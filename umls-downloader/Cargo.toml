@@ -2,6 +2,12 @@
 name = "umls-downloader"
 version = "0.1.0"
 edition = "2024"
+description = "Async helpers for discovering and downloading UMLS, RxNorm, and SNOMED CT releases"
+license = "MIT"
+readme = "README.md"
+documentation = "https://docs.rs/umls-downloader"
+keywords = ["umls", "rxnorm", "snomed", "terminology", "medical"]
+categories = ["api-bindings", "science"]
 
 [dependencies]
 async-trait = "0.1.91"
