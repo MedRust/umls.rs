@@ -32,7 +32,7 @@ pub struct ReleaseType {
     /// The product to which this release category belongs, such as UMLS or RxNorm.
     pub product: String,
     /// The value accepted by the Release API's `releaseType` query parameter.
-    #[serde(rename = "release_type")]
+    #[serde(rename = "releaseType")]
     pub name: String,
     /// The Release API endpoint for releases in this category.
     pub endpoint: String,
