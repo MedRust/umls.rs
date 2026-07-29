@@ -287,7 +287,7 @@ impl ReleaseFetcher<String, kind::All> {
         let release_type = self.name();
 
         let uri: http::Uri = format!(
-            "https://uts-ws.nlm.nih.gov/releases?releaseType={}&current=true",
+            "https://uts-ws.nlm.nih.gov/releases?releaseType={}",
             release_type
         )
         .parse()?;
