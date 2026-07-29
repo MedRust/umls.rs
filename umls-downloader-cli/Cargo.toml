@@ -6,6 +6,7 @@ description = "Interactive terminal downloader for UMLS, RxNorm, and SNOMED CT r
 license = "MIT"
 readme = "README.md"
 documentation = "https://docs.rs/umls-downloader-cli"
+repository = "https://github.com/MedRust/umls.rs.git"
 keywords = ["umls", "rxnorm", "snomed", "terminology", "tui"]
 categories = ["command-line-utilities", "science"]
 

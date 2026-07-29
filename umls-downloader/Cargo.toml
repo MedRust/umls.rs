@@ -6,6 +6,7 @@ description = "Async helpers for discovering and downloading UMLS, RxNorm, and S
 license = "MIT"
 readme = "README.md"
 documentation = "https://docs.rs/umls-downloader"
+repository = "https://github.com/MedRust/umls.rs.git"
 keywords = ["umls", "rxnorm", "snomed", "terminology", "medical"]
 categories = ["api-bindings", "science"]
 
