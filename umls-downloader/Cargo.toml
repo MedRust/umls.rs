@@ -1,0 +1,15 @@
+[package]
+name = "umls-downloader"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+async-trait = "0.1.91"
+bytes = "1.12.1"
+chrono = { version = "0.4.45", features = ["serde"] }
+futures-core = "0.3.33"
+futures-util = "0.3.33"
+http = "1.4.2"
+serde = { version = "1.0.229", features = ["derive"] }
+thiserror = "2.0.19"
+url = { version = "2.5.8", features = ["serde"] }
