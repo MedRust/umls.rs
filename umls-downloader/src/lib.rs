@@ -336,7 +336,7 @@ impl ReleaseFetcher<ReleaseType, kind::All> {
 /// behavior before sending `request`.
 pub trait HttpClient {
     /// Sends a request and deserializes its response body as `U`.
-    async fn execute<T: Serialize, U: DeserializeOwned>(
+    async fn execute<T: Serialize + Send, U: DeserializeOwned>(
         &self,
         request: http::Request<T>,
     ) -> Result<http::Response<U>, http::Error>;
@@ -352,7 +352,7 @@ pub type ByteStream = Pin<Box<dyn Stream<Item = Result<Bytes, BoxError>> + Send 
 /// An HTTP client capable of streaming response bodies.
 pub trait StreamHttpClient {
     /// Sends a request and returns its response body as a byte stream.
-    async fn execute<T: Serialize>(
+    async fn execute<T: Serialize + Send>(
         &self,
         request: http::Request<T>,
     ) -> Result<http::Response<ByteStream>, http::Error>;
