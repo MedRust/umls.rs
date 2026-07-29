@@ -27,4 +27,4 @@ reqwest = { version = "0.13.1", features = ["json", "stream"] }
 serde = "1.0.229"
 serde_json = "1.0.149"
 tokio = { version = "1.49.0", features = ["macros", "rt-multi-thread"] }
-umls-downloader = { version = "0.1.0", path = "../umls-downloader" }
+umls-downloader = { version = "0.1.1", path = "../umls-downloader" }
