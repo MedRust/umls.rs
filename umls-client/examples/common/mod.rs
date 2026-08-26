@@ -36,7 +36,7 @@ pub fn config_from_args(args: Args) -> Result<Config, umls_client::config::Error
 pub mod term {
 
     use clap::Parser;
-    use umls_client::search::request::Term;
+    use umls_client::search::core::Term;
 
     /// A command line argument to take search term.
     #[derive(Debug, Parser)]

@@ -3,14 +3,18 @@ use url::Url;
 
 use serde::Deserialize;
 
-use crate::{concept::cui::Cui, config::Config, search::request::get_trimmed_non_empty_string};
+use crate::{
+    concept::cui::Cui,
+    config::Config,
+    search::{ConceptSnapshot, core::get_trimmed_non_empty_string},
+};
 
 /// Validated UMLS Concept Unique Identifiers (CUIs).
 pub mod cui {
     use core::str;
     use std::str::FromStr;
 
-    use crate::search::request::{EmptyString, get_trimmed_non_empty_string};
+    use crate::search::core::{EmptyString, get_trimmed_non_empty_string};
 
     #[derive(Debug, thiserror::Error)]
     /// An error produced while validating a [`Cui`].
@@ -311,6 +315,17 @@ impl Info<Url> {
             .result;
 
         Ok(response)
+    }
+}
+
+impl Info<ConceptSnapshot> {
+    /// Retrieves the full concept represented by a search-result snapshot.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error`] if the concept request cannot be completed or decoded.
+    pub async fn fetch(&self, config: &Config) -> Result<Concept, Error> {
+        self.value.info().fetch(config).await
     }
 }
 

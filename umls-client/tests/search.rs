@@ -1,9 +1,11 @@
+//! A list of integration test for raw search function apis.
+
 use httpmock::{Method::GET, MockServer};
 use serde_json::json;
 
 use umls_client::{
     config::Config,
-    search::{request::Request, search},
+    search::{Request, raw::search},
 };
 use uuid::Uuid;
 
@@ -49,12 +51,12 @@ async fn successful_search_in_umls() -> Result<(), Box<dyn std::error::Error>> {
         .base_url(base_url)
         .build()?;
 
-    let request = Request::builder("cough".parse()?).build()?;
+    let request = Request::builder("cough".parse()?).build();
 
     let response = search(&config, &request).await?;
 
-    assert_eq!(response.page_size, 1);
-    assert_eq!(response.page_number, 1);
+    assert_eq!(response.page_size.get(), 1);
+    assert_eq!(response.page_number.get(), 1);
     assert_eq!(response.result.class_type, "searchResults".parse()?);
     assert_eq!(response.result.results.len(), 1);
 
