@@ -270,6 +270,10 @@ impl Request {
         &self.page
     }
 
+    pub(crate) fn page_mut(&mut self) -> &mut core::PageRequest {
+        &mut self.page
+    }
+
     /// Returns the identifier type requested for search results.
     pub fn return_id_type(&self) -> ReturnIdType {
         self.return_id_type
@@ -291,6 +295,12 @@ pub struct Search<'a, T> {
     _value: PhantomData<T>,
 }
 
+impl<'a, T> Search<'a, T> {
+    pub(crate) fn request_mut(&mut self) -> &mut Request {
+        &mut self.request
+    }
+}
+
 impl<'a> Search<'a, return_type::Concept> {
     /// Executes a search that returns concept identifiers.
     ///
@@ -302,12 +312,14 @@ impl<'a> Search<'a, return_type::Concept> {
     ///
     /// Returns [`SearchError`] when URL construction, transport, HTTP status
     /// validation, or response decoding fails.
-    pub async fn get(self) -> Result<Response<SearchResponse>, SearchError> {
+    pub async fn get(
+        self,
+    ) -> Result<Response<SearchResponse, Search<'a, return_type::Concept>>, SearchError> {
         let body = raw::search(self.config, &self.request)
             .await
             .map_err(SearchError::Raw)?;
 
-        Ok(Response::new(body))
+        Ok(Response::new(body, self))
     }
 }
 
@@ -353,15 +365,100 @@ impl<U> From<Vec<U>> for Content<U> {
     }
 }
 
-/// A raw response paired with the client state that produced it.
-pub struct Response<T> {
-    body: T,
+/// One page of content together with pagination state.
+///
+/// `C` retains the client needed to request adjacent pages.
+pub struct Page<T, C> {
+    content: T,
+    size: NonZeroU64,
+    number: NonZeroU64,
+    count: Option<NonZeroU64>,
+    client: C,
 }
 
-impl<T> Response<T> {
+impl<T, C> Page<T, C> {
+    /// Creates a page from content, pagination metadata, and its client.
+    ///
+    /// A `None` count represents the zero-result response used by the UMLS API.
+    pub(crate) fn new(
+        content: T,
+        size: NonZeroU64,
+        number: NonZeroU64,
+        count: Option<NonZeroU64>,
+        client: C,
+    ) -> Self {
+        Self {
+            content,
+            size,
+            number,
+            count,
+            client,
+        }
+    }
+
+    /// Returns the maximum number of results requested for this page.
+    pub fn size(&self) -> NonZeroU64 {
+        self.size
+    }
+
+    /// Returns this page's content.
+    pub fn content(&self) -> &T {
+        &self.content
+    }
+
+    /// Returns the one-based page number.
+    pub fn number(&self) -> NonZeroU64 {
+        self.number
+    }
+
+    /// Returns the total number of matching records.
+    ///
+    /// `None` means the response contained no matching records. The UMLS API
+    /// omits `recCount` when the count is zero.
+    pub fn count(&self) -> Option<NonZeroU64> {
+        self.count
+    }
+
+    /// Returns the number of non-empty result pages.
+    ///
+    /// `None` means there are no matching records.
+    pub fn total_pages(&self) -> Option<NonZeroU64> {
+        self.count.map(|x| x.div_ceil(self.size))
+    }
+
+    /// Returns `true` when a previous page exists.
+    pub fn has_previous(&self) -> bool {
+        self.number().get() > 1
+    }
+
+    /// Returns `true` when a next page exists.
+    ///
+    /// The function will return false if the count is [`Option::None`].
+    pub fn has_next(&self) -> bool {
+        self.total_pages()
+            .is_some_and(|total_pages| self.number() < total_pages)
+    }
+
+    /// Returns the retained client or search state.
+    pub fn client(&self) -> &C {
+        &self.client
+    }
+
+    pub(crate) fn client_mut(&mut self) -> &mut C {
+        &mut self.client
+    }
+}
+
+/// A raw response paired with the client state that produced it.
+pub struct Response<T, C> {
+    body: T,
+    client: C,
+}
+
+impl<T, C> Response<T, C> {
     /// Creates a response wrapper from its body and retained client state.
-    pub(crate) fn new(body: T) -> Self {
-        Self { body }
+    pub(crate) fn new(body: T, client: C) -> Self {
+        Self { body, client }
     }
 }
 
@@ -371,7 +468,7 @@ fn convert_raw_search_to_concept_snapshot(
     list.into_iter().map(TryFrom::try_from).collect()
 }
 
-impl Response<SearchResponse> {
+impl<'a> Response<SearchResponse, Search<'a, return_type::Concept>> {
     /// Converts raw search records into concept snapshots.
     ///
     /// # Errors
@@ -382,6 +479,96 @@ impl Response<SearchResponse> {
         let objects = convert_raw_search_to_concept_snapshot(self.body.result.results)?;
         Ok(Content::new(objects))
     }
+
+    /// Converts the response into a navigable page of concept snapshots.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PageError::Custom`] if any result cannot be converted into a
+    /// [`ConceptSnapshot`].
+    pub fn into_page(
+        self,
+    ) -> Result<
+        Page<Content<ConceptSnapshot>, Search<'a, return_type::Concept>>,
+        PageError<ConceptSnapshotError>,
+    > {
+        let count = self.body.result.rec_count.and_then(NonZeroU64::new);
+        let size = self.body.page_size;
+        let number = self.body.page_number;
+
+        let objects = convert_raw_search_to_concept_snapshot(self.body.result.results)
+            .map_err(PageError::Custom)?;
+        let content = Content::new(objects);
+
+        Ok(Page::new(content, size, number, count, self.client))
+    }
+}
+
+impl<'a> Page<Content<ConceptSnapshot>, Search<'a, return_type::Concept>> {
+    /// Requests the next page of concept results.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PageError::NoNextPage`] at the final page. Pagination or
+    /// search failures are returned through [`PageError::Custom`].
+    pub async fn next(
+        mut self,
+    ) -> Result<Response<SearchResponse, Search<'a, return_type::Concept>>, PageError<SearchError>>
+    {
+        if !self.has_next() {
+            return Err(PageError::NoNextPage);
+        }
+
+        self.client_mut()
+            .request_mut()
+            .page_mut()
+            .checked_next()
+            .map_err(SearchError::Page)
+            .map_err(PageError::Custom)?;
+
+        self.client.get().await.map_err(PageError::Custom)
+    }
+
+    /// Requests the previous page of concept results.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PageError::NoPreviousPage`] at the first page. Pagination or
+    /// search failures are returned through [`PageError::Custom`].
+    pub async fn previous(
+        mut self,
+    ) -> Result<Response<SearchResponse, Search<'a, return_type::Concept>>, PageError<SearchError>>
+    {
+        if !self.has_previous() {
+            return Err(PageError::NoPreviousPage);
+        }
+
+        self.client_mut()
+            .request_mut()
+            .page_mut()
+            .checked_previous()
+            .map_err(SearchError::Page)
+            .map_err(PageError::Custom)?;
+
+        self.client.get().await.map_err(PageError::Custom)
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
+/// An error produced while converting or navigating a search page.
+pub enum PageError<E: std::error::Error> {
+    /// The current page is already the first page.
+    #[error("Already at the first page")]
+    NoPreviousPage,
+
+    /// The current page is already the final page.
+    #[error("Already at the last page")]
+    NoNextPage,
+
+    /// Conversion or client operation `E` failed.
+    #[error("Custom error: {0}")]
+    Custom(E),
 }
 
 /// A compact concept representation returned by a search.
