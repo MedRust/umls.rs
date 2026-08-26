@@ -231,7 +231,7 @@ impl TermMatch {
 /// Indicates that a textual value was empty after trimming whitespace.
 pub struct EmptyString;
 
-fn get_trimmed_non_empty_string(value: &str) -> Result<&str, EmptyString> {
+pub fn get_trimmed_non_empty_string(value: &str) -> Result<&str, EmptyString> {
     let value = value.trim();
     if value.is_empty() {
         return Err(EmptyString);
