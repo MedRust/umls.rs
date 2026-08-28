@@ -1,3 +1,10 @@
 [workspace]
 resolver = "3"
-members = ["umls-downloader", "umls-downloader-cli"]
+members = ["umls-client", "umls-downloader", "umls-downloader-cli"]
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[workspace.lints.rustdoc]
+broken_intra_doc_links = "deny"
