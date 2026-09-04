@@ -3,7 +3,7 @@
 use httpmock::{Method, MockServer};
 use serde_json::json;
 use umls_client::{
-    atom::{self, All, Atom, Error},
+    atom::{self, All, Atom, Error, Preferred},
     concept::cui::Cui,
     config,
 };
@@ -569,6 +569,76 @@ async fn fetch_first_page_content_of_concept_atoms_using_cui()
     assert_eq!(first.term_type.as_str(), "MH");
     assert_eq!(first.language.as_str(), "ENG");
     assert_eq!(first.name.as_str(), "Benign Paroxysmal Positional Vertigo");
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn fetch_preferred_concept_atom() -> Result<(), Box<dyn std::error::Error>> {
+    _ = env_logger::builder().is_test(true).try_init();
+
+    let api_key = Uuid::new_v4();
+    let cui = Cui::new("C0010200")?;
+
+    let mock_server = MockServer::start_async().await;
+
+    mock_server
+        .mock_async(|when, then| {
+            let path = format!("/content/current/CUI/{}/atoms/preferred", cui);
+
+            when.method(Method::GET)
+                .path(path)
+                .query_param("apiKey", api_key.to_string());
+            then.status(200)
+                .json_body(json!({
+                    "pageSize": 1,
+                    "pageNumber": 1,
+                    "pageCount": 1,
+                    "result": {
+                            "classType": "Atom",
+                            "ui": "A24123438",
+                            "sourceDescriptor": "https://uts-ws.nlm.nih.gov/rest/content/2026AA/source/MSH/D065635",
+                            "sourceConcept": "https://uts-ws.nlm.nih.gov/rest/content/2026AA/source/MSH/M0529892",
+                            "concept": "https://uts-ws.nlm.nih.gov/rest/content/2026AA/CUI/C0155502",
+                            "suppressible": "false",
+                            "obsolete": "false",
+                            "rootSource": "MSH",
+                            "termType": "MH",
+                            "code": "https://uts-ws.nlm.nih.gov/rest/content/2026AA/source/MSH/D065635",
+                            "language": "ENG",
+                            "name": "Benign Paroxysmal Positional Vertigo",
+                            "ancestors": "NONE",
+                            "descendants": "NONE",
+                            "attributes": "https://uts-ws.nlm.nih.gov/rest/content/2026AA/AUI/A24123438/attributes",
+                            "relations": "https://uts-ws.nlm.nih.gov/rest/content/2026AA/AUI/A24123438/relations",
+                            "children": "NONE",
+                            "parents": "NONE"
+                        }
+                }));
+        })
+        .await;
+
+    let base_url: Url = mock_server.base_url().parse()?;
+
+    let umls_config = config::Builder::new(api_key.to_string())
+        .base_url(base_url)
+        .version("current".into())
+        .build()?;
+
+    let content = Atom::<'_, Preferred, Cui>::new(&umls_config, cui)
+        .fetch()
+        .await?;
+
+    assert_eq!(content.ui.as_str(), "A24123438");
+    assert!(!content.suppressible);
+    assert!(!content.obsolete);
+    assert_eq!(content.root_source.as_str(), "MSH");
+    assert_eq!(content.term_type.as_str(), "MH");
+    assert_eq!(content.language.as_str(), "ENG");
+    assert_eq!(
+        content.name.as_str(),
+        "Benign Paroxysmal Positional Vertigo"
+    );
 
     Ok(())
 }
