@@ -335,6 +335,38 @@ impl<T> Config<T> {
 /// Marker selecting retrieval of all atoms associated with a concept.
 pub struct All;
 
+/// Marker selecting retrieval of preferred atoms associated with a concept.
+pub struct Preferred;
+
+impl Preferred {
+    /// Creates a request for the preferred atom associated with a concept.
+    ///
+    /// Pass a validated [`Cui`] as `value`, then call [`Atom::fetch`] to
+    /// execute the request.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use umls_client::{
+    ///     atom::Preferred,
+    ///     concept::cui::Cui,
+    ///     config::Config,
+    /// };
+    ///
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// let config = Config::builder("your-api-key").build()?;
+    /// let cui = Cui::new("C0010200")?;
+    /// let atom = Preferred::for_concept(&config, cui).fetch().await?;
+    ///
+    /// println!("{}: {}", atom.ui, atom.name);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn for_concept<'a, T>(umls_config: &'a config::Config, value: T) -> Atom<'a, Self, T> {
+        Atom::new(umls_config, value)
+    }
+}
+
 /// An executable atom operation associated with a UMLS client configuration.
 ///
 /// `S` identifies the operation and `T` stores its request state. Most callers
@@ -505,6 +537,48 @@ impl<'a> Atom<'a, All, Cui> {
             .error_for_status()
             .map_err(Error::HttpStatus)?
             .json::<Page<Content<AtomResponse>>>()
+            .await
+            .map_err(Error::Decode)?;
+
+        Ok(body.content)
+    }
+}
+
+impl<'a> Atom<'a, Preferred, Cui> {
+    /// Fetches preferred concept atom for the given [Cui].
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if URL construction, transport, HTTP status validation,
+    /// or response decoding fails.
+    pub async fn fetch(self) -> Result<AtomResponse, Error> {
+        let path = format!(
+            "content/{}/CUI/{}/atoms/preferred",
+            self.umls_config().version(),
+            self.value()
+        );
+        let url_string = self
+            .umls_config()
+            .base_url()
+            .join(&path)
+            .map_err(Error::Url)?
+            .to_string();
+
+        let url = Url::parse_with_params(
+            &url_string,
+            &[("apiKey", self.umls_config().api_key().expose_secret())],
+        )?;
+
+        let body = self
+            .umls_config()
+            .client()
+            .get(url)
+            .send()
+            .await
+            .map_err(Error::Transport)?
+            .error_for_status()
+            .map_err(Error::HttpStatus)?
+            .json::<Page<AtomResponse>>()
             .await
             .map_err(Error::Decode)?;
 
