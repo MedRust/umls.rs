@@ -29,3 +29,5 @@ pub mod concept;
 pub mod config;
 /// Raw and high-level UMLS search APIs.
 pub mod search;
+
+pub mod atom;

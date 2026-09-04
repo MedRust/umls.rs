@@ -2,6 +2,7 @@
 
 use std::{marker::PhantomData, num::NonZeroU64};
 
+use serde::Deserialize;
 use url::Url;
 
 use crate::{
@@ -365,6 +366,17 @@ impl<U> From<Vec<U>> for Content<U> {
     }
 }
 
+impl<'de, T: Deserialize<'de>> Deserialize<'de> for Content<T> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let list = Vec::<T>::deserialize(deserializer)?;
+
+        Ok(Content::new(list))
+    }
+}
+
 /// One page of content together with pagination state.
 ///
 /// `C` retains the client needed to request adjacent pages.
@@ -373,7 +385,7 @@ pub struct Page<T, C> {
     size: NonZeroU64,
     number: NonZeroU64,
     count: Option<NonZeroU64>,
-    client: C,
+    pub(crate) client: C,
 }
 
 impl<T, C> Page<T, C> {
@@ -451,8 +463,8 @@ impl<T, C> Page<T, C> {
 
 /// A raw response paired with the client state that produced it.
 pub struct Response<T, C> {
-    body: T,
-    client: C,
+    pub(crate) body: T,
+    pub(crate) client: C,
 }
 
 impl<T, C> Response<T, C> {
@@ -573,7 +585,7 @@ pub enum PageError<E: std::error::Error> {
 
 /// A compact concept representation returned by a search.
 ///
-/// Use [`Info::get`](concept::Info::get) through [`Self::info`] to retrieve
+/// Use [`concept::Info::fetch`] through [`Self::info`] to retrieve
 /// the complete [`concept::Concept`].
 pub struct ConceptSnapshot {
     cui: concept::cui::Cui,
