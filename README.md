@@ -1,7 +1,8 @@
 # UMLS.rs
 
-Rust tools for discovering and downloading releases from the U.S. National
-Library of Medicine's UMLS Terminology Services (UTS).
+Rust tools for querying concepts and atoms, and discovering and downloading
+releases from the U.S. National Library of Medicine's UMLS Terminology
+Services (UTS).
 
 The workspace supports release files for:
 
@@ -21,6 +22,18 @@ release defaults to `current`; use `.version("2026AA".into())` before
 `.build()` to select a specific release. CUI-based all-atoms and
 preferred-atom requests honor this setting. Requests built from an explicit
 atom-list URL retain the release in that URL.
+
+The default REST base URL is `https://uts-ws.nlm.nih.gov/rest/`. When overriding
+it, supply a URL whose path ends with a slash:
+
+```rust
+let config = umls_client::config::Config::builder(std::env::var("UMLS_API_KEY")?)
+    .base_url("https://uts-ws.nlm.nih.gov/rest/".parse()?)
+    .build()?;
+```
+
+`Config::Builder::build()` rejects base URL paths without a trailing slash,
+which is required to preserve the full path prefix when joining atom endpoints.
 
 The `umls_client::atom` module documentation includes examples for filtered
 atom retrieval, and `Preferred::for_concept` documents preferred-atom retrieval.
