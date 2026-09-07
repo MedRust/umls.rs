@@ -84,6 +84,10 @@ impl Builder {
     }
 
     /// Selects the UMLS release used in endpoint paths.
+    ///
+    /// Defaults to `current`. CUI-based concept atom requests, including
+    /// preferred-atom requests, use this release. Atom requests built from an
+    /// explicit URL retain the release in that URL.
     pub fn version(mut self, version: String) -> Self {
         self.version = version;
         self

@@ -5,13 +5,20 @@
 //! optional filters, and create an [`crate::atom::Atom`] request with
 //! [`crate::atom::Builder::atoms`].
 //!
+//! CUI-based all-atoms and preferred-atom requests use the release selected by
+//! [`crate::config::Builder::version`], which defaults to `current`. Requests
+//! built from an explicit atom-list [`Url`] use that URL unchanged; the client
+//! configuration does not replace the release embedded in it.
+//!
 //! # Example
 //!
 //! ```no_run
 //! use umls_client::{atom, concept::cui::Cui, config::Config};
 //!
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-//! let config = Config::builder("your-api-key").build()?;
+//! let config = Config::builder(std::env::var("UMLS_API_KEY")?)
+//!     .version("2026AA".into())
+//!     .build()?;
 //! let cui = Cui::new("C0010200")?;
 //! let atoms = atom::Config::builder(cui)
 //!     .try_add_source_vocabulary("MSH")?
@@ -321,7 +328,7 @@ impl<T> Config<T> {
         self.include_obsolete
     }
 
-    /// Returns true if response include suppressible concept atoms.
+    /// Returns whether suppressible concept atoms are included.
     pub fn is_include_suppressible(&self) -> bool {
         self.include_suppressible
     }
@@ -342,7 +349,7 @@ impl Preferred {
     /// Creates a request for the preferred atom associated with a concept.
     ///
     /// Pass a validated [`Cui`] as `value`, then call [`Atom::fetch`] to
-    /// execute the request.
+    /// execute the request using the configured UMLS release.
     ///
     /// # Example
     ///
@@ -354,7 +361,9 @@ impl Preferred {
     /// };
     ///
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-    /// let config = Config::builder("your-api-key").build()?;
+    /// let config = Config::builder(std::env::var("UMLS_API_KEY")?)
+    ///     .version("2026AA".into())
+    ///     .build()?;
     /// let cui = Cui::new("C0010200")?;
     /// let atom = Preferred::for_concept(&config, cui).fetch().await?;
     ///
@@ -446,6 +455,8 @@ impl<'a, S, T> Atom<'a, S, Batch<Config<T>>> {
 impl<'a> Atom<'a, All, Batch<Config<Cui>>> {
     /// Fetches one filtered page of atoms for a validated CUI.
     ///
+    /// Uses the release returned by [`crate::config::Config::version`].
+    ///
     /// # Errors
     ///
     /// Returns an error if URL construction, transport, HTTP status validation,
@@ -455,7 +466,8 @@ impl<'a> Atom<'a, All, Batch<Config<Cui>>> {
     ) -> Result<Response<Page<Content<AtomResponse>>, Atom<'a, All, Batch<Config<Cui>>>>, Error>
     {
         let path = format!(
-            "/content/current/CUI/{}/atoms",
+            "/content/{}/CUI/{}/atoms",
+            self.umls_config().version(),
             self.value().value().value().as_ref()
         );
 
@@ -482,6 +494,9 @@ impl<'a> Atom<'a, All, Batch<Config<Cui>>> {
 
 impl<'a> Atom<'a, All, Batch<Config<Url>>> {
     /// Fetches one filtered page of atoms from an atom-list URL.
+    ///
+    /// Uses the supplied URL without replacing its release with the configured
+    /// version.
     ///
     /// # Errors
     ///
@@ -514,12 +529,18 @@ impl<'a> Atom<'a, All, Batch<Config<Url>>> {
 impl<'a> Atom<'a, All, Cui> {
     /// Fetches the first, unfiltered page of atoms for a validated CUI.
     ///
+    /// Uses the release returned by [`crate::config::Config::version`].
+    ///
     /// # Errors
     ///
     /// Returns an error if URL construction, transport, HTTP status validation,
     /// or response decoding fails.
     pub async fn fetch(self) -> Result<Content<AtomResponse>, Error> {
-        let path = format!("/content/current/CUI/{}/atoms", self.value());
+        let path = format!(
+            "/content/{}/CUI/{}/atoms",
+            self.umls_config().version(),
+            self.value()
+        );
         let url_string = self.umls_config().base_url().join(&path)?.to_string();
 
         let url = Url::parse_with_params(
@@ -545,7 +566,8 @@ impl<'a> Atom<'a, All, Cui> {
 }
 
 impl<'a> Atom<'a, Preferred, Cui> {
-    /// Fetches preferred concept atom for the given [Cui].
+    /// Fetches the preferred concept atom for the given [`Cui`] using the
+    /// configured UMLS release.
     ///
     /// # Errors
     ///

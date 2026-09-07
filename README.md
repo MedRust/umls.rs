@@ -11,6 +11,21 @@ The workspace supports release files for:
 
 ## Workspace crates
 
+### `umls-client`
+
+An asynchronous client for UMLS concept search, concept retrieval, and
+concept atom retrieval, including filtering and pagination.
+
+Create a client with `umls_client::config::Config::builder(api_key)`. The
+release defaults to `current`; use `.version("2026AA".into())` before
+`.build()` to select a specific release. CUI-based all-atoms and
+preferred-atom requests honor this setting. Requests built from an explicit
+atom-list URL retain the release in that URL.
+
+The `umls_client::atom` module documentation includes examples for filtered
+atom retrieval, and `Preferred::for_concept` documents preferred-atom retrieval.
+Generate the client documentation with `cargo doc -p umls-client --no-deps`.
+
 ### `umls-downloader`
 
 An asynchronous, HTTP-client-agnostic library for:
@@ -111,6 +126,6 @@ environment variable for repeated local use.
 
 ## License
 
-Both workspace crates are available under the MIT License. See
+The downloader library and CLI are available under the MIT License. See
 [`umls-downloader/LICENCE`](umls-downloader/LICENCE) and
 [`umls-downloader-cli/LICENCE`](umls-downloader-cli/LICENCE).

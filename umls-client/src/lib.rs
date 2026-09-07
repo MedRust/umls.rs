@@ -3,8 +3,10 @@
 //! An asynchronous client for the UMLS REST API.
 //!
 //! The crate provides validated request types, high-level search pagination,
-//! and concept retrieval. Start by creating a [`config::Config`], then build a
-//! request with [`search::Request`].
+//! concept retrieval, and concept atom retrieval. Start by creating a
+//! [`config::Config`], then build a request with [`search::Request`] for search
+//! or [`atom::Config::builder`] for atoms. Use [`atom::Preferred::for_concept`]
+//! to retrieve a preferred atom.
 //!
 //! # Example
 //!
