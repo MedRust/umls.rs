@@ -57,7 +57,7 @@ impl Builder {
     pub fn new(api_key: impl Into<SecretString>) -> Self {
         Self {
             client: reqwest::Client::new(),
-            base_url: "https://uts-ws.nlm.nih.gov/rest".parse().unwrap(),
+            base_url: "https://uts-ws.nlm.nih.gov/rest/".parse().unwrap(),
             api_key: api_key.into(),
             version: "current".into(),
         }
@@ -72,6 +72,26 @@ impl Builder {
     /// Replaces the UMLS REST base URL.
     ///
     /// This is primarily useful for proxies and test servers.
+    /// When the URL contains a path prefix, include a trailing `/` so relative
+    /// atom endpoints are appended to that prefix. For example, use
+    /// `https://uts-ws.nlm.nih.gov/rest/`, not
+    /// `https://uts-ws.nlm.nih.gov/rest`. The builder stores the URL as supplied.
+    /// [`Self::build`] rejects URLs whose paths do not end in `/`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use umls_client::config::Config;
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let config = Config::builder("example-api-key")
+    ///     .base_url("https://example.com/proxy/rest/".parse()?)
+    ///     .build()?;
+    /// let endpoint = config.base_url().join("content/current/CUI/C0010200/atoms")?;
+    /// assert_eq!(endpoint.path(), "/proxy/rest/content/current/CUI/C0010200/atoms");
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn base_url(mut self, base_url: Url) -> Self {
         self.base_url = base_url;
         self
@@ -98,7 +118,9 @@ impl Builder {
     /// # Errors
     ///
     /// Returns [`Error::EmptyApiKey`] when the API key is empty and
-    /// [`Error::EmptyVersion`] when the version is empty.
+    /// [`Error::EmptyVersion`] when the version is empty. Returns
+    /// [`Error::MissingBaseUrlTrailingSlash`] when the base URL path does not
+    /// end in `/`.
     pub fn build(self) -> Result<Config, Error> {
         if self.api_key.expose_secret().is_empty() {
             return Err(Error::EmptyApiKey);
@@ -106,6 +128,10 @@ impl Builder {
 
         if self.version.is_empty() {
             return Err(Error::EmptyVersion);
+        }
+
+        if !self.base_url.path().ends_with('/') {
+            return Err(Error::MissingBaseUrlTrailingSlash);
         }
 
         Ok(Config {
@@ -126,4 +152,7 @@ pub enum Error {
     /// The configured UMLS release was empty.
     #[error("Empty Version")]
     EmptyVersion,
+    /// The configured base URL path did not end in `/`.
+    #[error("Base URL path must end with a trailing '/'")]
+    MissingBaseUrlTrailingSlash,
 }

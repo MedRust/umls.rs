@@ -165,7 +165,7 @@ async fn fetch_first_page_content_of_concept_atoms_with_differnt_version()
 #[tokio::test]
 async fn reports_atom_url_errors() -> Result<(), Box<dyn std::error::Error>> {
     let config = config::Builder::new(Uuid::new_v4().to_string())
-        .base_url("mailto:umls@example.com".parse()?)
+        .base_url("mailto:umls@example.com/".parse()?)
         .build()?;
     let cui = Cui::new("C0010200")?;
 

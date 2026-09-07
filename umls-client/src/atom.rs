@@ -7,8 +7,14 @@
 //!
 //! CUI-based all-atoms and preferred-atom requests use the release selected by
 //! [`crate::config::Builder::version`], which defaults to `current`. Requests
-//! built from an explicit atom-list [`Url`] use that URL unchanged; the client
-//! configuration does not replace the release embedded in it.
+//! built from an explicit atom-list [`Url`] retain its endpoint path and
+//! release; the request adds authentication, filter, and pagination parameters.
+//!
+//! CUI-based requests resolve relative paths against the configured base URL.
+//! Include a trailing `/` to preserve its full path prefix (see
+//! [`crate::config::Builder::base_url`]). The default base URL is
+//! `https://uts-ws.nlm.nih.gov/rest/`; configuration validation rejects base
+//! URL paths without a trailing slash.
 //!
 //! # Example
 //!
@@ -17,6 +23,7 @@
 //!
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! let config = Config::builder(std::env::var("UMLS_API_KEY")?)
+//!     .base_url("https://uts-ws.nlm.nih.gov/rest/".parse()?)
 //!     .version("2026AA".into())
 //!     .build()?;
 //! let cui = Cui::new("C0010200")?;
@@ -362,6 +369,7 @@ impl Preferred {
     ///
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let config = Config::builder(std::env::var("UMLS_API_KEY")?)
+    ///     .base_url("https://uts-ws.nlm.nih.gov/rest/".parse()?)
     ///     .version("2026AA".into())
     ///     .build()?;
     /// let cui = Cui::new("C0010200")?;
@@ -466,7 +474,7 @@ impl<'a> Atom<'a, All, Batch<Config<Cui>>> {
     ) -> Result<Response<Page<Content<AtomResponse>>, Atom<'a, All, Batch<Config<Cui>>>>, Error>
     {
         let path = format!(
-            "/content/{}/CUI/{}/atoms",
+            "content/{}/CUI/{}/atoms",
             self.umls_config().version(),
             self.value().value().value().as_ref()
         );
@@ -537,7 +545,7 @@ impl<'a> Atom<'a, All, Cui> {
     /// or response decoding fails.
     pub async fn fetch(self) -> Result<Content<AtomResponse>, Error> {
         let path = format!(
-            "/content/{}/CUI/{}/atoms",
+            "content/{}/CUI/{}/atoms",
             self.umls_config().version(),
             self.value()
         );

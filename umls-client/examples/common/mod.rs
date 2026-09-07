@@ -12,7 +12,7 @@ use url::Url;
 /// - UMLS_VERSION: UMLS version default: current.
 #[derive(Debug, Parser)]
 pub struct Args {
-    /// UMLS REST API base url.
+    /// UMLS REST API base URL, with a path ending in `/`.
     #[arg(long, env = "UMLS_BASE_URL", hide_env_values = false)]
     pub base_url: Url,
 
