@@ -25,12 +25,22 @@ pub struct Args {
     pub version: String,
 }
 
-/// Create new configuration from [Args].
-pub fn config_from_args(args: Args) -> Result<Config, umls_client::config::Error> {
-    Config::builder(args.api_key)
+/// Creates a configuration by parsing the version in [`Args`].
+///
+/// # Errors
+///
+/// Returns a version parsing error or a configuration validation error.
+/// Explicit release parsing is currently incomplete; use the default `current`.
+///
+/// # Panics
+///
+/// See the [`std::str::FromStr`] implementation for
+/// [`umls_client::config::Version`] for the current non-ASCII input limitation.
+pub fn config_from_args(args: Args) -> Result<Config, Box<dyn std::error::Error>> {
+    Ok(Config::builder(args.api_key)
         .base_url(args.base_url)
-        .version(args.version)
-        .build()
+        .version(args.version.parse()?)
+        .build()?)
 }
 
 pub mod term {

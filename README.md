@@ -18,10 +18,25 @@ An asynchronous client for UMLS concept search, concept retrieval, and
 concept atom retrieval, including filtering and pagination.
 
 Create a client with `umls_client::config::Config::builder(api_key)`. The
-release defaults to `current`; use `.version("2026AA".into())` before
-`.build()` to select a specific release. CUI-based all-atoms and
+release defaults to `Version::Current`; pass a typed `Version::Release` to
+`.version()` before `.build()` to select a specific release. CUI-based all-atoms and
 preferred-atom requests honor this setting. Requests built from an explicit
 atom-list URL retain the release in that URL.
+
+```rust
+use umls_client::config::{Config, ReleaseType, Version};
+
+let config = Config::builder(std::env::var("UMLS_API_KEY")?)
+    .version(Version::Release { year: 2018, kind: ReleaseType::AA })
+    .build()?;
+```
+
+`Config::version()` now returns `&Version`. Use `.as_str()`
+when a formatted identifier is needed. The builder rejects years before 2018. It does not yet enforce the current
+year as an upper bound or check whether a release has been published. Parsing
+explicit releases from strings is currently incomplete; use typed construction
+for pinned releases. The CLI examples default to `current`; selecting an explicit
+release through `UMLS_VERSION` or `--version` currently fails parsing.
 
 The default REST base URL is `https://uts-ws.nlm.nih.gov/rest/`. When overriding
 it, supply a URL whose path ends with a slash:

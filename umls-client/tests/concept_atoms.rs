@@ -5,7 +5,7 @@ use serde_json::json;
 use umls_client::{
     atom::{self, All, Atom, Error, Preferred},
     concept::cui::Cui,
-    config,
+    config::{self, ReleaseType, Version},
 };
 use url::Url;
 use uuid::Uuid;
@@ -61,7 +61,6 @@ async fn fetch_first_page_content_of_concept_atoms() -> Result<(), Box<dyn std::
 
     let umls_config = config::Builder::new(api_key.to_string())
         .base_url(base_url)
-        .version("current".into())
         .build()?;
 
     let content = atom::Config::builder(cui)
@@ -92,7 +91,10 @@ async fn fetch_first_page_content_of_concept_atoms_with_differnt_version()
 
     let api_key = Uuid::new_v4();
     let cui = Cui::new("C0010200")?;
-    let umls_version = "2021AB";
+    let umls_version = Version::Release {
+        year: 2021,
+        kind: ReleaseType::AA,
+    };
 
     let mock_server = MockServer::start_async().await;
 
@@ -138,7 +140,7 @@ async fn fetch_first_page_content_of_concept_atoms_with_differnt_version()
 
     let umls_config = config::Builder::new(api_key.to_string())
         .base_url(base_url)
-        .version(umls_version.into())
+        .version(umls_version)
         .build()?;
 
     let content = atom::Config::builder(cui)
@@ -316,7 +318,6 @@ async fn fetch_first_page_of_concept_atoms() -> Result<(), Box<dyn std::error::E
 
     let umls_config = config::Builder::new(api_key.to_string())
         .base_url(base_url)
-        .version("current".into())
         .build()?;
 
     let first_page = atom::Config::builder(cui)
@@ -413,7 +414,6 @@ async fn fetch_first_page_content_of_concept_atoms_using_url()
 
     let umls_config = config::Builder::new(api_key.to_string())
         .base_url(base_url.clone())
-        .version("current".into())
         .build()?;
 
     let path = format!("/content/current/CUI/{}/atoms", cui);
@@ -530,7 +530,6 @@ async fn fetch_first_page_of_concept_atoms_using_url() -> Result<(), Box<dyn std
 
     let umls_config = config::Builder::new(api_key.to_string())
         .base_url(base_url.clone())
-        .version("current".into())
         .build()?;
 
     let path = format!("/content/current/CUI/{}/atoms", cui);
@@ -630,7 +629,6 @@ async fn fetch_first_page_content_of_concept_atoms_using_cui()
 
     let umls_config = config::Builder::new(api_key.to_string())
         .base_url(base_url)
-        .version("current".into())
         .build()?;
 
     let content = Atom::<'_, All, Cui>::new(&umls_config, cui).fetch().await?;
@@ -699,7 +697,6 @@ async fn fetch_preferred_concept_atom() -> Result<(), Box<dyn std::error::Error>
 
     let umls_config = config::Builder::new(api_key.to_string())
         .base_url(base_url)
-        .version("current".into())
         .build()?;
 
     let content = Atom::<'_, Preferred, Cui>::new(&umls_config, cui)
@@ -727,7 +724,10 @@ async fn fetch_preferred_concept_atom_from_different_version()
 
     let api_key = Uuid::new_v4();
     let cui = Cui::new("C0010200")?;
-    let umls_version = "2018AA";
+    let umls_version = Version::Release {
+        year: 2018,
+        kind: ReleaseType::AA,
+    };
 
     let mock_server = MockServer::start_async().await;
 
@@ -771,7 +771,7 @@ async fn fetch_preferred_concept_atom_from_different_version()
 
     let umls_config = config::Builder::new(api_key.to_string())
         .base_url(base_url)
-        .version(umls_version.into())
+        .version(umls_version)
         .build()?;
 
     let content = Atom::<'_, Preferred, Cui>::new(&umls_config, cui)
