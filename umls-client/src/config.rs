@@ -409,3 +409,92 @@ impl TryFrom<&str> for Version {
         value.parse()
     }
 }
+
+#[cfg(test)]
+mod tests {
+
+    use std::num::IntErrorKind;
+
+    use super::*;
+
+    #[test]
+    fn convert_current_version_to_string() {
+        let version = Version::Current.as_str();
+        assert_eq!(version, "current");
+    }
+
+    #[test]
+    fn convert_explicity_release_version_to_string() {
+        let version = Version::Release {
+            year: 2021,
+            kind: ReleaseType::AA,
+        };
+        assert_eq!(version.as_str(), "2021AA");
+    }
+
+    #[test]
+    fn invalid_version_parser_with_invalid_length_string() {
+        let result = "VERSION2020AA".parse::<Version>();
+        assert!(matches!(result, Err(InvalidVersion::InvalidLength)));
+    }
+
+    #[test]
+    fn invalid_version_parser_with_invalid_year() {
+        let result = "AA2018".parse::<Version>();
+        match result {
+            Err(InvalidVersion::YearParser(e)) => {
+                assert!(matches!(e.kind(), IntErrorKind::InvalidDigit));
+            }
+            other => panic!("Expected year parser error, but got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn invalid_version_perser_with_unsupported_release_type() {
+        let result = "2021BA".parse::<Version>();
+        match result {
+            Err(InvalidVersion::ReleaseTypeParser(e)) => {
+                assert!(matches!(e, InvalidRelaseType::Unsupported(..)));
+            }
+            other => panic!("Expected release type parser error, but got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn convert_release_type_from_string() -> Result<(), Box<dyn std::error::Error>> {
+        let release_type: ReleaseType = "AA".parse()?;
+        assert_eq!(release_type, ReleaseType::AA);
+
+        let release_type: ReleaseType = "AB".parse()?;
+        assert_eq!(release_type, ReleaseType::AB);
+
+        Ok(())
+    }
+
+    #[test]
+    fn default_configuration() -> Result<(), Box<dyn std::error::Error>> {
+        let config = Config::builder("apiKey").build()?;
+        assert_eq!(config.version(), Version::Current);
+        assert_eq!(config.api_key().expose_secret(), "apiKey");
+        assert_eq!(
+            config.base_url().as_str(),
+            "https://uts-ws.nlm.nih.gov/rest/"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn failed_on_version_year_less_then_2018() -> Result<(), Box<dyn std::error::Error>> {
+        let result = Config::builder("apiKey").try_version("2017AA")?.build();
+
+        match result {
+            Err(Error::UnsupportedYear(year)) => {
+                assert_eq!(year, 2017);
+            }
+            other => panic!("Expected unsupported year, but got {:?}", other),
+        }
+
+        Ok(())
+    }
+}
