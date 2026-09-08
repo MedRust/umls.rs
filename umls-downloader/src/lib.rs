@@ -15,12 +15,11 @@ use std::{
     pin::Pin,
 };
 
-use async_trait::async_trait;
 use bytes::Bytes;
 use chrono::NaiveDate;
 use futures_core::Stream;
 use futures_util::StreamExt;
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 #[cfg(feature = "reqwest")]
@@ -604,34 +603,11 @@ impl ReleaseFetcher<client::ReqwestClient, ReleaseType, kind::All> {
     }
 }
 
-#[async_trait]
-/// An HTTP client capable of returning deserialized response bodies.
-///
-/// Implementations may add authentication, headers, and transport-specific
-/// behavior before sending `request`.
-pub trait HttpClient {
-    /// Sends a request and deserializes its response body as `U`.
-    async fn execute<T: Serialize + Send, U: DeserializeOwned>(
-        &self,
-        request: http::Request<T>,
-    ) -> Result<http::Response<U>, http::Error>;
-}
-
 /// A thread-safe, dynamically dispatched error produced while reading a stream.
 pub type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
 /// A pinned stream of release-file byte chunks.
 pub type ByteStream = Pin<Box<dyn Stream<Item = Result<Bytes, BoxError>> + Send + 'static>>;
-
-#[async_trait]
-/// An HTTP client capable of streaming response bodies.
-pub trait StreamHttpClient {
-    /// Sends a request and returns its response body as a byte stream.
-    async fn execute<T: Serialize + Send>(
-        &self,
-        request: http::Request<T>,
-    ) -> Result<http::Response<ByteStream>, http::Error>;
-}
 
 #[derive(Debug, Error)]
 /// Errors that can occur while downloading a release.
