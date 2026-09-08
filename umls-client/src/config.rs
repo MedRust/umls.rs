@@ -33,7 +33,10 @@ impl Config {
         &self.base_url
     }
 
-    /// Returns the requested UMLS release, such as `current` or `2025AB`.
+    /// Returns the selected UMLS version by value.
+    ///
+    /// Use [`Version::as_str`] to format it or match [`Version::Release`] to
+    /// access the year and release type.
     pub fn version(&self) -> Version {
         self.version
     }
@@ -113,8 +116,8 @@ impl Builder {
     /// explicit URL retain the release in that URL.
     ///
     /// Construct a release with [`Version::Release`] or use [`Version::Current`].
-    /// [`Self::build`] rejects release years before 2018. It does not currently
-    /// enforce an upper year bound or check publication availability.
+    /// [`Self::build`] accepts release years from 2018 through the current UTC
+    /// year, inclusive. It does not check whether the release is published.
     ///
     /// # Example
     ///
@@ -132,15 +135,16 @@ impl Builder {
         self
     }
 
-    /// Selects the UMLS release used in endpoint paths.
+    /// Parses and selects the UMLS release from a string or other fallible input.
     ///
-    /// Defaults to `current`. CUI-based concept atom requests, including
-    /// preferred-atom requests, use this release. Atom requests built from an
-    /// explicit URL retain the release in that URL.
+    /// String inputs accept exactly `current` or four ASCII digits followed by
+    /// uppercase `AA` or `AB`. Whitespace is not trimmed. Year-range validation
+    /// occurs in [`Self::build`], not in this setter.
     ///
-    /// Construct a release with [`Version::Release`] or use [`Version::Current`].
-    /// [`Self::build`] rejects release years before 2018. It does not currently
-    /// enforce an upper year bound or check publication availability.
+    /// # Errors
+    ///
+    /// Returns [`InvalidVersion`] if conversion fails, including malformed
+    /// string lengths, non-digit years, or unsupported release suffixes.
     ///
     /// # Example
     ///
@@ -168,7 +172,7 @@ impl Builder {
     /// Returns [`Error::EmptyApiKey`] when the API key is empty. Returns
     /// [`Error::MissingBaseUrlTrailingSlash`] when the base URL path does not
     /// end in `/`. Returns [`Error::UnsupportedYear`] for explicit release
-    /// years before 2018.
+    /// years outside 2018 through the current UTC year, inclusive.
     ///
     /// Validation is local and does not make HTTP requests.
     pub fn build(self) -> Result<Config, Error> {
@@ -201,7 +205,7 @@ pub enum Error {
     /// The configured UMLS API key was empty.
     #[error("Empty API Key")]
     EmptyApiKey,
-    /// The explicit release year was earlier than 2018.
+    /// The explicit release year was outside 2018 through the current UTC year.
     #[error("Unsupported year: {0}")]
     UnsupportedYear(u16),
     /// The configured base URL path did not end in `/`.
@@ -224,7 +228,7 @@ pub enum InvalidVersion {
     /// The release suffix could not be parsed.
     ReleaseTypeParser(#[source] InvalidRelaseType),
 
-    /// Indicate invalid year format.
+    /// The four-byte year prefix contained a non-ASCII-digit byte.
     #[error("Invalid year format")]
     InvalidYearFormat,
 }
@@ -267,9 +271,9 @@ impl FromStr for ReleaseType {
     ///
     /// # Errors
     ///
-    /// The current implementation rejects every input, including `AA` and
-    /// `AB`, because its length check is inverted. Use enum variants directly
-    /// until parsing is corrected.
+    /// Returns [`InvalidRelaseType::InvalidLength`] unless the input is two
+    /// bytes, or [`InvalidRelaseType::Unsupported`] unless it is exactly `AA`
+    /// or `AB`. Parsing is case-sensitive and does not trim whitespace.
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if s.len() != 2 {
             return Err(InvalidRelaseType::InvalidLength);
@@ -309,8 +313,9 @@ impl TryFrom<&str> for ReleaseType {
 /// A request for the current UMLS release or an explicitly selected release.
 ///
 /// The type restricts release suffixes to [`ReleaseType`]. Construction itself
-/// does not validate the year; [`Builder::build`] rejects years before 2018.
-/// No upper year bound or publication check is currently applied.
+/// and parsing do not validate the year range; [`Builder::build`] accepts
+/// years from 2018 through the current UTC year, inclusive. Publication
+/// availability is not checked.
 ///
 /// # Example
 ///
@@ -323,7 +328,7 @@ impl TryFrom<&str> for ReleaseType {
 /// match config.version() {
 ///     Version::Current => println!("Using the current release"),
 ///     Version::Release { year, kind } => {
-///         // Matching a borrowed version gives &u16 and &ReleaseType.
+///         // The copied version contains a u16 and a ReleaseType.
 ///         assert_eq!(year, 2018);
 ///         assert_eq!(kind.as_str(), "AB");
 ///     }
@@ -335,8 +340,8 @@ pub enum Version {
     Current,
     /// Select a release by year and suffix.
     Release {
-        /// The release year; validated against the 2018 minimum when building
-        /// a configuration.
+        /// The release year; checked against 2018 through the current UTC year
+        /// when building a configuration.
         year: u16,
         /// The AA or AB suffix.
         kind: ReleaseType,
@@ -359,20 +364,17 @@ impl Version {
 impl FromStr for Version {
     type Err = InvalidVersion;
 
-    /// Parses the case-insensitive `current` alias.
+    /// Parses exactly `current` or four ASCII digits followed by `AA` or `AB`.
     ///
-    /// Explicit release parsing is currently incomplete: six-byte identifiers
-    /// such as `2018AA` are rejected. Construct [`Version::Release`] directly
-    /// for pinned versions.
+    /// Parsing is case-sensitive, does not trim whitespace, and does not check
+    /// the supported year range. [`Builder::build`] performs that validation.
     ///
     /// # Errors
     ///
-    /// Returns [`InvalidVersion`] when a length, year, or suffix check fails.
-    ///
-    /// # Panics
-    ///
-    /// A seven-byte input panics if byte index four is not a UTF-8 character
-    /// boundary. Avoid passing unvalidated non-ASCII input until this is fixed.
+    /// Returns [`InvalidVersion::InvalidLength`] for an incorrect byte length,
+    /// [`InvalidVersion::InvalidYearFormat`] for non-digit year bytes, or
+    /// [`InvalidVersion::ReleaseTypeParser`] for an unsupported suffix.
+    /// Integer conversion errors are represented by [`InvalidVersion::YearParser`].
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if s == "current" {
             return Ok(Version::Current);

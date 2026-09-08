@@ -31,12 +31,17 @@ let config = Config::builder(std::env::var("UMLS_API_KEY")?)
     .build()?;
 ```
 
-`Config::version()` now returns `&Version`. Use `.as_str()`
-when a formatted identifier is needed. The builder rejects years before 2018. It does not yet enforce the current
-year as an upper bound or check whether a release has been published. Parsing
-explicit releases from strings is currently incomplete; use typed construction
-for pinned releases. The CLI examples default to `current`; selecting an explicit
-release through `UMLS_VERSION` or `--version` currently fails parsing.
+`Config::version()` returns a copied `Version`. Use `.as_str()` when a formatted
+identifier is needed, or match `Version::Release { year, kind }` to read its fields.
+
+For strings, use `.try_version("2018AA")?` or parse a `Version` with `.parse()?`.
+Parsing accepts exactly `current` or four ASCII digits followed by uppercase
+`AA` or `AB`, without surrounding whitespace. The CLI examples accept these
+values through `UMLS_VERSION` or `--version` and default to `current`.
+
+`build()` validates release years against 2018 through the current UTC year,
+inclusive. Parsing alone does not enforce this range. Validation makes no network
+requests and does not verify whether the selected AA/AB release is published.
 
 The default REST base URL is `https://uts-ws.nlm.nih.gov/rest/`. When overriding
 it, supply a URL whose path ends with a slash:

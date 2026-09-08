@@ -30,12 +30,9 @@ pub struct Args {
 /// # Errors
 ///
 /// Returns a version parsing error or a configuration validation error.
-/// Explicit release parsing is currently incomplete; use the default `current`.
-///
-/// # Panics
-///
-/// See the [`std::str::FromStr`] implementation for
-/// [`umls_client::config::Version`] for the current non-ASCII input limitation.
+/// Versions must be `current` or four ASCII digits followed by `AA` or `AB`.
+/// Configuration validation rejects years outside 2018 through the current
+/// UTC year.
 pub fn config_from_args(args: Args) -> Result<Config, Box<dyn std::error::Error>> {
     Ok(Config::builder(args.api_key)
         .base_url(args.base_url)
