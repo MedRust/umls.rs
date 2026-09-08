@@ -11,9 +11,8 @@ use ratatui::{
     widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap},
 };
 use umls_downloader::{
-    Release, ReleaseFetcher,
+    DownloadResource, Release, ReleaseDownloader, ReleaseFetcher,
     client::ReqwestClient,
-    download_release_to_path,
     kind::All,
     release_type::{self, ReleaseType},
 };
@@ -257,8 +256,12 @@ async fn run_download(
     download: &Download,
 ) -> Result<DownloadResult, http::uri::InvalidUri> {
     let source = download.release.download_url.parse()?;
-    let operation =
-        download_release_to_path(client, source, &download.api_key, &download.destination);
+    let resource = DownloadResource::new(source, &download.destination);
+
+    let operation = ReleaseDownloader::new(download.api_key.as_str(), resource)
+        .with_client(client)
+        .download();
+
     tokio::pin!(operation);
     let mut events = EventStream::new();
 

@@ -8,23 +8,25 @@
 //! [uts]: https://documentation.uts.nlm.nih.gov/automating-downloads.html
 #![warn(missing_docs)]
 
-use std::{
-    fs::File,
-    io::{BufWriter, Write},
-    path::Path,
-    pin::Pin,
-};
+use std::pin::Pin;
+#[cfg(feature = "reqwest")]
+use std::{fs::File, io::{BufWriter, Write}, path::Path};
 
 use bytes::Bytes;
 use chrono::NaiveDate;
 use futures_core::Stream;
 use futures_util::StreamExt;
+#[cfg(feature = "reqwest")]
+use secrecy::ExposeSecret;
+use secrecy::SecretString;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 #[cfg(feature = "reqwest")]
 use crate::client::ReqwestClient;
 
+use crate::client::WithoutClient;
+#[cfg(feature = "reqwest")]
 use crate::{kind::Current, release_type::ReleaseType};
 
 /// Provides concrete HTTP clients and a marker for builders without a client.
@@ -663,50 +665,170 @@ impl From<BoxError> for Error {
     }
 }
 
-/// Opens a byte stream for a UTS release archive.
+/// Builds a release download operation with a client and destination value.
 ///
-/// `release_download_uri` is the release's source URL (for example,
-/// [`Release::download_url`] parsed as an [`http::Uri`]), not the UTS Download
-/// API endpoint. The function supplies that URL and `api_key` to the Download
-/// API and returns the response body without choosing where it is stored.
-///
-/// Takes ownership of the client; a clone can be passed to share connections with later requests.
-/// The returned stream owns the response and can be consumed after this call returns.
+/// A downloader is created without a client and transitions to an executable state with
+/// [`Self::with_client`]. The destination type selects the operation: an [`http::Uri`] produces a
+/// [`ByteStream`], while [`DownloadResource`] writes the response to a path.
 ///
 /// # Examples
 ///
-/// ```no_run
-/// # #[allow(deprecated)]
-/// use umls_downloader::{client::ReqwestClient, download_release};
-/// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-/// let client = Default::default();
-/// let source = "https://download.nlm.nih.gov/umls/kss/2026AA/umls-2026AA-full.zip".parse()?;
-/// let key = std::env::var("UMLS_API_KEY")?;
-/// # #[allow(deprecated)]
-/// let stream = download_release(client, source, &key).await?;
-/// # Ok(())
-/// # }
 /// ```
-///
-/// # Errors
-///
-/// Returns [`Error::Url`] or [`Error::Uri`] if the Download API request URL
-/// cannot be constructed, and [`Error::Http`] if the request cannot be built or
-/// sent. Errors encountered while consuming the returned stream are yielded as
-/// [`BoxError`] values.
-pub async fn download_release(
-    client: ReqwestClient,
-    release_download_uri: http::Uri,
-    api_key: &str,
-) -> Result<ByteStream, Error> {
-    let uri = download_uri(&release_download_uri, api_key)?;
+/// use umls_downloader::{ReleaseDownloader, client::WithoutClient};
+/// let source: http::Uri = "https://example.com/release.zip".parse()?;
+/// let downloader = ReleaseDownloader::new("api-key", source);
+/// let _ready = downloader.with_client(WithoutClient);
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
+pub struct ReleaseDownloader<C, T> {
+    client: C,
+    value: T,
+    api_key: SecretString,
+}
 
-    let request = http::Request::builder()
-        .method(http::Method::GET)
-        .uri(uri)
-        .body(())?;
+impl<T> ReleaseDownloader<WithoutClient, T> {
+    /// Creates a downloader without attaching an HTTP client.
+    ///
+    /// This method performs no I/O. The API key is retained for the eventual UTS download request.
+    /// Call [`Self::with_client`] before calling an operation-specific `download` method.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use umls_downloader::ReleaseDownloader;
+    /// let source: http::Uri = "https://example.com/release.zip".parse()?;
+    /// let downloader = ReleaseDownloader::new("api-key", source);
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    pub fn new(api_key: impl Into<SecretString>, value: T) -> Self {
+        Self {
+            client: WithoutClient,
+            value,
+            api_key: api_key.into(),
+        }
+    }
 
-    Ok(client.execute_stream(request).await?.into_body())
+    /// Attaches an HTTP client and returns an executable downloader.
+    ///
+    /// This method consumes the current downloader and performs no network I/O. The client is
+    /// owned by the returned value, so it can be reused by cloning a cloneable client first.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use umls_downloader::{ReleaseDownloader, client::WithoutClient};
+    /// let source: http::Uri = "https://example.com/release.zip".parse()?;
+    /// let downloader = ReleaseDownloader::new("api-key", source).with_client(WithoutClient);
+    /// # let _ = downloader;
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    pub fn with_client<C>(self, client: C) -> ReleaseDownloader<C, T> {
+        ReleaseDownloader {
+            client,
+            value: self.value,
+            api_key: self.api_key,
+        }
+    }
+}
+
+#[cfg(feature = "reqwest")]
+impl ReleaseDownloader<ReqwestClient, http::Uri> {
+    /// Starts a release download and returns its response body as a stream.
+    ///
+    /// The request is sent lazily when this method is awaited. The returned [`ByteStream`] owns
+    /// the response body and yields chunks as they arrive. It does not create or modify a file.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Url`] or [`Error::Uri`] when the UTS download URL cannot be constructed,
+    /// [`Error::Http`] when the request or response cannot be built, or an error produced by the
+    /// underlying HTTP client. Errors encountered while reading the body are yielded by the
+    /// returned stream.
+    pub async fn download(&self) -> Result<ByteStream, Error> {
+        let uri = download_uri(&self.value, self.api_key.expose_secret())?;
+
+        let request = http::Request::builder()
+            .method(http::Method::GET)
+            .uri(uri)
+            .body(())?;
+
+        Ok(self.client.execute_stream(request).await?.into_body())
+    }
+}
+
+/// Associates a release URI with a destination value.
+///
+/// When used with [`ReleaseDownloader`], a destination implementing [`AsRef<Path>`] causes the
+/// downloaded response to be written to that path. Existing files are replaced. The destination
+/// may be a [`PathBuf`], `&Path`, or another path-like type.
+///
+/// # Examples
+///
+/// ```
+/// use umls_downloader::DownloadResource;
+/// let source = "https://example.com/release.zip".parse()?;
+/// let target = DownloadResource::new(source, "release.zip");
+/// # let _ = target;
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
+pub struct DownloadResource<D> {
+    source: http::Uri,
+    destination: D,
+}
+
+impl<D> DownloadResource<D> {
+    /// Associates a source URI with a destination.
+    ///
+    /// This method performs no I/O and does not validate whether the URI or destination exists.
+    /// Validation occurs when the associated downloader is executed.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use umls_downloader::DownloadResource;
+    /// let source = "https://example.com/release.zip".parse()?;
+    /// let target = DownloadResource::new(source, "release.zip");
+    /// # let _ = target;
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    pub fn new(source: http::Uri, destination: D) -> Self {
+        Self {
+            source,
+            destination,
+        }
+    }
+}
+
+#[cfg(feature = "reqwest")]
+impl<D: AsRef<Path>> ReleaseDownloader<ReqwestClient, DownloadResource<D>> {
+    /// Downloads the release and writes it to the configured destination path.
+    ///
+    /// Existing files are replaced. File creation and writes are synchronous, so callers should
+    /// avoid invoking this operation on a latency-sensitive executor thread for large files.
+    /// A failed request, stream error, or cancellation can leave a partial file.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Io`] when the destination cannot be created, written, or flushed. Returns
+    /// [`Error::Stream`] when reading the response body fails, or another [`Error`] variant when
+    /// request construction or the HTTP operation fails.
+    pub async fn download(self) -> Result<(), Error> {
+        let mut stream = ReleaseDownloader::new(self.api_key.clone(), self.value.source)
+            .with_client(self.client.clone())
+            .download()
+            .await?;
+
+        let file = File::create(self.value.destination)?;
+        let mut writer = BufWriter::new(file);
+
+        while let Some(chunk) = stream.next().await {
+            writer.write_all(&chunk?)?;
+        }
+
+        writer.flush()?;
+
+        Ok(())
+    }
 }
 
 fn download_uri(release_download_uri: &http::Uri, api_key: &str) -> Result<http::Uri, Error> {
@@ -716,96 +838,6 @@ fn download_uri(release_download_uri: &http::Uri, api_key: &str) -> Result<http:
         .append_pair("apiKey", api_key);
 
     Ok(url.as_str().parse()?)
-}
-
-/// Downloads a UTS release archive to a local file.
-///
-/// This is a convenience wrapper around [`download_release`]. It replaces an
-/// existing file at `destination`.
-///
-/// Takes ownership of the client; a clone can be passed to share connections with later requests.
-/// A failure or cancellation can leave a partial file. Local file operations are synchronous.
-///
-/// # Examples
-///
-/// ```no_run
-/// # #[allow(deprecated)]
-/// use umls_downloader::{client::ReqwestClient, download_release_to_path};
-/// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-/// let client = Default::default();
-/// let source = "https://download.nlm.nih.gov/umls/kss/2026AA/umls-2026AA-full.zip".parse()?;
-/// let key = std::env::var("UMLS_API_KEY")?;
-/// # #[allow(deprecated)]
-/// download_release_to_path(client, source, &key, "release.zip").await?;
-/// # Ok(())
-/// # }
-/// ```
-///
-/// # Errors
-///
-/// Returns an error if the download request cannot be constructed or sent, the
-/// response stream fails, or the destination file cannot be created, written,
-/// or flushed.
-pub async fn download_release_to_path<P: AsRef<Path>>(
-    client: ReqwestClient,
-    release_download_uri: http::Uri,
-    api_key: &str,
-    destination: P,
-) -> Result<(), Error> {
-    let mut stream = download_release(client, release_download_uri, api_key).await?;
-
-    let file = File::create(destination)?;
-    let mut writer = BufWriter::new(file);
-
-    while let Some(chunk) = stream.next().await {
-        writer.write_all(&chunk?)?;
-    }
-
-    writer.flush()?;
-
-    Ok(())
-}
-
-/// Downloads a UTS release archive to a local file.
-///
-/// This compatibility alias delegates to [`download_release_to_path`]. New
-/// code that needs destination-independent storage should use
-/// [`download_release`] instead.
-///
-/// Takes ownership of the client; a clone can be passed to share connections with later requests.
-/// A failure or cancellation can leave a partial file. Local file operations are synchronous.
-///
-/// # Examples
-///
-/// ```no_run
-/// # #[allow(deprecated)]
-/// use umls_downloader::{client::ReqwestClient, download_umls_terminology_service};
-/// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-/// let client = Default::default();
-/// let source = "https://download.nlm.nih.gov/umls/kss/2026AA/umls-2026AA-full.zip".parse()?;
-/// let key = std::env::var("UMLS_API_KEY")?;
-/// # #[allow(deprecated)]
-/// download_umls_terminology_service(client, source, &key, "release.zip").await?;
-/// # Ok(())
-/// # }
-/// ```
-///
-/// # Errors
-///
-/// Returns an error if the download request cannot be constructed or sent, the
-/// response stream fails, or the destination file cannot be created, written,
-/// or flushed.
-#[deprecated(
-    since = "0.1.0",
-    note = "use download_release for a byte stream or download_release_to_path for a local file"
-)]
-pub async fn download_umls_terminology_service<P: AsRef<Path>>(
-    client: ReqwestClient,
-    release_download_uri: http::Uri,
-    api_key: &str,
-    destination: P,
-) -> Result<(), Error> {
-    download_release_to_path(client, release_download_uri, api_key, destination).await
 }
 
 #[cfg(test)]

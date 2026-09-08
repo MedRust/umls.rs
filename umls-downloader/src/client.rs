@@ -87,6 +87,7 @@ fn as_http_error(error: impl std::fmt::Display) -> http::Error {
     http::Request::builder().uri(invalid).body(()).unwrap_err()
 }
 
+#[cfg(feature = "reqwest")]
 impl ReqwestClient {
     /// Sends a request and deserializes its JSON response.
     ///
