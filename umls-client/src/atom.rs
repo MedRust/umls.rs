@@ -24,10 +24,7 @@
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! let config = Config::builder(std::env::var("UMLS_API_KEY")?)
 //!     .base_url("https://uts-ws.nlm.nih.gov/rest/".parse()?)
-//!     .version(umls_client::config::Version::Release {
-//!     year: 2026,
-//!     kind: umls_client::config::ReleaseType::AA,
-//! })
+//!     .try_version("2026AA")?
 //!     .build()?;
 //! let cui = Cui::new("C0010200")?;
 //! let atoms = atom::Config::builder(cui)
@@ -373,10 +370,7 @@ impl Preferred {
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let config = Config::builder(std::env::var("UMLS_API_KEY")?)
     ///     .base_url("https://uts-ws.nlm.nih.gov/rest/".parse()?)
-    ///     .version(umls_client::config::Version::Release {
-    ///     year: 2026,
-    ///     kind: umls_client::config::ReleaseType::AA,
-    /// })
+    ///     .try_version("2026AB")?
     ///     .build()?;
     /// let cui = Cui::new("C0010200")?;
     /// let atom = Preferred::for_concept(&config, cui).fetch().await?;

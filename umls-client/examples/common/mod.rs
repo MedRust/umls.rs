@@ -39,7 +39,7 @@ pub struct Args {
 pub fn config_from_args(args: Args) -> Result<Config, Box<dyn std::error::Error>> {
     Ok(Config::builder(args.api_key)
         .base_url(args.base_url)
-        .version(args.version.parse()?)
+        .try_version(args.version)?
         .build()?)
 }
 

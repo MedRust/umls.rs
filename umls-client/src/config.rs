@@ -131,6 +131,35 @@ impl Builder {
         self
     }
 
+    /// Selects the UMLS release used in endpoint paths.
+    ///
+    /// Defaults to `current`. CUI-based concept atom requests, including
+    /// preferred-atom requests, use this release. Atom requests built from an
+    /// explicit URL retain the release in that URL.
+    ///
+    /// Construct a release with [`Version::Release`] or use [`Version::Current`].
+    /// [`Self::build`] rejects release years before 2018. It does not currently
+    /// enforce an upper year bound or check publication availability.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use umls_client::config::{Config, ReleaseType, Version};
+    ///
+    /// let config = Config::builder("example-api-key")
+    ///     .try_version("2018AA")?
+    ///     .build()?;
+    /// assert_eq!(config.version().to_string(), "2018AA");
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    pub fn try_version(
+        mut self,
+        version: impl TryInto<Version, Error = InvalidVersion>,
+    ) -> Result<Self, InvalidVersion> {
+        self.version = version.try_into()?;
+        Ok(self)
+    }
+
     /// Validates the builder and creates a [`Config`].
     ///
     /// # Errors
@@ -284,7 +313,7 @@ impl TryFrom<&str> for ReleaseType {
 /// use umls_client::config::{Config, ReleaseType, Version};
 ///
 /// let config = Config::builder("example-api-key")
-///     .version(Version::Release { year: 2018, kind: ReleaseType::AB })
+///     .try_version("2018AB")?
 ///     .build()?;
 /// match config.version() {
 ///     Version::Current => println!("Using the current release"),
@@ -294,7 +323,7 @@ impl TryFrom<&str> for ReleaseType {
 ///         assert_eq!(kind.as_str(), "AB");
 ///     }
 /// }
-/// # Ok::<(), umls_client::config::Error>(())
+/// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 pub enum Version {
     /// Resolve the release through the API's `current` alias.
