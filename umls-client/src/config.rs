@@ -1,5 +1,6 @@
 use std::{borrow::Cow, num::ParseIntError, str::FromStr};
 
+use chrono::{Datelike, Utc};
 use secrecy::{ExposeSecret, SecretString};
 use thiserror::Error;
 use url::Url;
@@ -180,7 +181,7 @@ impl Builder {
         }
 
         if let Version::Release { year, .. } = self.version
-            && year < 2018
+            && !(2018..=Utc::now().year()).contains(&i32::from(year))
         {
             return Err(Error::UnsupportedYear(year));
         }
@@ -212,16 +213,20 @@ pub enum Error {
 /// An error encountered while parsing a UMLS version string.
 pub enum InvalidVersion {
     /// The input length does not match the parser's expected release length.
-    #[error("The length should be 5 character long")]
+    #[error("The length should be 6 character long")]
     InvalidLength,
 
     #[error("Year parse error: {0}")]
     /// The year could not be parsed as an unsigned integer.
-    YearParser(ParseIntError),
+    YearParser(#[source] ParseIntError),
 
     #[error("Release type parser error: {0}")]
     /// The release suffix could not be parsed.
-    ReleaseTypeParser(InvalidRelaseType),
+    ReleaseTypeParser(#[source] InvalidRelaseType),
+
+    /// Indicate invalid year format.
+    #[error("Invalid year format")]
+    InvalidYearFormat,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -369,12 +374,16 @@ impl FromStr for Version {
     /// A seven-byte input panics if byte index four is not a UTF-8 character
     /// boundary. Avoid passing unvalidated non-ASCII input until this is fixed.
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s.to_lowercase() == "current" {
+        if s == "current" {
             return Ok(Version::Current);
         }
 
         if s.len() != 6 {
             return Err(InvalidVersion::InvalidLength);
+        }
+
+        if !s.as_bytes()[..4].iter().all(u8::is_ascii_digit) {
+            return Err(InvalidVersion::InvalidYearFormat); // New variant.
         }
 
         let (year, release_type) = s.split_at(4);
@@ -413,8 +422,6 @@ impl TryFrom<&str> for Version {
 #[cfg(test)]
 mod tests {
 
-    use std::num::IntErrorKind;
-
     use super::*;
 
     #[test]
@@ -441,12 +448,7 @@ mod tests {
     #[test]
     fn invalid_version_parser_with_invalid_year() {
         let result = "AA2018".parse::<Version>();
-        match result {
-            Err(InvalidVersion::YearParser(e)) => {
-                assert!(matches!(e.kind(), IntErrorKind::InvalidDigit));
-            }
-            other => panic!("Expected year parser error, but got {:?}", other),
-        }
+        assert!(matches!(result, Err(InvalidVersion::InvalidYearFormat)));
     }
 
     #[test]
@@ -496,5 +498,34 @@ mod tests {
         }
 
         Ok(())
+    }
+
+    #[test]
+    fn success_version_parser() {
+        assert!("2018AA".parse::<Version>().is_ok());
+        assert!("2021AB".parse::<Version>().is_ok());
+        assert!("2021AA".parse::<Version>().is_ok());
+    }
+
+    #[test]
+    fn failed_version_parser() {
+        assert!("123éA".parse::<Version>().is_err());
+        assert!("+123AA".parse::<Version>().is_err());
+        assert!("CURRENT".parse::<Version>().is_err());
+    }
+
+    #[test]
+    fn test_version_more_then_current_year() {
+        let current_year = Utc::now().year();
+        let future_year = (current_year + 10).try_into().unwrap();
+        let result = Config::builder("apiKey")
+            .version(Version::Release {
+                year: future_year,
+                kind: ReleaseType::AA,
+            })
+            .build();
+
+        assert!(result.is_err());
+        matches!(result, Err(Error::UnsupportedYear(..)));
     }
 }
