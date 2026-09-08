@@ -33,8 +33,8 @@ impl Config {
     }
 
     /// Returns the requested UMLS release, such as `current` or `2025AB`.
-    pub fn version(&self) -> &Version {
-        &self.version
+    pub fn version(&self) -> Version {
+        self.version
     }
 
     /// Returns the protected UMLS API key.
@@ -207,7 +207,7 @@ pub enum InvalidRelaseType {
     Unsupported(String),
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 /// The AA or AB suffix of a UMLS release identifier.
 pub enum ReleaseType {
     /// The AA release within a year.
@@ -271,7 +271,7 @@ impl TryFrom<&str> for ReleaseType {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 /// A request for the current UMLS release or an explicitly selected release.
 ///
 /// The type restricts release suffixes to [`ReleaseType`]. Construction itself
@@ -290,7 +290,7 @@ impl TryFrom<&str> for ReleaseType {
 ///     Version::Current => println!("Using the current release"),
 ///     Version::Release { year, kind } => {
 ///         // Matching a borrowed version gives &u16 and &ReleaseType.
-///         assert_eq!(*year, 2018);
+///         assert_eq!(year, 2018);
 ///         assert_eq!(kind.as_str(), "AB");
 ///     }
 /// }
