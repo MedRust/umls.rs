@@ -1,11 +1,8 @@
 use std::{path::PathBuf, time::Duration};
 
-use async_trait::async_trait;
-use bytes::Bytes;
 use clap::Parser;
 use crossterm::event::{self, Event, EventStream, KeyCode, KeyEvent, KeyEventKind};
-use futures_util::{StreamExt, TryStreamExt};
-use http::{Request, Response};
+use futures_util::StreamExt;
 use ratatui::{
     DefaultTerminal, Frame,
     layout::{Constraint, Direction, Layout, Rect},
@@ -13,10 +10,12 @@ use ratatui::{
     text::Line,
     widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap},
 };
-use serde::{Serialize, de::DeserializeOwned};
 use umls_downloader::{
-    BoxError, ByteStream, HttpClient, Release, ReleaseFetcher, ReleaseType, StreamHttpClient,
-    download_release_to_path, get_release_types, kind::All,
+    Release, ReleaseFetcher,
+    client::ReqwestClient,
+    download_release_to_path,
+    kind::All,
+    release_type::{self, ReleaseType},
 };
 
 #[derive(Debug, Parser)]
@@ -28,74 +27,6 @@ struct Args {
     /// UTS API key. UMLS_API_KEY is used when this option is omitted.
     #[arg(long, env = "UMLS_API_KEY", hide_env_values = true)]
     api_key: Option<String>,
-}
-
-#[derive(Clone)]
-struct ReqwestClient(reqwest::Client);
-
-impl ReqwestClient {
-    fn new() -> Self {
-        Self(reqwest::Client::new())
-    }
-
-    async fn send<T: Serialize + Send>(
-        &self,
-        request: Request<T>,
-    ) -> Result<reqwest::Response, http::Error> {
-        let (parts, body) = request.into_parts();
-        let body = serde_json::to_vec(&body).map_err(as_http_error)?;
-        let mut builder = self.0.request(parts.method, parts.uri.to_string());
-        for (name, value) in &parts.headers {
-            builder = builder.header(name, value);
-        }
-        if !body.is_empty() && body != b"null" {
-            builder = builder.body(body);
-        }
-        let response = builder.send().await.map_err(as_http_error)?;
-        response.error_for_status().map_err(as_http_error)
-    }
-}
-
-fn as_http_error(error: impl std::fmt::Display) -> http::Error {
-    // `HttpClient` currently exposes `http::Error`, so create one while retaining
-    // the transport message in the invalid URI value.
-    let invalid = format!("{}\n", error);
-    Request::builder().uri(invalid).body(()).unwrap_err()
-}
-
-#[async_trait]
-impl HttpClient for ReqwestClient {
-    async fn execute<T: Serialize + Send, U: DeserializeOwned>(
-        &self,
-        request: Request<T>,
-    ) -> Result<Response<U>, http::Error> {
-        let response = self.send(request).await?;
-        let status = response.status();
-        let headers = response.headers().clone();
-        let body = response.json::<U>().await.map_err(as_http_error)?;
-        let mut output = Response::builder().status(status);
-        *output.headers_mut().expect("response builder has headers") = headers;
-        output.body(body)
-    }
-}
-
-#[async_trait]
-impl StreamHttpClient for ReqwestClient {
-    async fn execute<T: Serialize + Send>(
-        &self,
-        request: Request<T>,
-    ) -> Result<Response<ByteStream>, http::Error> {
-        let response = self.send(request).await?;
-        let status = response.status();
-        let headers = response.headers().clone();
-        let stream = response
-            .bytes_stream()
-            .map_err(|error| Box::new(error) as BoxError);
-        let body: ByteStream = Box::pin(stream.map(|chunk: Result<Bytes, BoxError>| chunk));
-        let mut output = Response::builder().status(status);
-        *output.headers_mut().expect("response builder has headers") = headers;
-        output.body(body)
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -254,24 +185,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
     let client = ReqwestClient::new();
     let mut terminal = ratatui::init();
-    let result = run(&mut terminal, &client, args.api_key).await;
+    let result = run(&mut terminal, client.clone(), args.api_key).await;
     ratatui::restore();
     result
 }
 
 async fn run(
     terminal: &mut DefaultTerminal,
-    client: &ReqwestClient,
+    client: ReqwestClient,
     api_key: Option<String>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut app = App::new(api_key);
     terminal.draw(|frame| draw(frame, &mut app))?;
 
-    match get_release_types(client).await {
+    let release_types = release_type::Client::default().with_client(client.clone());
+
+    match release_types.fetch().await {
         Ok(types) => {
             app.set_release_types(types);
             app.status = "↑/↓ select · Tab switch table · Enter download · q quit".into();
-            load_selected_releases(&mut app, client).await;
+            load_selected_releases(&mut app, client.clone()).await;
         }
         Err(error) => app.status = format!("Could not load release types: {error}"),
     }
@@ -294,7 +227,7 @@ async fn run(
                 download.release.file_name
             );
             terminal.draw(|frame| draw(frame, &mut app))?;
-            match run_download(client, &download).await? {
+            match run_download(client.clone(), &download).await? {
                 DownloadResult::Completed(Ok(())) => {
                     app.status = format!("Downloaded to {}", download.destination.display());
                 }
@@ -313,14 +246,14 @@ async fn run(
             && app.focus == Focus::ReleaseTypes
             && matches!(key.code, KeyCode::Up | KeyCode::Down)
         {
-            load_selected_releases(&mut app, client).await;
+            load_selected_releases(&mut app, client.clone()).await;
         }
     }
     Ok(())
 }
 
 async fn run_download(
-    client: &ReqwestClient,
+    client: ReqwestClient,
     download: &Download,
 ) -> Result<DownloadResult, http::uri::InvalidUri> {
     let source = download.release.download_url.parse()?;
@@ -393,13 +326,13 @@ fn handle_key(app: &mut App, key: KeyEvent) -> Option<Download> {
     None
 }
 
-async fn load_selected_releases(app: &mut App, client: &ReqwestClient) {
+async fn load_selected_releases(app: &mut App, client: ReqwestClient) {
     let Some(release_type) = app.selected_release_type().cloned() else {
         app.set_releases(Vec::new());
         return;
     };
     app.status = format!("Loading {} releases…", release_type);
-    match ReleaseFetcher::new(release_type, All).send(client).await {
+    match ReleaseFetcher::new(client, release_type, All).send().await {
         Ok(releases) => {
             let count = releases.len();
             app.set_releases(releases);
