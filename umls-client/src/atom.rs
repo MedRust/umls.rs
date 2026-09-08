@@ -24,7 +24,7 @@
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! let config = Config::builder(std::env::var("UMLS_API_KEY")?)
 //!     .base_url("https://uts-ws.nlm.nih.gov/rest/".parse()?)
-//!     .version("2026AA".into())
+//!     .try_version("2026AA")?
 //!     .build()?;
 //! let cui = Cui::new("C0010200")?;
 //! let atoms = atom::Config::builder(cui)
@@ -370,7 +370,7 @@ impl Preferred {
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let config = Config::builder(std::env::var("UMLS_API_KEY")?)
     ///     .base_url("https://uts-ws.nlm.nih.gov/rest/".parse()?)
-    ///     .version("2026AA".into())
+    ///     .try_version("2026AB")?
     ///     .build()?;
     /// let cui = Cui::new("C0010200")?;
     /// let atom = Preferred::for_concept(&config, cui).fetch().await?;
@@ -475,7 +475,7 @@ impl<'a> Atom<'a, All, Batch<Config<Cui>>> {
     {
         let path = format!(
             "content/{}/CUI/{}/atoms",
-            self.umls_config().version(),
+            self.umls_config().version().as_str(),
             self.value().value().value().as_ref()
         );
 
@@ -546,7 +546,7 @@ impl<'a> Atom<'a, All, Cui> {
     pub async fn fetch(self) -> Result<Content<AtomResponse>, Error> {
         let path = format!(
             "content/{}/CUI/{}/atoms",
-            self.umls_config().version(),
+            self.umls_config().version().as_str(),
             self.value()
         );
         let url_string = self.umls_config().base_url().join(&path)?.to_string();
@@ -584,7 +584,7 @@ impl<'a> Atom<'a, Preferred, Cui> {
     pub async fn fetch(self) -> Result<AtomResponse, Error> {
         let path = format!(
             "content/{}/CUI/{}/atoms/preferred",
-            self.umls_config().version(),
+            self.umls_config().version().as_str(),
             self.value()
         );
         let url_string = self

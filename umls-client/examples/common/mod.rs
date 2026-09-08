@@ -25,12 +25,19 @@ pub struct Args {
     pub version: String,
 }
 
-/// Create new configuration from [Args].
-pub fn config_from_args(args: Args) -> Result<Config, umls_client::config::Error> {
-    Config::builder(args.api_key)
+/// Creates a configuration by parsing the version in [`Args`].
+///
+/// # Errors
+///
+/// Returns a version parsing error or a configuration validation error.
+/// Versions must be `current` or four ASCII digits followed by `AA` or `AB`.
+/// Configuration validation rejects years outside 2018 through the current
+/// UTC year.
+pub fn config_from_args(args: Args) -> Result<Config, Box<dyn std::error::Error>> {
+    Ok(Config::builder(args.api_key)
         .base_url(args.base_url)
-        .version(args.version)
-        .build()
+        .try_version(args.version)?
+        .build()?)
 }
 
 pub mod term {

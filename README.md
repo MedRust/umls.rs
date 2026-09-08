@@ -18,10 +18,30 @@ An asynchronous client for UMLS concept search, concept retrieval, and
 concept atom retrieval, including filtering and pagination.
 
 Create a client with `umls_client::config::Config::builder(api_key)`. The
-release defaults to `current`; use `.version("2026AA".into())` before
-`.build()` to select a specific release. CUI-based all-atoms and
+release defaults to `Version::Current`; pass a typed `Version::Release` to
+`.version()` before `.build()` to select a specific release. CUI-based all-atoms and
 preferred-atom requests honor this setting. Requests built from an explicit
 atom-list URL retain the release in that URL.
+
+```rust
+use umls_client::config::{Config, ReleaseType, Version};
+
+let config = Config::builder(std::env::var("UMLS_API_KEY")?)
+    .version(Version::Release { year: 2018, kind: ReleaseType::AA })
+    .build()?;
+```
+
+`Config::version()` returns a copied `Version`. Use `.as_str()` when a formatted
+identifier is needed, or match `Version::Release { year, kind }` to read its fields.
+
+For strings, use `.try_version("2018AA")?` or parse a `Version` with `.parse()?`.
+Parsing accepts exactly `current` or four ASCII digits followed by uppercase
+`AA` or `AB`, without surrounding whitespace. The CLI examples accept these
+values through `UMLS_VERSION` or `--version` and default to `current`.
+
+`build()` validates release years against 2018 through the current UTC year,
+inclusive. Parsing alone does not enforce this range. Validation makes no network
+requests and does not verify whether the selected AA/AB release is published.
 
 The default REST base URL is `https://uts-ws.nlm.nih.gov/rest/`. When overriding
 it, supply a URL whose path ends with a slash:
