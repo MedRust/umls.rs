@@ -237,7 +237,7 @@ impl FromStr for ReleaseType {
     /// `AB`, because its length check is inverted. Use enum variants directly
     /// until parsing is corrected.
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s.len() == 2 {
+        if s.len() != 2 {
             return Err(InvalidRelaseType::InvalidLength);
         }
 
