@@ -344,7 +344,7 @@ impl FromStr for Version {
             return Ok(Version::Current);
         }
 
-        if s.len() != 7 {
+        if s.len() != 6 {
             return Err(InvalidVersion::InvalidLength);
         }
 
