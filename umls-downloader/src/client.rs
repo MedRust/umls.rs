@@ -23,7 +23,7 @@ use crate::{BoxError, ByteStream};
 pub struct WithoutClient;
 
 #[cfg(feature = "reqwest")]
-#[derive(Clone)]
+#[derive(Clone, Default)]
 /// Sends HTTP requests using reqwest.
 ///
 /// Cloning this client shares its connection pool. JSON requests and streamed responses use the
@@ -33,7 +33,7 @@ pub struct WithoutClient;
 ///
 /// ```
 /// use umls_downloader::client::ReqwestClient;
-/// let client = ReqwestClient::new();
+/// let client: ReqwestClient = Default::default();
 /// let shared = client.clone();
 /// ```
 pub struct ReqwestClient(reqwest::Client);
@@ -49,15 +49,17 @@ impl ReqwestClient {
     ///
     /// ```
     /// use umls_downloader::client::ReqwestClient;
-    /// let client = ReqwestClient::new();
+    /// use reqwest::Client;
+    /// let reqwest_client = Client::new();
+    /// let client = ReqwestClient::new(reqwest_client);
     /// ```
     ///
     /// # Panics
     ///
     /// Panics if the TLS backend cannot be initialized or the system resolver configuration
     /// cannot be loaded.
-    pub fn new() -> Self {
-        Self(reqwest::Client::new())
+    pub fn new(client: reqwest::Client) -> Self {
+        Self(client)
     }
 
     async fn send<T: Serialize + Send>(
@@ -98,7 +100,7 @@ impl ReqwestClient {
     /// ```no_run
     /// use umls_downloader::client::ReqwestClient;
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-    /// let client = ReqwestClient::new();
+    /// let client: ReqwestClient = Default::default();
     /// let request = http::Request::get("https://uts-ws.nlm.nih.gov/releases").body(())?;
     /// let response = client.execute::<(), serde_json::Value>(request).await?;
     /// let body = response.into_body();
@@ -139,7 +141,7 @@ impl ReqwestClient {
     /// ```no_run
     /// use umls_downloader::client::ReqwestClient;
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-    /// let client = ReqwestClient::new();
+    /// let client: ReqwestClient = Default::default();
     /// let request = http::Request::get("https://uts-ws.nlm.nih.gov/releases").body(())?;
     /// let response = client.execute_stream(request).await?;
     /// let stream = response.into_body();

@@ -142,7 +142,7 @@ impl ReleaseFetcher<client::ReqwestClient, http::Uri, Current> {
     /// use umls_downloader::{ReleaseFetcher, client::ReqwestClient, kind::Current};
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let category = "https://uts-ws.nlm.nih.gov/releases".parse::<http::Uri>()?;
-    /// let fetcher = ReleaseFetcher::new(ReqwestClient::new(), category, Current);
+    /// let fetcher = ReleaseFetcher::new(Default::default(), category, Current);
     /// let selected = fetcher.uri();
     /// # Ok(())
     /// # }
@@ -164,7 +164,7 @@ impl ReleaseFetcher<client::ReqwestClient, http::Uri, Current> {
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let category = concat!("https://uts-ws.nlm.nih.gov/releases?",
     ///     "releaseType=umls-full-release&current=true").parse::<http::Uri>()?;
-    /// let releases = ReleaseFetcher::new(ReqwestClient::new(), category, Current)
+    /// let releases = ReleaseFetcher::new(Default::default(), category, Current)
     ///     .send().await?;
     /// # Ok(())
     /// # }
@@ -202,7 +202,7 @@ impl ReleaseFetcher<client::ReqwestClient, http::Uri, kind::All> {
     /// use umls_downloader::{ReleaseFetcher, client::ReqwestClient, kind::All};
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let category = "https://uts-ws.nlm.nih.gov/releases".parse::<http::Uri>()?;
-    /// let fetcher = ReleaseFetcher::new(ReqwestClient::new(), category, All);
+    /// let fetcher = ReleaseFetcher::new(Default::default(), category, All);
     /// let selected = fetcher.uri();
     /// # Ok(())
     /// # }
@@ -224,7 +224,7 @@ impl ReleaseFetcher<client::ReqwestClient, http::Uri, kind::All> {
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let category = concat!("https://uts-ws.nlm.nih.gov/releases?",
     ///     "releaseType=umls-full-release&current=true").parse::<http::Uri>()?;
-    /// let releases = ReleaseFetcher::new(ReqwestClient::new(), category, All)
+    /// let releases = ReleaseFetcher::new(Default::default(), category, All)
     ///     .send().await?;
     /// # Ok(())
     /// # }
@@ -262,7 +262,7 @@ impl ReleaseFetcher<client::ReqwestClient, &str, Current> {
     /// use umls_downloader::{ReleaseFetcher, client::ReqwestClient, kind::Current};
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let category = "umls-full-release";
-    /// let fetcher = ReleaseFetcher::new(ReqwestClient::new(), category, Current);
+    /// let fetcher = ReleaseFetcher::new(Default::default(), category, Current);
     /// let selected = fetcher.name();
     /// # Ok(())
     /// # }
@@ -282,7 +282,7 @@ impl ReleaseFetcher<client::ReqwestClient, &str, Current> {
     /// use umls_downloader::{ReleaseFetcher, client::ReqwestClient, kind::Current};
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let category = "umls-full-release";
-    /// let releases = ReleaseFetcher::new(ReqwestClient::new(), category, Current)
+    /// let releases = ReleaseFetcher::new(Default::default(), category, Current)
     ///     .send().await?;
     /// # Ok(())
     /// # }
@@ -320,7 +320,7 @@ impl ReleaseFetcher<client::ReqwestClient, &str, kind::All> {
     /// use umls_downloader::{ReleaseFetcher, client::ReqwestClient, kind::All};
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let category = "umls-full-release";
-    /// let fetcher = ReleaseFetcher::new(ReqwestClient::new(), category, All);
+    /// let fetcher = ReleaseFetcher::new(Default::default(), category, All);
     /// let selected = fetcher.name();
     /// # Ok(())
     /// # }
@@ -340,7 +340,7 @@ impl ReleaseFetcher<client::ReqwestClient, &str, kind::All> {
     /// use umls_downloader::{ReleaseFetcher, client::ReqwestClient, kind::All};
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let category = "umls-full-release";
-    /// let releases = ReleaseFetcher::new(ReqwestClient::new(), category, All)
+    /// let releases = ReleaseFetcher::new(Default::default(), category, All)
     ///     .send().await?;
     /// # Ok(())
     /// # }
@@ -378,7 +378,7 @@ impl ReleaseFetcher<client::ReqwestClient, String, Current> {
     /// use umls_downloader::{ReleaseFetcher, client::ReqwestClient, kind::Current};
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let category = String::from("umls-full-release");
-    /// let fetcher = ReleaseFetcher::new(ReqwestClient::new(), category, Current);
+    /// let fetcher = ReleaseFetcher::new(Default::default(), category, Current);
     /// let selected = fetcher.name();
     /// # Ok(())
     /// # }
@@ -398,7 +398,7 @@ impl ReleaseFetcher<client::ReqwestClient, String, Current> {
     /// use umls_downloader::{ReleaseFetcher, client::ReqwestClient, kind::Current};
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let category = String::from("umls-full-release");
-    /// let releases = ReleaseFetcher::new(ReqwestClient::new(), category, Current)
+    /// let releases = ReleaseFetcher::new(Default::default(), category, Current)
     ///     .send().await?;
     /// # Ok(())
     /// # }
@@ -436,7 +436,7 @@ impl ReleaseFetcher<client::ReqwestClient, String, kind::All> {
     /// use umls_downloader::{ReleaseFetcher, client::ReqwestClient, kind::All};
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let category = String::from("umls-full-release");
-    /// let fetcher = ReleaseFetcher::new(ReqwestClient::new(), category, All);
+    /// let fetcher = ReleaseFetcher::new(Default::default(), category, All);
     /// let selected = fetcher.name();
     /// # Ok(())
     /// # }
@@ -456,7 +456,7 @@ impl ReleaseFetcher<client::ReqwestClient, String, kind::All> {
     /// use umls_downloader::{ReleaseFetcher, client::ReqwestClient, kind::All};
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let category = String::from("umls-full-release");
-    /// let releases = ReleaseFetcher::new(ReqwestClient::new(), category, All)
+    /// let releases = ReleaseFetcher::new(Default::default(), category, All)
     ///     .send().await?;
     /// # Ok(())
     /// # }
@@ -497,7 +497,7 @@ impl ReleaseFetcher<client::ReqwestClient, ReleaseType, Current> {
     ///     product: "UMLS".into(), name: "umls-full-release".into(),
     ///     endpoint: "https://uts-ws.nlm.nih.gov/releases".into(),
     /// };
-    /// let fetcher = ReleaseFetcher::new(ReqwestClient::new(), category, Current);
+    /// let fetcher = ReleaseFetcher::new(Default::default(), category, Current);
     /// let selected = fetcher.release_type();
     /// # Ok(())
     /// # }
@@ -523,7 +523,7 @@ impl ReleaseFetcher<client::ReqwestClient, ReleaseType, Current> {
     ///     endpoint: concat!("https://uts-ws.nlm.nih.gov/releases?",
     ///         "releaseType=umls-full-release&current=true").into(),
     /// };
-    /// let releases = ReleaseFetcher::new(ReqwestClient::new(), category, Current)
+    /// let releases = ReleaseFetcher::new(Default::default(), category, Current)
     ///     .send().await?;
     /// # Ok(())
     /// # }
@@ -558,7 +558,7 @@ impl ReleaseFetcher<client::ReqwestClient, ReleaseType, kind::All> {
     ///     product: "UMLS".into(), name: "umls-full-release".into(),
     ///     endpoint: "https://uts-ws.nlm.nih.gov/releases".into(),
     /// };
-    /// let fetcher = ReleaseFetcher::new(ReqwestClient::new(), category, All);
+    /// let fetcher = ReleaseFetcher::new(Default::default(), category, All);
     /// let selected = fetcher.release_type();
     /// # Ok(())
     /// # }
@@ -584,7 +584,7 @@ impl ReleaseFetcher<client::ReqwestClient, ReleaseType, kind::All> {
     ///     endpoint: concat!("https://uts-ws.nlm.nih.gov/releases?",
     ///         "releaseType=umls-full-release&current=true").into(),
     /// };
-    /// let releases = ReleaseFetcher::new(ReqwestClient::new(), category, All)
+    /// let releases = ReleaseFetcher::new(Default::default(), category, All)
     ///     .send().await?;
     /// # Ok(())
     /// # }
@@ -679,7 +679,7 @@ impl From<BoxError> for Error {
 /// # #[allow(deprecated)]
 /// use umls_downloader::{client::ReqwestClient, download_release};
 /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-/// let client = ReqwestClient::new();
+/// let client = Default::default();
 /// let source = "https://download.nlm.nih.gov/umls/kss/2026AA/umls-2026AA-full.zip".parse()?;
 /// let key = std::env::var("UMLS_API_KEY")?;
 /// # #[allow(deprecated)]
@@ -732,7 +732,7 @@ fn download_uri(release_download_uri: &http::Uri, api_key: &str) -> Result<http:
 /// # #[allow(deprecated)]
 /// use umls_downloader::{client::ReqwestClient, download_release_to_path};
 /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-/// let client = ReqwestClient::new();
+/// let client = Default::default();
 /// let source = "https://download.nlm.nih.gov/umls/kss/2026AA/umls-2026AA-full.zip".parse()?;
 /// let key = std::env::var("UMLS_API_KEY")?;
 /// # #[allow(deprecated)]
@@ -781,7 +781,7 @@ pub async fn download_release_to_path<P: AsRef<Path>>(
 /// # #[allow(deprecated)]
 /// use umls_downloader::{client::ReqwestClient, download_umls_terminology_service};
 /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-/// let client = ReqwestClient::new();
+/// let client = Default::default();
 /// let source = "https://download.nlm.nih.gov/umls/kss/2026AA/umls-2026AA-full.zip".parse()?;
 /// let key = std::env::var("UMLS_API_KEY")?;
 /// # #[allow(deprecated)]

@@ -143,7 +143,7 @@ impl Client<WithoutClient> {
     /// # #[cfg(feature = "reqwest")]
     /// # {
     /// use umls_downloader::{client::ReqwestClient, release_type::Client};
-    /// let client = Client::default().with_client(ReqwestClient::new());
+    /// let client = Client::default().with_client(ReqwestClient::default());
     /// # }
     /// ```
     pub fn with_client<T>(self, client: T) -> Client<T> {
@@ -163,7 +163,7 @@ impl Client<ReqwestClient> {
     /// ```no_run
     /// use umls_downloader::{client::ReqwestClient, release_type::Client};
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-    /// let client = Client::default().with_client(ReqwestClient::new());
+    /// let client = Client::default().with_client(ReqwestClient::default());
     /// for category in client.fetch().await? {
     ///     println!("{}: {}", category.product(), category.name());
     /// }

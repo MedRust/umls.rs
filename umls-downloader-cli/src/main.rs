@@ -183,7 +183,7 @@ fn destination_path(input: &str, file_name: &str) -> PathBuf {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
-    let client = ReqwestClient::new();
+    let client = ReqwestClient::default();
     let mut terminal = ratatui::init();
     let result = run(&mut terminal, client.clone(), args.api_key).await;
     ratatui::restore();
