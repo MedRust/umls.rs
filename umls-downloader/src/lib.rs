@@ -8,7 +8,6 @@
 //! [uts]: https://documentation.uts.nlm.nih.gov/automating-downloads.html
 #![warn(missing_docs)]
 
-use std::pin::Pin;
 #[cfg(feature = "reqwest")]
 use std::{
     fs::File,
@@ -16,8 +15,10 @@ use std::{
     path::Path,
 };
 
+#[cfg(feature = "reqwest")]
 use bytes::Bytes;
 use chrono::NaiveDate;
+#[cfg(feature = "reqwest")]
 use futures_core::Stream;
 #[cfg(feature = "reqwest")]
 use futures_util::StreamExt;
@@ -180,7 +181,8 @@ impl ReleaseFetcher<client::ReqwestClient, http::Uri, Current> {
     /// # Errors
     ///
     /// Returns an error if URI or request construction, serialization, transport, HTTP 4xx or 5xx
-    /// status validation, or release metadata decoding fails. Failures use [`http::Error`].
+    /// status validation, or release metadata decoding fails. Failures preserve typed client errors in [`Error::Client`]
+    /// or report invalid URIs through [`Error::Uri`].
     pub async fn send(self) -> Result<Option<Release>, Error<client::Error>> {
         let uri = self.uri();
 
@@ -243,7 +245,8 @@ impl ReleaseFetcher<client::ReqwestClient, http::Uri, kind::All> {
     /// # Errors
     ///
     /// Returns an error if URI or request construction, serialization, transport, HTTP 4xx or 5xx
-    /// status validation, or release metadata decoding fails. Failures use [`http::Error`].
+    /// status validation, or release metadata decoding fails. Failures preserve typed client errors in [`Error::Client`]
+    /// or report invalid URIs through [`Error::Uri`].
     pub async fn send(self) -> Result<Vec<Release>, Error<client::Error>> {
         let uri = self.uri();
 
@@ -304,7 +307,8 @@ impl ReleaseFetcher<client::ReqwestClient, &str, Current> {
     /// # Errors
     ///
     /// Returns an error if URI or request construction, serialization, transport, HTTP 4xx or 5xx
-    /// status validation, or release metadata decoding fails. Failures use [`http::Error`].
+    /// status validation, or release metadata decoding fails. Failures preserve typed client errors in [`Error::Client`]
+    /// or report invalid URIs through [`Error::Uri`].
     pub async fn send(self) -> Result<Option<Release>, Error<client::Error>> {
         let release_type = self.name();
 
@@ -363,7 +367,8 @@ impl ReleaseFetcher<client::ReqwestClient, &str, kind::All> {
     /// # Errors
     ///
     /// Returns an error if URI or request construction, serialization, transport, HTTP 4xx or 5xx
-    /// status validation, or release metadata decoding fails. Failures use [`http::Error`].
+    /// status validation, or release metadata decoding fails. Failures preserve typed client errors in [`Error::Client`]
+    /// or report invalid URIs through [`Error::Uri`].
     pub async fn send(self) -> Result<Vec<Release>, Error<client::Error>> {
         let release_type = self.name();
 
@@ -422,7 +427,8 @@ impl ReleaseFetcher<client::ReqwestClient, String, Current> {
     /// # Errors
     ///
     /// Returns an error if URI or request construction, serialization, transport, HTTP 4xx or 5xx
-    /// status validation, or release metadata decoding fails. Failures use [`http::Error`].
+    /// status validation, or release metadata decoding fails. Failures preserve typed client errors in [`Error::Client`]
+    /// or report invalid URIs through [`Error::Uri`].
     pub async fn send(self) -> Result<Option<Release>, Error<client::Error>> {
         let release_type = self.name();
 
@@ -481,7 +487,8 @@ impl ReleaseFetcher<client::ReqwestClient, String, kind::All> {
     /// # Errors
     ///
     /// Returns an error if URI or request construction, serialization, transport, HTTP 4xx or 5xx
-    /// status validation, or release metadata decoding fails. Failures use [`http::Error`].
+    /// status validation, or release metadata decoding fails. Failures preserve typed client errors in [`Error::Client`]
+    /// or report invalid URIs through [`Error::Uri`].
     pub async fn send(self) -> Result<Vec<Release>, Error<client::Error>> {
         let release_type = self.name();
 
@@ -549,7 +556,8 @@ impl ReleaseFetcher<client::ReqwestClient, ReleaseType, Current> {
     /// # Errors
     ///
     /// Returns an error if URI or request construction, serialization, transport, HTTP 4xx or 5xx
-    /// status validation, or release metadata decoding fails. Failures use [`http::Error`].
+    /// status validation, or release metadata decoding fails. Failures preserve typed client errors in [`Error::Client`]
+    /// or report invalid URIs through [`Error::Uri`].
     pub async fn send(self) -> Result<Option<Release>, Error<client::Error>> {
         let uri: http::Uri = self.release_type().endpoint().parse().map_err(Error::Uri)?;
 
@@ -610,7 +618,8 @@ impl ReleaseFetcher<client::ReqwestClient, ReleaseType, kind::All> {
     /// # Errors
     ///
     /// Returns an error if URI or request construction, serialization, transport, HTTP 4xx or 5xx
-    /// status validation, or release metadata decoding fails. Failures use [`http::Error`].
+    /// status validation, or release metadata decoding fails. Failures preserve typed client errors in [`Error::Client`]
+    /// or report invalid URIs through [`Error::Uri`].
     pub async fn send(self) -> Result<Vec<Release>, Error<client::Error>> {
         let uri: http::Uri = self.release_type().endpoint().parse().map_err(Error::Uri)?;
 
@@ -620,16 +629,10 @@ impl ReleaseFetcher<client::ReqwestClient, ReleaseType, kind::All> {
     }
 }
 
-/// A thread-safe, dynamically dispatched error produced while reading a stream.
-pub type BoxError = Box<dyn std::error::Error + Send + Sync>;
-
-/// A pinned stream of release-file byte chunks.
-pub type ByteStream = Pin<Box<dyn Stream<Item = Result<Bytes, BoxError>> + Send + 'static>>;
-
 #[derive(Debug, Error)]
 /// Errors that can occur while downloading a release.
 pub enum Error<T: std::error::Error> {
-    /// An error constructing or executing the HTTP request.
+    /// An error constructing or executing the HTTP request, or reading its response body.
     #[error("Client error: {0}")]
     Client(#[source] T),
 
@@ -644,10 +647,6 @@ pub enum Error<T: std::error::Error> {
     /// An error creating, writing, or flushing the destination file.
     #[error("I/O Error: {0}")]
     Io(#[source] std::io::Error),
-
-    /// An error yielded while reading the response body.
-    #[error("response stream error: {0}")]
-    Stream(#[source] BoxError),
 }
 
 impl<T: std::error::Error> From<url::ParseError> for Error<T> {
@@ -662,17 +661,11 @@ impl<T: std::error::Error> From<std::io::Error> for Error<T> {
     }
 }
 
-impl<T: std::error::Error> From<BoxError> for Error<T> {
-    fn from(value: BoxError) -> Self {
-        Self::Stream(value)
-    }
-}
-
 /// Builds a release download operation with a client and destination value.
 ///
 /// A downloader is created without a client and transitions to an executable state with
 /// [`Self::with_client`]. The destination type selects the operation: an [`http::Uri`] produces a
-/// [`ByteStream`], while [`DownloadResource`] writes the response to a path.
+/// stream of byte chunks, while [`DownloadResource`] writes the response to a path.
 ///
 /// # Examples
 ///
@@ -738,16 +731,23 @@ impl<T> ReleaseDownloader<WithoutClient, T> {
 impl ReleaseDownloader<ReqwestClient, http::Uri> {
     /// Starts a release download and returns its response body as a stream.
     ///
-    /// The request is sent lazily when this method is awaited. The returned [`ByteStream`] owns
-    /// the response body and yields chunks as they arrive. It does not create or modify a file.
+    /// The request is sent when this method is awaited. The returned stream owns the response
+    /// body and yields byte chunks as they arrive, with failures reported as [`client::Error`].
+    /// Pin the stream before consuming it with [`StreamExt::next`]. It does not create or modify
+    /// a file.
     ///
     /// # Errors
     ///
     /// Returns [`Error::Url`] or [`Error::Uri`] when the UTS download URL cannot be constructed,
-    /// [`Error::Http`] when the request or response cannot be built, or an error produced by the
+    /// [`Error::Client`] when the request or response cannot be built, or an error produced by the
     /// underlying HTTP client. Errors encountered while reading the body are yielded by the
     /// returned stream.
-    pub async fn download(&self) -> Result<ByteStream, Error<client::Error>> {
+    pub async fn download(
+        &self,
+    ) -> Result<
+        impl Stream<Item = Result<Bytes, client::Error>> + Send + 'static + use<>,
+        Error<client::Error>,
+    > {
         let uri = download_uri(&self.value, self.api_key.expose_secret())?;
 
         let request = http::Request::builder()
@@ -769,7 +769,7 @@ impl ReleaseDownloader<ReqwestClient, http::Uri> {
 ///
 /// When used with [`ReleaseDownloader`], a destination implementing [`AsRef<Path>`] causes the
 /// downloaded response to be written to that path. Existing files are replaced. The destination
-/// may be a [`PathBuf`], `&Path`, or another path-like type.
+/// may be a [`PathBuf`](std::path::PathBuf), `&Path`, or another path-like type.
 ///
 /// # Examples
 ///
@@ -819,19 +819,20 @@ impl<D: AsRef<Path>> ReleaseDownloader<ReqwestClient, DownloadResource<D>> {
     /// # Errors
     ///
     /// Returns [`Error::Io`] when the destination cannot be created, written, or flushed. Returns
-    /// [`Error::Stream`] when reading the response body fails, or another [`Error`] variant when
+    /// [`Error::Client`] when reading the response body fails, or another [`enum@Error`] variant when
     /// request construction or the HTTP operation fails.
     pub async fn download(self) -> Result<(), Error<client::Error>> {
-        let mut stream = ReleaseDownloader::new(self.api_key.clone(), self.value.source)
+        let stream = ReleaseDownloader::new(self.api_key.clone(), self.value.source)
             .with_client(self.client.clone())
             .download()
             .await?;
 
+        let mut stream = std::pin::pin!(stream);
         let file = File::create(self.value.destination)?;
         let mut writer = BufWriter::new(file);
 
         while let Some(chunk) = stream.next().await {
-            writer.write_all(&chunk?)?;
+            writer.write_all(&chunk.map_err(Error::Client)?)?;
         }
 
         writer.flush()?;
@@ -853,7 +854,7 @@ fn download_uri(
     url.as_str().parse().map_err(Error::Uri)
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "reqwest"))]
 mod tests {
     use super::download_uri;
 

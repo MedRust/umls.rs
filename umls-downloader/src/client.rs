@@ -5,14 +5,13 @@
 #[cfg(feature = "reqwest")]
 use bytes::Bytes;
 #[cfg(feature = "reqwest")]
-use futures_util::{StreamExt, TryStreamExt};
+use futures_core::Stream;
+#[cfg(feature = "reqwest")]
+use futures_util::TryStreamExt;
 #[cfg(feature = "reqwest")]
 use serde::Serialize;
 #[cfg(feature = "reqwest")]
 use serde::de::DeserializeOwned;
-
-#[cfg(feature = "reqwest")]
-use crate::{BoxError, ByteStream};
 
 /// Marks a request builder that has no HTTP client attached.
 ///
@@ -50,7 +49,7 @@ pub enum Error {
     #[error("JSON error: {0}")]
     Json(#[source] serde_json::Error),
 
-    /// Reports a transport or HTTP-status failure from reqwest.
+    /// Reports a transport, HTTP-status, response decoding, or body stream failure from reqwest.
     #[error("Reqwest error: {0}")]
     Reqwest(#[source] reqwest::Error),
 
@@ -160,9 +159,9 @@ impl ReqwestClient {
 
     /// Sends a request and returns its response body as a byte stream.
     ///
-    /// The response retains the HTTP status and headers. Body chunks are read as the returned
-    /// stream
-    /// is polled; subsequent read failures are yielded as stream errors.
+    /// The response retains the HTTP status and headers. The returned stream owns the response
+    /// body and reads chunks as it is polled. Read failures are yielded as [`Error::Reqwest`].
+    /// Pin the stream before consuming it with [`next`](futures_util::StreamExt::next).
     /// The request body is serialized as JSON; a JSON `null` body is omitted. The caller supplies
     /// any required content-type header.
     ///
@@ -188,14 +187,14 @@ impl ReqwestClient {
     pub async fn execute_stream<T: Serialize + Send>(
         &self,
         request: http::Request<T>,
-    ) -> Result<http::Response<ByteStream>, Error> {
+    ) -> Result<
+        http::Response<impl Stream<Item = Result<Bytes, Error>> + Send + 'static + use<T>>,
+        Error,
+    > {
         let response = self.send(request).await?;
         let status = response.status();
         let headers = response.headers().clone();
-        let stream = response
-            .bytes_stream()
-            .map_err(|error| Box::new(error) as BoxError);
-        let body: ByteStream = Box::pin(stream.map(|chunk: Result<Bytes, BoxError>| chunk));
+        let body = response.bytes_stream().map_err(Error::Reqwest);
         let mut output = http::Response::builder().status(status);
         *output.headers_mut().expect("response builder has headers") = headers;
         output.body(body).map_err(Error::Http)

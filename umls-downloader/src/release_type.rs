@@ -174,7 +174,8 @@ impl Client<ReqwestClient> {
     /// # Errors
     ///
     /// Returns an error if request construction, serialization, transport, HTTP 4xx or 5xx status
-    /// validation, or response decoding fails. Failures are reported as [`http::Error`].
+    /// validation, or response decoding fails. Failures preserve typed client errors
+    /// in [`crate::Error::Client`].
     pub async fn fetch(&self) -> Result<Vec<ReleaseType>, crate::Error<client::Error>> {
         let request = http::Request::builder()
             .uri("https://uts-ws.nlm.nih.gov/releases")
