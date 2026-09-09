@@ -177,8 +177,20 @@ impl Client<reqwest::Client> {
     /// validation, or response decoding fails. Failures preserve typed client errors
     /// in [`crate::Error::Client`].
     pub async fn fetch(&self) -> Result<Vec<ReleaseType>, crate::Error<reqwest::Error>> {
+        self.fetch_from_uri(
+            "https://uts-ws.nlm.nih.gov/releases"
+                .parse()
+                .expect("valid release endpoint"),
+        )
+        .await
+    }
+
+    async fn fetch_from_uri(
+        &self,
+        uri: http::Uri,
+    ) -> Result<Vec<ReleaseType>, crate::Error<reqwest::Error>> {
         let request = http::Request::builder()
-            .uri("https://uts-ws.nlm.nih.gov/releases")
+            .uri(uri)
             .method(http::Method::GET)
             .body(())
             .map_err(reqwest::Error::Http)
@@ -190,5 +202,38 @@ impl Client<reqwest::Client> {
             .map(|x| x.into_body())
             .map(|x| x.types)
             .map_err(crate::Error::Client)
+    }
+}
+
+#[cfg(all(test, feature = "reqwest"))]
+mod tests {
+    use super::*;
+    use httpmock::prelude::*;
+
+    #[tokio::test]
+    async fn discovery_decodes_categories_and_empty_lists() {
+        let server = MockServer::start_async().await;
+        for types in [
+            serde_json::json!([]),
+            serde_json::json!([{
+                "product":"UMLS", "releaseType":"umls-full-release",
+                "endpoint":"https://example.test/releases?custom=kept"
+            }]),
+        ] {
+            let mock = server
+                .mock_async(|when, then| {
+                    when.method(GET).path("/releases");
+                    then.json_body(serde_json::json!({"releaseTypes":types}));
+                })
+                .await;
+            let client = Client::default().with_client(reqwest::Client::default());
+            let result = client
+                .fetch_from_uri(server.url("/releases").parse().unwrap())
+                .await
+                .unwrap();
+            assert_eq!(serde_json::to_value(result).unwrap(), types);
+            mock.assert_async().await;
+            mock.delete_async().await;
+        }
     }
 }

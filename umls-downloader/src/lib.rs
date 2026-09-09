@@ -318,12 +318,7 @@ impl ReleaseFetcher<reqwest::Client, &str, Current> {
     pub async fn send(self) -> Result<Option<Release>, Error<reqwest::Error>> {
         let release_type = self.name();
 
-        let uri: http::Uri = format!(
-            "https://uts-ws.nlm.nih.gov/releases?releaseType={}&current=true",
-            release_type
-        )
-        .parse()
-        .map_err(Error::Uri)?;
+        let uri = release_uri(release_type, true).map_err(Error::Uri)?;
 
         ReleaseFetcher::new(self.client, uri, self.kind)
             .send()
@@ -378,12 +373,7 @@ impl ReleaseFetcher<reqwest::Client, &str, kind::All> {
     pub async fn send(self) -> Result<Vec<Release>, Error<reqwest::Error>> {
         let release_type = self.name();
 
-        let uri: http::Uri = format!(
-            "https://uts-ws.nlm.nih.gov/releases?releaseType={}",
-            release_type
-        )
-        .parse()
-        .map_err(Error::Uri)?;
+        let uri = release_uri(release_type, false).map_err(Error::Uri)?;
 
         ReleaseFetcher::new(self.client, uri, self.kind)
             .send()
@@ -438,12 +428,7 @@ impl ReleaseFetcher<reqwest::Client, String, Current> {
     pub async fn send(self) -> Result<Option<Release>, Error<reqwest::Error>> {
         let release_type = self.name();
 
-        let uri: http::Uri = format!(
-            "https://uts-ws.nlm.nih.gov/releases?releaseType={}&current=true",
-            release_type
-        )
-        .parse()
-        .map_err(Error::Uri)?;
+        let uri = release_uri(release_type, true).map_err(Error::Uri)?;
 
         ReleaseFetcher::new(self.client, uri, self.kind)
             .send()
@@ -498,12 +483,7 @@ impl ReleaseFetcher<reqwest::Client, String, kind::All> {
     pub async fn send(self) -> Result<Vec<Release>, Error<reqwest::Error>> {
         let release_type = self.name();
 
-        let uri: http::Uri = format!(
-            "https://uts-ws.nlm.nih.gov/releases?releaseType={}",
-            release_type
-        )
-        .parse()
-        .map_err(Error::Uri)?;
+        let uri = release_uri(release_type, false).map_err(Error::Uri)?;
 
         ReleaseFetcher::new(self.client, uri, self.kind)
             .send()
@@ -756,6 +736,16 @@ impl ReleaseDownloader<Client, http::Uri> {
     > {
         let uri = download_uri(&self.value, self.api_key.expose_secret())?;
 
+        self.download_from_uri(uri).await
+    }
+
+    async fn download_from_uri(
+        &self,
+        uri: http::Uri,
+    ) -> Result<
+        impl Stream<Item = Result<Bytes, reqwest::Error>> + Send + 'static + use<>,
+        Error<reqwest::Error>,
+    > {
         let request = http::Request::builder()
             .method(http::Method::GET)
             .uri(uri)
@@ -833,18 +823,29 @@ impl<D: AsRef<Path>> ReleaseDownloader<Client, DownloadResource<D>> {
             .download()
             .await?;
 
-        let mut stream = std::pin::pin!(stream);
-        let file = File::create(self.value.destination)?;
-        let mut writer = BufWriter::new(file);
-
-        while let Some(chunk) = stream.next().await {
-            writer.write_all(&chunk.map_err(Error::Client)?)?;
-        }
-
-        writer.flush()?;
-
-        Ok(())
+        write_download(stream, self.value.destination).await
     }
+}
+
+#[cfg(feature = "reqwest")]
+async fn write_download(
+    stream: impl Stream<Item = Result<Bytes, reqwest::Error>>,
+    destination: impl AsRef<Path>,
+) -> Result<(), Error<reqwest::Error>> {
+    let mut stream = std::pin::pin!(stream);
+    let file = File::create(destination)?;
+    let mut writer = BufWriter::new(file);
+    while let Some(chunk) = stream.next().await {
+        writer.write_all(&chunk.map_err(Error::Client)?)?;
+    }
+    writer.flush()?;
+    Ok(())
+}
+
+#[cfg(feature = "reqwest")]
+fn release_uri(name: &str, current: bool) -> Result<http::Uri, http::uri::InvalidUri> {
+    let filter = if current { "&current=true" } else { "" };
+    format!("https://uts-ws.nlm.nih.gov/releases?releaseType={name}{filter}").parse()
 }
 
 #[cfg(feature = "reqwest")]
@@ -884,3 +885,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(all(test, feature = "reqwest"))]
+#[path = "download_tests.rs"]
+mod download_tests;

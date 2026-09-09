@@ -26,3 +26,8 @@ serde = { version = "1.0.229", features = ["derive"] }
 serde_json = { version = "1.0.151", optional = true }
 thiserror = "2.0.19"
 url = { version = "2.5.8", features = ["serde"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "io-util", "sync", "time"] }
+httpmock = "0.8.3"
+tempfile = "3"

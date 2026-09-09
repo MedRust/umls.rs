@@ -261,12 +261,21 @@ async fn run_download(
         .with_client(client)
         .download();
 
+    Ok(wait_for_download(operation, EventStream::new()).await)
+}
+
+async fn wait_for_download(
+    operation: impl std::future::Future<
+        Output = Result<(), umls_downloader::Error<client::reqwest::Error>>,
+    >,
+    events: impl futures_util::Stream<Item = std::io::Result<Event>>,
+) -> DownloadResult {
     tokio::pin!(operation);
-    let mut events = EventStream::new();
+    tokio::pin!(events);
 
     loop {
         tokio::select! {
-            result = &mut operation => return Ok(DownloadResult::Completed(result)),
+            result = &mut operation => return DownloadResult::Completed(result),
             event = events.next() => {
                 let Some(Ok(Event::Key(key))) = event else {
                     continue;
@@ -275,8 +284,8 @@ async fn run_download(
                     continue;
                 }
                 match key.code {
-                    KeyCode::Esc => return Ok(DownloadResult::Cancelled { quit: false }),
-                    KeyCode::Char('q') => return Ok(DownloadResult::Cancelled { quit: true }),
+                    KeyCode::Esc => return DownloadResult::Cancelled { quit: false },
+                    KeyCode::Char('q') => return DownloadResult::Cancelled { quit: true },
                     _ => {}
                 }
             }
@@ -520,5 +529,98 @@ mod tests {
         let download = app.accept_api_key().unwrap();
         assert_eq!(download.api_key, "secret");
         assert_eq!(download.destination, Path::new("rxnorm.zip"));
+    }
+}
+
+#[cfg(test)]
+mod cancellation_tests {
+    use super::*;
+    use std::sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    };
+
+    #[test]
+    fn explicit_filename_and_existing_directory_destinations() {
+        assert_eq!(
+            destination_path(" custom.zip ", "original.zip"),
+            PathBuf::from("custom.zip")
+        );
+        let directory = std::env::temp_dir();
+        assert_eq!(
+            destination_path(directory.to_str().unwrap(), "original.zip"),
+            directory.join("original.zip")
+        );
+        let trailing = format!("new-directory{}", std::path::MAIN_SEPARATOR);
+        assert_eq!(
+            destination_path(&trailing, "original.zip"),
+            PathBuf::from("new-directory").join("original.zip")
+        );
+    }
+
+    #[tokio::test]
+    async fn escape_and_quit_cancel_and_drop_download() {
+        struct DropFlag(Arc<AtomicBool>);
+        impl Drop for DropFlag {
+            fn drop(&mut self) {
+                self.0.store(true, Ordering::SeqCst);
+            }
+        }
+        for (key, expected_quit) in [(KeyCode::Esc, false), (KeyCode::Char('q'), true)] {
+            let dropped = Arc::new(AtomicBool::new(false));
+            let guard = DropFlag(dropped.clone());
+            let operation = async move {
+                let _guard = guard;
+                std::future::pending().await
+            };
+            let events = futures_util::stream::iter([Ok(Event::Key(KeyEvent::new(
+                key,
+                event::KeyModifiers::NONE,
+            )))]);
+            let result = wait_for_download(operation, events).await;
+            assert!(matches!(result, DownloadResult::Cancelled { quit } if quit == expected_quit));
+            assert!(dropped.load(Ordering::SeqCst));
+        }
+    }
+
+    #[tokio::test]
+    async fn irrelevant_and_release_events_do_not_cancel() {
+        let mut release = KeyEvent::new(KeyCode::Esc, event::KeyModifiers::NONE);
+        release.kind = KeyEventKind::Release;
+        let events = futures_util::stream::iter([
+            Ok(Event::Resize(80, 24)),
+            Ok(Event::Key(release)),
+            Ok(Event::Key(KeyEvent::new(
+                KeyCode::Char('x'),
+                event::KeyModifiers::NONE,
+            ))),
+            Ok(Event::Key(KeyEvent::new(
+                KeyCode::Esc,
+                event::KeyModifiers::NONE,
+            ))),
+        ]);
+        assert!(matches!(
+            wait_for_download(std::future::pending(), events).await,
+            DownloadResult::Cancelled { quit: false }
+        ));
+    }
+
+    #[tokio::test]
+    async fn completed_download_and_failure_are_returned() {
+        let result = wait_for_download(async { Ok(()) }, futures_util::stream::pending()).await;
+        assert!(matches!(result, DownloadResult::Completed(Ok(()))));
+        let result = wait_for_download(
+            async {
+                Err(umls_downloader::Error::Io(std::io::Error::other(
+                    "disk failure",
+                )))
+            },
+            futures_util::stream::pending(),
+        )
+        .await;
+        assert!(matches!(
+            result,
+            DownloadResult::Completed(Err(umls_downloader::Error::Io(_)))
+        ));
     }
 }
