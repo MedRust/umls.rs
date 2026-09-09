@@ -10,11 +10,16 @@
 
 use std::pin::Pin;
 #[cfg(feature = "reqwest")]
-use std::{fs::File, io::{BufWriter, Write}, path::Path};
+use std::{
+    fs::File,
+    io::{BufWriter, Write},
+    path::Path,
+};
 
 use bytes::Bytes;
 use chrono::NaiveDate;
 use futures_core::Stream;
+#[cfg(feature = "reqwest")]
 use futures_util::StreamExt;
 #[cfg(feature = "reqwest")]
 use secrecy::ExposeSecret;
@@ -176,18 +181,21 @@ impl ReleaseFetcher<client::ReqwestClient, http::Uri, Current> {
     ///
     /// Returns an error if URI or request construction, serialization, transport, HTTP 4xx or 5xx
     /// status validation, or release metadata decoding fails. Failures use [`http::Error`].
-    pub async fn send(self) -> Result<Option<Release>, http::Error> {
+    pub async fn send(self) -> Result<Option<Release>, Error<client::Error>> {
         let uri = self.uri();
 
         let request = http::Request::builder()
             .uri(uri.clone())
             .method(http::Method::GET)
-            .body(())?;
+            .body(())
+            .map_err(client::Error::Http)
+            .map_err(Error::Client)?;
 
         self.client
             .execute::<(), Vec<Release>>(request)
             .await
             .map(|x| x.into_body().first().cloned())
+            .map_err(Error::Client)
     }
 }
 
@@ -236,18 +244,21 @@ impl ReleaseFetcher<client::ReqwestClient, http::Uri, kind::All> {
     ///
     /// Returns an error if URI or request construction, serialization, transport, HTTP 4xx or 5xx
     /// status validation, or release metadata decoding fails. Failures use [`http::Error`].
-    pub async fn send(self) -> Result<Vec<Release>, http::Error> {
+    pub async fn send(self) -> Result<Vec<Release>, Error<client::Error>> {
         let uri = self.uri();
 
         let request = http::Request::builder()
             .uri(uri.clone())
             .method(http::Method::GET)
-            .body(())?;
+            .body(())
+            .map_err(client::Error::Http)
+            .map_err(Error::Client)?;
 
         self.client
             .execute::<(), Vec<Release>>(request)
             .await
             .map(|x| x.into_body())
+            .map_err(Error::Client)
     }
 }
 
@@ -294,14 +305,15 @@ impl ReleaseFetcher<client::ReqwestClient, &str, Current> {
     ///
     /// Returns an error if URI or request construction, serialization, transport, HTTP 4xx or 5xx
     /// status validation, or release metadata decoding fails. Failures use [`http::Error`].
-    pub async fn send(self) -> Result<Option<Release>, http::Error> {
+    pub async fn send(self) -> Result<Option<Release>, Error<client::Error>> {
         let release_type = self.name();
 
         let uri: http::Uri = format!(
             "https://uts-ws.nlm.nih.gov/releases?releaseType={}&current=true",
             release_type
         )
-        .parse()?;
+        .parse()
+        .map_err(Error::Uri)?;
 
         ReleaseFetcher::new(self.client, uri, self.kind)
             .send()
@@ -352,14 +364,15 @@ impl ReleaseFetcher<client::ReqwestClient, &str, kind::All> {
     ///
     /// Returns an error if URI or request construction, serialization, transport, HTTP 4xx or 5xx
     /// status validation, or release metadata decoding fails. Failures use [`http::Error`].
-    pub async fn send(self) -> Result<Vec<Release>, http::Error> {
+    pub async fn send(self) -> Result<Vec<Release>, Error<client::Error>> {
         let release_type = self.name();
 
         let uri: http::Uri = format!(
             "https://uts-ws.nlm.nih.gov/releases?releaseType={}",
             release_type
         )
-        .parse()?;
+        .parse()
+        .map_err(Error::Uri)?;
 
         ReleaseFetcher::new(self.client, uri, self.kind)
             .send()
@@ -410,14 +423,15 @@ impl ReleaseFetcher<client::ReqwestClient, String, Current> {
     ///
     /// Returns an error if URI or request construction, serialization, transport, HTTP 4xx or 5xx
     /// status validation, or release metadata decoding fails. Failures use [`http::Error`].
-    pub async fn send(self) -> Result<Option<Release>, http::Error> {
+    pub async fn send(self) -> Result<Option<Release>, Error<client::Error>> {
         let release_type = self.name();
 
         let uri: http::Uri = format!(
             "https://uts-ws.nlm.nih.gov/releases?releaseType={}&current=true",
             release_type
         )
-        .parse()?;
+        .parse()
+        .map_err(Error::Uri)?;
 
         ReleaseFetcher::new(self.client, uri, self.kind)
             .send()
@@ -468,14 +482,15 @@ impl ReleaseFetcher<client::ReqwestClient, String, kind::All> {
     ///
     /// Returns an error if URI or request construction, serialization, transport, HTTP 4xx or 5xx
     /// status validation, or release metadata decoding fails. Failures use [`http::Error`].
-    pub async fn send(self) -> Result<Vec<Release>, http::Error> {
+    pub async fn send(self) -> Result<Vec<Release>, Error<client::Error>> {
         let release_type = self.name();
 
         let uri: http::Uri = format!(
             "https://uts-ws.nlm.nih.gov/releases?releaseType={}",
             release_type
         )
-        .parse()?;
+        .parse()
+        .map_err(Error::Uri)?;
 
         ReleaseFetcher::new(self.client, uri, self.kind)
             .send()
@@ -535,8 +550,8 @@ impl ReleaseFetcher<client::ReqwestClient, ReleaseType, Current> {
     ///
     /// Returns an error if URI or request construction, serialization, transport, HTTP 4xx or 5xx
     /// status validation, or release metadata decoding fails. Failures use [`http::Error`].
-    pub async fn send(self) -> Result<Option<Release>, http::Error> {
-        let uri: http::Uri = self.release_type().endpoint().parse()?;
+    pub async fn send(self) -> Result<Option<Release>, Error<client::Error>> {
+        let uri: http::Uri = self.release_type().endpoint().parse().map_err(Error::Uri)?;
 
         ReleaseFetcher::new(self.client, uri, self.kind)
             .send()
@@ -596,8 +611,8 @@ impl ReleaseFetcher<client::ReqwestClient, ReleaseType, kind::All> {
     ///
     /// Returns an error if URI or request construction, serialization, transport, HTTP 4xx or 5xx
     /// status validation, or release metadata decoding fails. Failures use [`http::Error`].
-    pub async fn send(self) -> Result<Vec<Release>, http::Error> {
-        let uri: http::Uri = self.release_type().endpoint().parse()?;
+    pub async fn send(self) -> Result<Vec<Release>, Error<client::Error>> {
+        let uri: http::Uri = self.release_type().endpoint().parse().map_err(Error::Uri)?;
 
         ReleaseFetcher::new(self.client, uri, self.kind)
             .send()
@@ -613,10 +628,10 @@ pub type ByteStream = Pin<Box<dyn Stream<Item = Result<Bytes, BoxError>> + Send 
 
 #[derive(Debug, Error)]
 /// Errors that can occur while downloading a release.
-pub enum Error {
+pub enum Error<T: std::error::Error> {
     /// An error constructing or executing the HTTP request.
-    #[error("HTTP error: {0}")]
-    Http(#[source] http::Error),
+    #[error("Client error: {0}")]
+    Client(#[source] T),
 
     /// The UTS Download API base URL was invalid.
     #[error("URL parse error: {0}")]
@@ -635,31 +650,19 @@ pub enum Error {
     Stream(#[source] BoxError),
 }
 
-impl From<http::Error> for Error {
-    fn from(value: http::Error) -> Self {
-        Self::Http(value)
-    }
-}
-
-impl From<url::ParseError> for Error {
+impl<T: std::error::Error> From<url::ParseError> for Error<T> {
     fn from(value: url::ParseError) -> Self {
         Self::Url(value)
     }
 }
 
-impl From<http::uri::InvalidUri> for Error {
-    fn from(value: http::uri::InvalidUri) -> Self {
-        Self::Uri(value)
-    }
-}
-
-impl From<std::io::Error> for Error {
+impl<T: std::error::Error> From<std::io::Error> for Error<T> {
     fn from(value: std::io::Error) -> Self {
         Self::Io(value)
     }
 }
 
-impl From<BoxError> for Error {
+impl<T: std::error::Error> From<BoxError> for Error<T> {
     fn from(value: BoxError) -> Self {
         Self::Stream(value)
     }
@@ -744,15 +747,21 @@ impl ReleaseDownloader<ReqwestClient, http::Uri> {
     /// [`Error::Http`] when the request or response cannot be built, or an error produced by the
     /// underlying HTTP client. Errors encountered while reading the body are yielded by the
     /// returned stream.
-    pub async fn download(&self) -> Result<ByteStream, Error> {
+    pub async fn download(&self) -> Result<ByteStream, Error<client::Error>> {
         let uri = download_uri(&self.value, self.api_key.expose_secret())?;
 
         let request = http::Request::builder()
             .method(http::Method::GET)
             .uri(uri)
-            .body(())?;
+            .body(())
+            .map_err(client::Error::Http)
+            .map_err(Error::Client)?;
 
-        Ok(self.client.execute_stream(request).await?.into_body())
+        self.client
+            .execute_stream(request)
+            .await
+            .map(|x| x.into_body())
+            .map_err(Error::Client)
     }
 }
 
@@ -812,7 +821,7 @@ impl<D: AsRef<Path>> ReleaseDownloader<ReqwestClient, DownloadResource<D>> {
     /// Returns [`Error::Io`] when the destination cannot be created, written, or flushed. Returns
     /// [`Error::Stream`] when reading the response body fails, or another [`Error`] variant when
     /// request construction or the HTTP operation fails.
-    pub async fn download(self) -> Result<(), Error> {
+    pub async fn download(self) -> Result<(), Error<client::Error>> {
         let mut stream = ReleaseDownloader::new(self.api_key.clone(), self.value.source)
             .with_client(self.client.clone())
             .download()
@@ -831,13 +840,17 @@ impl<D: AsRef<Path>> ReleaseDownloader<ReqwestClient, DownloadResource<D>> {
     }
 }
 
-fn download_uri(release_download_uri: &http::Uri, api_key: &str) -> Result<http::Uri, Error> {
+#[cfg(feature = "reqwest")]
+fn download_uri(
+    release_download_uri: &http::Uri,
+    api_key: &str,
+) -> Result<http::Uri, Error<client::Error>> {
     let mut url = url::Url::parse("https://uts-ws.nlm.nih.gov/download")?;
     url.query_pairs_mut()
         .append_pair("url", &release_download_uri.to_string())
         .append_pair("apiKey", api_key);
 
-    Ok(url.as_str().parse()?)
+    url.as_str().parse().map_err(Error::Uri)
 }
 
 #[cfg(test)]

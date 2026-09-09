@@ -2,9 +2,9 @@
 
 use serde::{Deserialize, Serialize};
 
-#[cfg(feature = "reqwest")]
-use crate::client::ReqwestClient;
 use crate::client::WithoutClient;
+#[cfg(feature = "reqwest")]
+use crate::client::{self, ReqwestClient};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -175,16 +175,19 @@ impl Client<ReqwestClient> {
     ///
     /// Returns an error if request construction, serialization, transport, HTTP 4xx or 5xx status
     /// validation, or response decoding fails. Failures are reported as [`http::Error`].
-    pub async fn fetch(&self) -> Result<Vec<ReleaseType>, http::Error> {
+    pub async fn fetch(&self) -> Result<Vec<ReleaseType>, crate::Error<client::Error>> {
         let request = http::Request::builder()
             .uri("https://uts-ws.nlm.nih.gov/releases")
             .method(http::Method::GET)
-            .body(())?;
+            .body(())
+            .map_err(client::Error::Http)
+            .map_err(crate::Error::Client)?;
 
         self.client
             .execute::<(), ReleaseTypes>(request)
             .await
             .map(|x| x.into_body())
             .map(|x| x.types)
+            .map_err(crate::Error::Client)
     }
 }

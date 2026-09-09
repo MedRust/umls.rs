@@ -162,7 +162,7 @@ struct Download {
 }
 
 enum DownloadResult {
-    Completed(Result<(), umls_downloader::Error>),
+    Completed(Result<(), umls_downloader::Error<umls_downloader::client::Error>>),
     Cancelled { quit: bool },
 }
 

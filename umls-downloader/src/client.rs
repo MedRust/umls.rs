@@ -2,12 +2,16 @@
 //!
 //! The `reqwest` feature enables [`ReqwestClient`].
 
+#[cfg(feature = "reqwest")]
 use bytes::Bytes;
+#[cfg(feature = "reqwest")]
 use futures_util::{StreamExt, TryStreamExt};
 #[cfg(feature = "reqwest")]
 use serde::Serialize;
+#[cfg(feature = "reqwest")]
 use serde::de::DeserializeOwned;
 
+#[cfg(feature = "reqwest")]
 use crate::{BoxError, ByteStream};
 
 /// Marks a request builder that has no HTTP client attached.
@@ -39,8 +43,46 @@ pub struct WithoutClient;
 pub struct ReqwestClient(reqwest::Client);
 
 #[cfg(feature = "reqwest")]
+#[derive(Debug, thiserror::Error)]
+/// Reports failures from the reqwest-backed client.
+pub enum Error {
+    /// Reports a JSON serialization or deserialization failure.
+    #[error("JSON error: {0}")]
+    Json(#[source] serde_json::Error),
+
+    /// Reports a transport or HTTP-status failure from reqwest.
+    #[error("Reqwest error: {0}")]
+    Reqwest(#[source] reqwest::Error),
+
+    /// Reports failure while constructing an HTTP response.
+    #[error("Http error: {0}")]
+    Http(#[source] http::Error),
+}
+
+#[cfg(feature = "reqwest")]
+impl From<reqwest::Error> for Error {
+    fn from(value: reqwest::Error) -> Self {
+        Error::Reqwest(value)
+    }
+}
+
+#[cfg(feature = "reqwest")]
+impl From<serde_json::Error> for Error {
+    fn from(value: serde_json::Error) -> Self {
+        Error::Json(value)
+    }
+}
+
+#[cfg(feature = "reqwest")]
+impl From<http::Error> for Error {
+    fn from(value: http::Error) -> Self {
+        Error::Http(value)
+    }
+}
+
+#[cfg(feature = "reqwest")]
 impl ReqwestClient {
-    /// Creates an HTTP client with reqwest's default configuration.
+    /// Wraps a configured reqwest client for downloader operations.
     ///
     /// The client reuses connections across requests and can be cloned for independent request
     /// builders that share a connection pool.
@@ -54,10 +96,6 @@ impl ReqwestClient {
     /// let client = ReqwestClient::new(reqwest_client);
     /// ```
     ///
-    /// # Panics
-    ///
-    /// Panics if the TLS backend cannot be initialized or the system resolver configuration
-    /// cannot be loaded.
     pub fn new(client: reqwest::Client) -> Self {
         Self(client)
     }
@@ -65,9 +103,9 @@ impl ReqwestClient {
     async fn send<T: Serialize + Send>(
         &self,
         request: http::Request<T>,
-    ) -> Result<reqwest::Response, http::Error> {
+    ) -> Result<reqwest::Response, Error> {
         let (parts, body) = request.into_parts();
-        let body = serde_json::to_vec(&body).map_err(as_http_error)?;
+        let body = serde_json::to_vec(&body).map_err(Error::Json)?;
         let mut builder = self.0.request(parts.method, parts.uri.to_string());
         for (name, value) in &parts.headers {
             builder = builder.header(name, value);
@@ -75,16 +113,9 @@ impl ReqwestClient {
         if !body.is_empty() && body != b"null" {
             builder = builder.body(body);
         }
-        let response = builder.send().await.map_err(as_http_error)?;
-        response.error_for_status().map_err(as_http_error)
+        let response = builder.send().await.map_err(Error::Reqwest)?;
+        response.error_for_status().map_err(Error::Reqwest)
     }
-}
-
-fn as_http_error(error: impl std::fmt::Display) -> http::Error {
-    // `HttpClient` currently exposes `http::Error`, so create one while retaining
-    // the transport message in the invalid URI value.
-    let invalid = format!("{}\n", error);
-    http::Request::builder().uri(invalid).body(()).unwrap_err()
 }
 
 #[cfg(feature = "reqwest")]
@@ -112,21 +143,19 @@ impl ReqwestClient {
     /// # Errors
     ///
     /// Returns an error if request serialization, transport, HTTP 4xx or 5xx status validation,
-    /// JSON decoding, or
-    /// response construction fails.
-    /// Request-stage failures are reported as [`http::Error`] without preserving their original
-    /// error type or source chain.
+    /// JSON decoding, or response construction fails. The returned error preserves the original
+    /// error as its source where the underlying library provides one.
     pub async fn execute<T: Serialize + Send, U: DeserializeOwned>(
         &self,
         request: http::Request<T>,
-    ) -> Result<http::Response<U>, http::Error> {
+    ) -> Result<http::Response<U>, Error> {
         let response = self.send(request).await?;
         let status = response.status();
         let headers = response.headers().clone();
-        let body = response.json::<U>().await.map_err(as_http_error)?;
+        let body = response.json::<U>().await?;
         let mut output = http::Response::builder().status(status);
         *output.headers_mut().expect("response builder has headers") = headers;
-        output.body(body)
+        output.body(body).map_err(Error::Http)
     }
 
     /// Sends a request and returns its response body as a byte stream.
@@ -152,15 +181,14 @@ impl ReqwestClient {
     ///
     /// # Errors
     ///
-    /// Returns an error if request serialization, transport, HTTP 4xx or 5xx status validation, or
-    /// response
-    /// construction fails. Errors while reading body chunks are returned by the stream.
-    /// Request-stage failures are reported as [`http::Error`] without preserving their original
-    /// error type or source chain.
+    /// Returns an error if request serialization, transport, HTTP 4xx or 5xx status validation,
+    /// or response construction fails. Errors while reading body chunks are returned by the
+    /// stream. The returned error preserves the original error as its source where the underlying
+    /// library provides one.
     pub async fn execute_stream<T: Serialize + Send>(
         &self,
         request: http::Request<T>,
-    ) -> Result<http::Response<ByteStream>, http::Error> {
+    ) -> Result<http::Response<ByteStream>, Error> {
         let response = self.send(request).await?;
         let status = response.status();
         let headers = response.headers().clone();
@@ -170,6 +198,6 @@ impl ReqwestClient {
         let body: ByteStream = Box::pin(stream.map(|chunk: Result<Bytes, BoxError>| chunk));
         let mut output = http::Response::builder().status(status);
         *output.headers_mut().expect("response builder has headers") = headers;
-        output.body(body)
+        output.body(body).map_err(Error::Http)
     }
 }
