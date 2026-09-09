@@ -1,29 +1,12 @@
 //! Provides clients for JSON requests and streamed HTTP responses.
 //!
-//! The `reqwest` feature enables [`ReqwestClient`].
+//! The `reqwest` feature enables [`Client`].
 
-#[cfg(feature = "reqwest")]
 use bytes::Bytes;
-#[cfg(feature = "reqwest")]
 use futures_core::Stream;
-#[cfg(feature = "reqwest")]
 use futures_util::TryStreamExt;
-#[cfg(feature = "reqwest")]
 use serde::Serialize;
-#[cfg(feature = "reqwest")]
 use serde::de::DeserializeOwned;
-
-/// Marks a request builder that has no HTTP client attached.
-///
-/// Builders in this state can accept a client before executing requests.
-///
-/// # Examples
-///
-/// ```
-/// use umls_downloader::client::WithoutClient;
-/// let state = WithoutClient;
-/// ```
-pub struct WithoutClient;
 
 #[cfg(feature = "reqwest")]
 #[derive(Clone, Default)]
@@ -35,11 +18,11 @@ pub struct WithoutClient;
 /// # Examples
 ///
 /// ```
-/// use umls_downloader::client::ReqwestClient;
-/// let client: ReqwestClient = Default::default();
+/// use umls_downloader::client::reqwest::Client;
+/// let client: Client = Default::default();
 /// let shared = client.clone();
 /// ```
-pub struct ReqwestClient(reqwest::Client);
+pub struct Client(reqwest::Client);
 
 #[cfg(feature = "reqwest")]
 #[derive(Debug, thiserror::Error)]
@@ -80,21 +63,11 @@ impl From<http::Error> for Error {
 }
 
 #[cfg(feature = "reqwest")]
-impl ReqwestClient {
+impl Client {
     /// Wraps a configured reqwest client for downloader operations.
     ///
     /// The client reuses connections across requests and can be cloned for independent request
     /// builders that share a connection pool.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use umls_downloader::client::ReqwestClient;
-    /// use reqwest::Client;
-    /// let reqwest_client = Client::new();
-    /// let client = ReqwestClient::new(reqwest_client);
-    /// ```
-    ///
     pub fn new(client: reqwest::Client) -> Self {
         Self(client)
     }
@@ -118,7 +91,7 @@ impl ReqwestClient {
 }
 
 #[cfg(feature = "reqwest")]
-impl ReqwestClient {
+impl Client {
     /// Sends a request and deserializes its JSON response.
     ///
     /// The response retains the HTTP status and headers. The entire response body is decoded as
@@ -129,14 +102,14 @@ impl ReqwestClient {
     /// # Examples
     ///
     /// ```no_run
-    /// use umls_downloader::client::ReqwestClient;
-    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-    /// let client: ReqwestClient = Default::default();
+    /// use umls_downloader::client::reqwest::Client;
+    /// async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client: Client = Default::default();
     /// let request = http::Request::get("https://uts-ws.nlm.nih.gov/releases").body(())?;
     /// let response = client.execute::<(), serde_json::Value>(request).await?;
     /// let body = response.into_body();
-    /// # Ok(())
-    /// # }
+    /// Ok(())
+    /// }
     /// ```
     ///
     /// # Errors
@@ -168,14 +141,14 @@ impl ReqwestClient {
     /// # Examples
     ///
     /// ```no_run
-    /// use umls_downloader::client::ReqwestClient;
-    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-    /// let client: ReqwestClient = Default::default();
+    /// use umls_downloader::client::reqwest::Client;
+    /// async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client: Client = Default::default();
     /// let request = http::Request::get("https://uts-ws.nlm.nih.gov/releases").body(())?;
     /// let response = client.execute_stream(request).await?;
     /// let stream = response.into_body();
-    /// # Ok(())
-    /// # }
+    /// Ok(())
+    /// }
     /// ```
     ///
     /// # Errors

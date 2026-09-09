@@ -1,9 +1,17 @@
 //! Asynchronous helpers for discovering and downloading releases from the
 //! [UMLS Terminology Services (UTS)][uts] Release and Download APIs.
 //!
-//! The `reqwest` feature enables concrete clients for release discovery and streaming downloads.
+//! Enable the optional `reqwest` feature to execute requests with
+//! `client::reqwest::Client`. Cloning the client shares its connection pool.
 //! [`release_type::Client`] fetches categories, and [`ReleaseFetcher`] fetches release metadata.
-//! Download operations return a stream or write an archive to a caller-selected path.
+//! [`ReleaseFetcher::new`] takes the HTTP client, category, and selection kind;
+//! its `send()` method consumes the fetcher. [`ReleaseDownloader::new`] takes an API
+//! key and either an [`http::Uri`] for streaming or a [`DownloadResource`] for file
+//! output. Attach the HTTP client with [`ReleaseDownloader::with_client`] before
+//! calling `download()`.
+//!
+//! Without `reqwest`, metadata and builder types remain available, but HTTP
+//! execution methods are disabled.
 //!
 //! [uts]: https://documentation.uts.nlm.nih.gov/automating-downloads.html
 #![warn(missing_docs)]
@@ -29,10 +37,8 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 #[cfg(feature = "reqwest")]
-use crate::client::ReqwestClient;
+use client::reqwest::{self, Client};
 
-use crate::client::WithoutClient;
-#[cfg(feature = "reqwest")]
 use crate::{kind::Current, release_type::ReleaseType};
 
 /// Provides concrete HTTP clients and a marker for builders without a client.
@@ -138,7 +144,7 @@ impl<C, Type, Kind: Copy> ReleaseFetcher<C, Type, Kind> {
 }
 
 #[cfg(feature = "reqwest")]
-impl ReleaseFetcher<client::ReqwestClient, http::Uri, Current> {
+impl ReleaseFetcher<reqwest::Client, http::Uri, Current> {
     /// Returns the exact Release API URI that will be requested.
     ///
     /// The returned reference borrows the category supplied during construction without making
@@ -147,10 +153,10 @@ impl ReleaseFetcher<client::ReqwestClient, http::Uri, Current> {
     /// # Examples
     ///
     /// ```
-    /// use umls_downloader::{ReleaseFetcher, client::ReqwestClient, kind::Current};
+    /// use umls_downloader::{ReleaseFetcher, client::reqwest::Client, kind::Current};
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let category = "https://uts-ws.nlm.nih.gov/releases".parse::<http::Uri>()?;
-    /// let fetcher = ReleaseFetcher::new(Default::default(), category, Current);
+    /// let fetcher = ReleaseFetcher::new(Client::default(), category, Current);
     /// let selected = fetcher.uri();
     /// # Ok(())
     /// # }
@@ -168,11 +174,11 @@ impl ReleaseFetcher<client::ReqwestClient, http::Uri, Current> {
     /// # Examples
     ///
     /// ```no_run
-    /// use umls_downloader::{ReleaseFetcher, client::ReqwestClient, kind::Current};
+    /// use umls_downloader::{ReleaseFetcher, client::reqwest::Client, kind::Current};
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let category = concat!("https://uts-ws.nlm.nih.gov/releases?",
     ///     "releaseType=umls-full-release&current=true").parse::<http::Uri>()?;
-    /// let releases = ReleaseFetcher::new(Default::default(), category, Current)
+    /// let releases = ReleaseFetcher::new(Client::default(), category, Current)
     ///     .send().await?;
     /// # Ok(())
     /// # }
@@ -183,14 +189,14 @@ impl ReleaseFetcher<client::ReqwestClient, http::Uri, Current> {
     /// Returns an error if URI or request construction, serialization, transport, HTTP 4xx or 5xx
     /// status validation, or release metadata decoding fails. Failures preserve typed client errors in [`Error::Client`]
     /// or report invalid URIs through [`Error::Uri`].
-    pub async fn send(self) -> Result<Option<Release>, Error<client::Error>> {
+    pub async fn send(self) -> Result<Option<Release>, Error<reqwest::Error>> {
         let uri = self.uri();
 
         let request = http::Request::builder()
             .uri(uri.clone())
             .method(http::Method::GET)
             .body(())
-            .map_err(client::Error::Http)
+            .map_err(reqwest::Error::Http)
             .map_err(Error::Client)?;
 
         self.client
@@ -202,7 +208,7 @@ impl ReleaseFetcher<client::ReqwestClient, http::Uri, Current> {
 }
 
 #[cfg(feature = "reqwest")]
-impl ReleaseFetcher<client::ReqwestClient, http::Uri, kind::All> {
+impl ReleaseFetcher<reqwest::Client, http::Uri, kind::All> {
     /// Returns the exact Release API URI that will be requested.
     ///
     /// The returned reference borrows the category supplied during construction without making
@@ -211,10 +217,10 @@ impl ReleaseFetcher<client::ReqwestClient, http::Uri, kind::All> {
     /// # Examples
     ///
     /// ```
-    /// use umls_downloader::{ReleaseFetcher, client::ReqwestClient, kind::All};
+    /// use umls_downloader::{ReleaseFetcher, client::reqwest::Client, kind::All};
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let category = "https://uts-ws.nlm.nih.gov/releases".parse::<http::Uri>()?;
-    /// let fetcher = ReleaseFetcher::new(Default::default(), category, All);
+    /// let fetcher = ReleaseFetcher::new(Client::default(), category, All);
     /// let selected = fetcher.uri();
     /// # Ok(())
     /// # }
@@ -232,11 +238,11 @@ impl ReleaseFetcher<client::ReqwestClient, http::Uri, kind::All> {
     /// # Examples
     ///
     /// ```no_run
-    /// use umls_downloader::{ReleaseFetcher, client::ReqwestClient, kind::All};
+    /// use umls_downloader::{ReleaseFetcher, client::reqwest::Client, kind::All};
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let category = concat!("https://uts-ws.nlm.nih.gov/releases?",
-    ///     "releaseType=umls-full-release&current=true").parse::<http::Uri>()?;
-    /// let releases = ReleaseFetcher::new(Default::default(), category, All)
+    ///     "releaseType=umls-full-release").parse::<http::Uri>()?;
+    /// let releases = ReleaseFetcher::new(Client::default(), category, All)
     ///     .send().await?;
     /// # Ok(())
     /// # }
@@ -247,14 +253,14 @@ impl ReleaseFetcher<client::ReqwestClient, http::Uri, kind::All> {
     /// Returns an error if URI or request construction, serialization, transport, HTTP 4xx or 5xx
     /// status validation, or release metadata decoding fails. Failures preserve typed client errors in [`Error::Client`]
     /// or report invalid URIs through [`Error::Uri`].
-    pub async fn send(self) -> Result<Vec<Release>, Error<client::Error>> {
+    pub async fn send(self) -> Result<Vec<Release>, Error<reqwest::Error>> {
         let uri = self.uri();
 
         let request = http::Request::builder()
             .uri(uri.clone())
             .method(http::Method::GET)
             .body(())
-            .map_err(client::Error::Http)
+            .map_err(reqwest::Error::Http)
             .map_err(Error::Client)?;
 
         self.client
@@ -266,7 +272,7 @@ impl ReleaseFetcher<client::ReqwestClient, http::Uri, kind::All> {
 }
 
 #[cfg(feature = "reqwest")]
-impl ReleaseFetcher<client::ReqwestClient, &str, Current> {
+impl ReleaseFetcher<reqwest::Client, &str, Current> {
     /// Returns the configured release-type identifier.
     ///
     /// The returned reference borrows the category supplied during construction without making
@@ -275,10 +281,10 @@ impl ReleaseFetcher<client::ReqwestClient, &str, Current> {
     /// # Examples
     ///
     /// ```
-    /// use umls_downloader::{ReleaseFetcher, client::ReqwestClient, kind::Current};
+    /// use umls_downloader::{ReleaseFetcher, client::reqwest::Client, kind::Current};
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let category = "umls-full-release";
-    /// let fetcher = ReleaseFetcher::new(Default::default(), category, Current);
+    /// let fetcher = ReleaseFetcher::new(Client::default(), category, Current);
     /// let selected = fetcher.name();
     /// # Ok(())
     /// # }
@@ -295,10 +301,10 @@ impl ReleaseFetcher<client::ReqwestClient, &str, Current> {
     /// # Examples
     ///
     /// ```no_run
-    /// use umls_downloader::{ReleaseFetcher, client::ReqwestClient, kind::Current};
+    /// use umls_downloader::{ReleaseFetcher, client::reqwest::Client, kind::Current};
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let category = "umls-full-release";
-    /// let releases = ReleaseFetcher::new(Default::default(), category, Current)
+    /// let releases = ReleaseFetcher::new(Client::default(), category, Current)
     ///     .send().await?;
     /// # Ok(())
     /// # }
@@ -309,7 +315,7 @@ impl ReleaseFetcher<client::ReqwestClient, &str, Current> {
     /// Returns an error if URI or request construction, serialization, transport, HTTP 4xx or 5xx
     /// status validation, or release metadata decoding fails. Failures preserve typed client errors in [`Error::Client`]
     /// or report invalid URIs through [`Error::Uri`].
-    pub async fn send(self) -> Result<Option<Release>, Error<client::Error>> {
+    pub async fn send(self) -> Result<Option<Release>, Error<reqwest::Error>> {
         let release_type = self.name();
 
         let uri: http::Uri = format!(
@@ -326,7 +332,7 @@ impl ReleaseFetcher<client::ReqwestClient, &str, Current> {
 }
 
 #[cfg(feature = "reqwest")]
-impl ReleaseFetcher<client::ReqwestClient, &str, kind::All> {
+impl ReleaseFetcher<reqwest::Client, &str, kind::All> {
     /// Returns the configured release-type identifier.
     ///
     /// The returned reference borrows the category supplied during construction without making
@@ -335,10 +341,10 @@ impl ReleaseFetcher<client::ReqwestClient, &str, kind::All> {
     /// # Examples
     ///
     /// ```
-    /// use umls_downloader::{ReleaseFetcher, client::ReqwestClient, kind::All};
+    /// use umls_downloader::{ReleaseFetcher, client::reqwest::Client, kind::All};
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let category = "umls-full-release";
-    /// let fetcher = ReleaseFetcher::new(Default::default(), category, All);
+    /// let fetcher = ReleaseFetcher::new(Client::default(), category, All);
     /// let selected = fetcher.name();
     /// # Ok(())
     /// # }
@@ -355,10 +361,10 @@ impl ReleaseFetcher<client::ReqwestClient, &str, kind::All> {
     /// # Examples
     ///
     /// ```no_run
-    /// use umls_downloader::{ReleaseFetcher, client::ReqwestClient, kind::All};
+    /// use umls_downloader::{ReleaseFetcher, client::reqwest::Client, kind::All};
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let category = "umls-full-release";
-    /// let releases = ReleaseFetcher::new(Default::default(), category, All)
+    /// let releases = ReleaseFetcher::new(Client::default(), category, All)
     ///     .send().await?;
     /// # Ok(())
     /// # }
@@ -369,7 +375,7 @@ impl ReleaseFetcher<client::ReqwestClient, &str, kind::All> {
     /// Returns an error if URI or request construction, serialization, transport, HTTP 4xx or 5xx
     /// status validation, or release metadata decoding fails. Failures preserve typed client errors in [`Error::Client`]
     /// or report invalid URIs through [`Error::Uri`].
-    pub async fn send(self) -> Result<Vec<Release>, Error<client::Error>> {
+    pub async fn send(self) -> Result<Vec<Release>, Error<reqwest::Error>> {
         let release_type = self.name();
 
         let uri: http::Uri = format!(
@@ -386,7 +392,7 @@ impl ReleaseFetcher<client::ReqwestClient, &str, kind::All> {
 }
 
 #[cfg(feature = "reqwest")]
-impl ReleaseFetcher<client::ReqwestClient, String, Current> {
+impl ReleaseFetcher<reqwest::Client, String, Current> {
     /// Returns the configured release-type identifier.
     ///
     /// The returned reference borrows the category supplied during construction without making
@@ -395,10 +401,10 @@ impl ReleaseFetcher<client::ReqwestClient, String, Current> {
     /// # Examples
     ///
     /// ```
-    /// use umls_downloader::{ReleaseFetcher, client::ReqwestClient, kind::Current};
+    /// use umls_downloader::{ReleaseFetcher, client::reqwest::Client, kind::Current};
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let category = String::from("umls-full-release");
-    /// let fetcher = ReleaseFetcher::new(Default::default(), category, Current);
+    /// let fetcher = ReleaseFetcher::new(Client::default(), category, Current);
     /// let selected = fetcher.name();
     /// # Ok(())
     /// # }
@@ -415,10 +421,10 @@ impl ReleaseFetcher<client::ReqwestClient, String, Current> {
     /// # Examples
     ///
     /// ```no_run
-    /// use umls_downloader::{ReleaseFetcher, client::ReqwestClient, kind::Current};
+    /// use umls_downloader::{ReleaseFetcher, client::reqwest::Client, kind::Current};
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let category = String::from("umls-full-release");
-    /// let releases = ReleaseFetcher::new(Default::default(), category, Current)
+    /// let releases = ReleaseFetcher::new(Client::default(), category, Current)
     ///     .send().await?;
     /// # Ok(())
     /// # }
@@ -429,7 +435,7 @@ impl ReleaseFetcher<client::ReqwestClient, String, Current> {
     /// Returns an error if URI or request construction, serialization, transport, HTTP 4xx or 5xx
     /// status validation, or release metadata decoding fails. Failures preserve typed client errors in [`Error::Client`]
     /// or report invalid URIs through [`Error::Uri`].
-    pub async fn send(self) -> Result<Option<Release>, Error<client::Error>> {
+    pub async fn send(self) -> Result<Option<Release>, Error<reqwest::Error>> {
         let release_type = self.name();
 
         let uri: http::Uri = format!(
@@ -446,7 +452,7 @@ impl ReleaseFetcher<client::ReqwestClient, String, Current> {
 }
 
 #[cfg(feature = "reqwest")]
-impl ReleaseFetcher<client::ReqwestClient, String, kind::All> {
+impl ReleaseFetcher<reqwest::Client, String, kind::All> {
     /// Returns the configured release-type identifier.
     ///
     /// The returned reference borrows the category supplied during construction without making
@@ -455,10 +461,10 @@ impl ReleaseFetcher<client::ReqwestClient, String, kind::All> {
     /// # Examples
     ///
     /// ```
-    /// use umls_downloader::{ReleaseFetcher, client::ReqwestClient, kind::All};
+    /// use umls_downloader::{ReleaseFetcher, client::reqwest::Client, kind::All};
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let category = String::from("umls-full-release");
-    /// let fetcher = ReleaseFetcher::new(Default::default(), category, All);
+    /// let fetcher = ReleaseFetcher::new(Client::default(), category, All);
     /// let selected = fetcher.name();
     /// # Ok(())
     /// # }
@@ -475,10 +481,10 @@ impl ReleaseFetcher<client::ReqwestClient, String, kind::All> {
     /// # Examples
     ///
     /// ```no_run
-    /// use umls_downloader::{ReleaseFetcher, client::ReqwestClient, kind::All};
+    /// use umls_downloader::{ReleaseFetcher, client::reqwest::Client, kind::All};
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let category = String::from("umls-full-release");
-    /// let releases = ReleaseFetcher::new(Default::default(), category, All)
+    /// let releases = ReleaseFetcher::new(Client::default(), category, All)
     ///     .send().await?;
     /// # Ok(())
     /// # }
@@ -489,7 +495,7 @@ impl ReleaseFetcher<client::ReqwestClient, String, kind::All> {
     /// Returns an error if URI or request construction, serialization, transport, HTTP 4xx or 5xx
     /// status validation, or release metadata decoding fails. Failures preserve typed client errors in [`Error::Client`]
     /// or report invalid URIs through [`Error::Uri`].
-    pub async fn send(self) -> Result<Vec<Release>, Error<client::Error>> {
+    pub async fn send(self) -> Result<Vec<Release>, Error<reqwest::Error>> {
         let release_type = self.name();
 
         let uri: http::Uri = format!(
@@ -506,7 +512,7 @@ impl ReleaseFetcher<client::ReqwestClient, String, kind::All> {
 }
 
 #[cfg(feature = "reqwest")]
-impl ReleaseFetcher<client::ReqwestClient, ReleaseType, Current> {
+impl ReleaseFetcher<reqwest::Client, ReleaseType, Current> {
     /// Returns the release category used by this fetcher.
     ///
     /// The returned reference borrows the category supplied during construction without making
@@ -515,13 +521,13 @@ impl ReleaseFetcher<client::ReqwestClient, ReleaseType, Current> {
     /// # Examples
     ///
     /// ```
-    /// use umls_downloader::{ReleaseFetcher, client::ReqwestClient, kind::Current};
+    /// use umls_downloader::{ReleaseFetcher, client::reqwest::Client, kind::Current};
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let category = umls_downloader::release_type::ReleaseType {
     ///     product: "UMLS".into(), name: "umls-full-release".into(),
     ///     endpoint: "https://uts-ws.nlm.nih.gov/releases".into(),
     /// };
-    /// let fetcher = ReleaseFetcher::new(Default::default(), category, Current);
+    /// let fetcher = ReleaseFetcher::new(Client::default(), category, Current);
     /// let selected = fetcher.release_type();
     /// # Ok(())
     /// # }
@@ -539,7 +545,7 @@ impl ReleaseFetcher<client::ReqwestClient, ReleaseType, Current> {
     /// # Examples
     ///
     /// ```no_run
-    /// use umls_downloader::{ReleaseFetcher, client::ReqwestClient, kind::Current};
+    /// use umls_downloader::{ReleaseFetcher, client::reqwest::Client, kind::Current};
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let category = umls_downloader::release_type::ReleaseType {
     ///     product: "UMLS".into(),
@@ -547,7 +553,7 @@ impl ReleaseFetcher<client::ReqwestClient, ReleaseType, Current> {
     ///     endpoint: concat!("https://uts-ws.nlm.nih.gov/releases?",
     ///         "releaseType=umls-full-release&current=true").into(),
     /// };
-    /// let releases = ReleaseFetcher::new(Default::default(), category, Current)
+    /// let releases = ReleaseFetcher::new(Client::default(), category, Current)
     ///     .send().await?;
     /// # Ok(())
     /// # }
@@ -558,7 +564,7 @@ impl ReleaseFetcher<client::ReqwestClient, ReleaseType, Current> {
     /// Returns an error if URI or request construction, serialization, transport, HTTP 4xx or 5xx
     /// status validation, or release metadata decoding fails. Failures preserve typed client errors in [`Error::Client`]
     /// or report invalid URIs through [`Error::Uri`].
-    pub async fn send(self) -> Result<Option<Release>, Error<client::Error>> {
+    pub async fn send(self) -> Result<Option<Release>, Error<reqwest::Error>> {
         let uri: http::Uri = self.release_type().endpoint().parse().map_err(Error::Uri)?;
 
         ReleaseFetcher::new(self.client, uri, self.kind)
@@ -568,7 +574,7 @@ impl ReleaseFetcher<client::ReqwestClient, ReleaseType, Current> {
 }
 
 #[cfg(feature = "reqwest")]
-impl ReleaseFetcher<client::ReqwestClient, ReleaseType, kind::All> {
+impl ReleaseFetcher<reqwest::Client, ReleaseType, kind::All> {
     /// Returns the release category used by this fetcher.
     ///
     /// The returned reference borrows the category supplied during construction without making
@@ -577,13 +583,13 @@ impl ReleaseFetcher<client::ReqwestClient, ReleaseType, kind::All> {
     /// # Examples
     ///
     /// ```
-    /// use umls_downloader::{ReleaseFetcher, client::ReqwestClient, kind::All};
+    /// use umls_downloader::{ReleaseFetcher, client::reqwest::Client, kind::All};
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let category = umls_downloader::release_type::ReleaseType {
     ///     product: "UMLS".into(), name: "umls-full-release".into(),
     ///     endpoint: "https://uts-ws.nlm.nih.gov/releases".into(),
     /// };
-    /// let fetcher = ReleaseFetcher::new(Default::default(), category, All);
+    /// let fetcher = ReleaseFetcher::new(Client::default(), category, All);
     /// let selected = fetcher.release_type();
     /// # Ok(())
     /// # }
@@ -601,15 +607,15 @@ impl ReleaseFetcher<client::ReqwestClient, ReleaseType, kind::All> {
     /// # Examples
     ///
     /// ```no_run
-    /// use umls_downloader::{ReleaseFetcher, client::ReqwestClient, kind::All};
+    /// use umls_downloader::{ReleaseFetcher, client::reqwest::Client, kind::All};
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let category = umls_downloader::release_type::ReleaseType {
     ///     product: "UMLS".into(),
     ///     name: "umls-full-release".into(),
     ///     endpoint: concat!("https://uts-ws.nlm.nih.gov/releases?",
-    ///         "releaseType=umls-full-release&current=true").into(),
+    ///         "releaseType=umls-full-release").into(),
     /// };
-    /// let releases = ReleaseFetcher::new(Default::default(), category, All)
+    /// let releases = ReleaseFetcher::new(Client::default(), category, All)
     ///     .send().await?;
     /// # Ok(())
     /// # }
@@ -620,7 +626,7 @@ impl ReleaseFetcher<client::ReqwestClient, ReleaseType, kind::All> {
     /// Returns an error if URI or request construction, serialization, transport, HTTP 4xx or 5xx
     /// status validation, or release metadata decoding fails. Failures preserve typed client errors in [`Error::Client`]
     /// or report invalid URIs through [`Error::Uri`].
-    pub async fn send(self) -> Result<Vec<Release>, Error<client::Error>> {
+    pub async fn send(self) -> Result<Vec<Release>, Error<reqwest::Error>> {
         let uri: http::Uri = self.release_type().endpoint().parse().map_err(Error::Uri)?;
 
         ReleaseFetcher::new(self.client, uri, self.kind)
@@ -630,7 +636,7 @@ impl ReleaseFetcher<client::ReqwestClient, ReleaseType, kind::All> {
 }
 
 #[derive(Debug, Error)]
-/// Errors that can occur while downloading a release.
+/// # Errors that can occur while downloading a release.
 pub enum Error<T: std::error::Error> {
     /// An error constructing or executing the HTTP request, or reading its response body.
     #[error("Client error: {0}")]
@@ -640,7 +646,7 @@ pub enum Error<T: std::error::Error> {
     #[error("URL parse error: {0}")]
     Url(#[source] url::ParseError),
 
-    /// The constructed Download API URI was invalid.
+    /// A release endpoint or constructed Download API URI was invalid.
     #[error("Invalid URI error: {0}")]
     Uri(#[source] http::uri::InvalidUri),
 
@@ -682,7 +688,7 @@ pub struct ReleaseDownloader<C, T> {
     api_key: SecretString,
 }
 
-impl<T> ReleaseDownloader<WithoutClient, T> {
+impl<T> ReleaseDownloader<client::WithoutClient, T> {
     /// Creates a downloader without attaching an HTTP client.
     ///
     /// This method performs no I/O. The API key is retained for the eventual UTS download request.
@@ -698,7 +704,7 @@ impl<T> ReleaseDownloader<WithoutClient, T> {
     /// ```
     pub fn new(api_key: impl Into<SecretString>, value: T) -> Self {
         Self {
-            client: WithoutClient,
+            client: client::WithoutClient,
             value,
             api_key: api_key.into(),
         }
@@ -728,11 +734,11 @@ impl<T> ReleaseDownloader<WithoutClient, T> {
 }
 
 #[cfg(feature = "reqwest")]
-impl ReleaseDownloader<ReqwestClient, http::Uri> {
+impl ReleaseDownloader<Client, http::Uri> {
     /// Starts a release download and returns its response body as a stream.
     ///
     /// The request is sent when this method is awaited. The returned stream owns the response
-    /// body and yields byte chunks as they arrive, with failures reported as [`client::Error`].
+    /// body and yields byte chunks as they arrive, with failures reported as [`reqwest::Error`].
     /// Pin the stream before consuming it with [`StreamExt::next`]. It does not create or modify
     /// a file.
     ///
@@ -745,8 +751,8 @@ impl ReleaseDownloader<ReqwestClient, http::Uri> {
     pub async fn download(
         &self,
     ) -> Result<
-        impl Stream<Item = Result<Bytes, client::Error>> + Send + 'static + use<>,
-        Error<client::Error>,
+        impl Stream<Item = Result<Bytes, client::reqwest::Error>> + Send + 'static + use<>,
+        Error<reqwest::Error>,
     > {
         let uri = download_uri(&self.value, self.api_key.expose_secret())?;
 
@@ -754,7 +760,7 @@ impl ReleaseDownloader<ReqwestClient, http::Uri> {
             .method(http::Method::GET)
             .uri(uri)
             .body(())
-            .map_err(client::Error::Http)
+            .map_err(reqwest::Error::Http)
             .map_err(Error::Client)?;
 
         self.client
@@ -767,7 +773,7 @@ impl ReleaseDownloader<ReqwestClient, http::Uri> {
 
 /// Associates a release URI with a destination value.
 ///
-/// When used with [`ReleaseDownloader`], a destination implementing [`AsRef<Path>`] causes the
+/// When used with [`ReleaseDownloader`], a destination implementing [`AsRef<std::path::Path>`] causes the
 /// downloaded response to be written to that path. Existing files are replaced. The destination
 /// may be a [`PathBuf`](std::path::PathBuf), `&Path`, or another path-like type.
 ///
@@ -809,7 +815,7 @@ impl<D> DownloadResource<D> {
 }
 
 #[cfg(feature = "reqwest")]
-impl<D: AsRef<Path>> ReleaseDownloader<ReqwestClient, DownloadResource<D>> {
+impl<D: AsRef<Path>> ReleaseDownloader<Client, DownloadResource<D>> {
     /// Downloads the release and writes it to the configured destination path.
     ///
     /// Existing files are replaced. File creation and writes are synchronous, so callers should
@@ -821,7 +827,7 @@ impl<D: AsRef<Path>> ReleaseDownloader<ReqwestClient, DownloadResource<D>> {
     /// Returns [`Error::Io`] when the destination cannot be created, written, or flushed. Returns
     /// [`Error::Client`] when reading the response body fails, or another [`enum@Error`] variant when
     /// request construction or the HTTP operation fails.
-    pub async fn download(self) -> Result<(), Error<client::Error>> {
+    pub async fn download(self) -> Result<(), Error<reqwest::Error>> {
         let stream = ReleaseDownloader::new(self.api_key.clone(), self.value.source)
             .with_client(self.client.clone())
             .download()
@@ -845,7 +851,7 @@ impl<D: AsRef<Path>> ReleaseDownloader<ReqwestClient, DownloadResource<D>> {
 fn download_uri(
     release_download_uri: &http::Uri,
     api_key: &str,
-) -> Result<http::Uri, Error<client::Error>> {
+) -> Result<http::Uri, Error<reqwest::Error>> {
     let mut url = url::Url::parse("https://uts-ws.nlm.nih.gov/download")?;
     url.query_pairs_mut()
         .append_pair("url", &release_download_uri.to_string())

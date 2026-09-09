@@ -2,9 +2,9 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::client::WithoutClient;
+use crate::client;
 #[cfg(feature = "reqwest")]
-use crate::client::{self, ReqwestClient};
+use crate::client::reqwest;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -123,15 +123,15 @@ pub struct Client<C> {
     client: C,
 }
 
-impl Default for Client<WithoutClient> {
+impl Default for Client<client::WithoutClient> {
     fn default() -> Self {
         Self {
-            client: WithoutClient,
+            client: client::WithoutClient,
         }
     }
 }
 
-impl Client<WithoutClient> {
+impl Client<client::WithoutClient> {
     /// Attaches an HTTP client and returns the resulting release-category client.
     ///
     /// This operation consumes the builder without making a network request. Fetching is available
@@ -142,8 +142,8 @@ impl Client<WithoutClient> {
     /// ```
     /// # #[cfg(feature = "reqwest")]
     /// # {
-    /// use umls_downloader::{client::ReqwestClient, release_type::Client};
-    /// let client = Client::default().with_client(ReqwestClient::default());
+    /// use umls_downloader::{client::reqwest, release_type::Client};
+    /// let client = Client::default().with_client(reqwest::Client::default());
     /// # }
     /// ```
     pub fn with_client<T>(self, client: T) -> Client<T> {
@@ -152,7 +152,7 @@ impl Client<WithoutClient> {
 }
 
 #[cfg(feature = "reqwest")]
-impl Client<ReqwestClient> {
+impl Client<reqwest::Client> {
     /// Fetches the release categories advertised by UTS.
     ///
     /// Each call makes a new request. An empty category list produces an empty [`Vec`]. The client
@@ -161,9 +161,9 @@ impl Client<ReqwestClient> {
     /// # Examples
     ///
     /// ```no_run
-    /// use umls_downloader::{client::ReqwestClient, release_type::Client};
+    /// use umls_downloader::{client::reqwest, release_type::Client};
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-    /// let client = Client::default().with_client(ReqwestClient::default());
+    /// let client = Client::default().with_client(reqwest::Client::default());
     /// for category in client.fetch().await? {
     ///     println!("{}: {}", category.product(), category.name());
     /// }
@@ -176,12 +176,12 @@ impl Client<ReqwestClient> {
     /// Returns an error if request construction, serialization, transport, HTTP 4xx or 5xx status
     /// validation, or response decoding fails. Failures preserve typed client errors
     /// in [`crate::Error::Client`].
-    pub async fn fetch(&self) -> Result<Vec<ReleaseType>, crate::Error<client::Error>> {
+    pub async fn fetch(&self) -> Result<Vec<ReleaseType>, crate::Error<reqwest::Error>> {
         let request = http::Request::builder()
             .uri("https://uts-ws.nlm.nih.gov/releases")
             .method(http::Method::GET)
             .body(())
-            .map_err(client::Error::Http)
+            .map_err(reqwest::Error::Http)
             .map_err(crate::Error::Client)?;
 
         self.client
