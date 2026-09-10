@@ -61,7 +61,7 @@ Generate the client documentation with `cargo doc -p umls-client --no-deps`.
 
 ### `umls-downloader`
 
-An asynchronous, HTTP-client-agnostic library for:
+An asynchronous library with an optional reqwest transport for:
 
 - Discovering UTS release types
 - Fetching current or historical release versions
@@ -69,7 +69,10 @@ An asynchronous, HTTP-client-agnostic library for:
 - Downloading archives to local files
 
 See [`umls-downloader/README.md`](umls-downloader/README.md) for library usage
-and HTTP-client integration.
+and HTTP-client configuration. Enable its `reqwest` feature to execute requests
+with `umls_downloader::client::reqwest::Client`. Release discovery uses
+`release_type::Client::fetch()` and `ReleaseFetcher::new(client, category, kind).send()`;
+downloads use `ReleaseDownloader::new(api_key, resource).with_client(client).download()`.
 
 ### `umls-downloader-cli`
 
@@ -146,7 +149,7 @@ cargo run -p umls-downloader-cli
 Generate the library documentation:
 
 ```sh
-cargo doc --workspace --open
+cargo doc --workspace --all-features --open
 ```
 
 ## UTS API key

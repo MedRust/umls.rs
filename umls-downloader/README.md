@@ -1,133 +1,138 @@
 # UMLS Downloader
 
-`umls-downloader` provides asynchronous, HTTP-client-agnostic helpers for
-discovering and downloading releases from the
-[UMLS Terminology Services (UTS)](https://documentation.uts.nlm.nih.gov/automating-downloads.html)
-Release and Download APIs.
-
-The crate supports release files for UMLS, RxNorm, and SNOMED CT.
-
-## Features
-
-- Discover the release types advertised by UTS.
-- Fetch the current release or all releases for a release type.
-- Stream a release to any caller-selected destination.
-- Download directly to a local file when desired.
-- Integrate with any HTTP stack by implementing small client traits.
+`umls-downloader` provides asynchronous helpers for discovering and downloading
+UMLS, RxNorm, and SNOMED CT releases through the UTS Release and Download APIs.
 
 ## Installation
 
-Add the crate to your `Cargo.toml`:
+Enable the optional `reqwest` feature to execute discovery and download requests:
 
 ```toml
 [dependencies]
-umls-downloader = "0.1"
+umls-downloader = { version = "0.1", features = ["reqwest"] }
+futures-util = "0.3" # For consuming download streams
 ```
 
-## HTTP client integration
+Run the async examples below inside a Tokio runtime. Without `reqwest`, the crate
+exposes metadata and builder types, but no HTTP execution methods.
 
-The crate does not select an HTTP transport or async runtime. Applications
-provide adapters for:
+## HTTP client configuration
 
-- `HttpClient`, which returns deserialized release metadata.
-- `StreamHttpClient`, which returns release data as a `ByteStream`.
+`umls_downloader::client::reqwest::Client` handles both JSON metadata and streamed
+responses. Create it with `Client::default()`, or wrap a configured
+`reqwest::Client` with `Client::new(inner)`. Clones share a connection pool.
+The transport also exposes `execute()` for JSON requests and `execute_stream()`
+for byte streams, each returning an `http::Response` with status and headers.
 
-This keeps the library compatible with different HTTP clients, runtimes, and
-storage services.
+`client::WithoutClient` marks builders before a client is attached.
+`release_type::Client` discovers categories; it is distinct from the HTTP client.
 
 ## Discovering releases
 
-Start by retrieving the release types supported by UTS:
+```rust,no_run
+use umls_downloader::{ReleaseFetcher, client::reqwest::Client, kind, release_type};
 
-```rust,ignore
-use umls_downloader::get_release_types;
+async fn discover() -> Result<(), Box<dyn std::error::Error>> {
+    let client = Client::default();
+    let categories = release_type::Client::default()
+        .with_client(client.clone())
+        .fetch()
+        .await?;
 
-let release_types = get_release_types(&http_client).await?;
+    for category in categories {
+        println!("{}: {}", category.product(), category.name());
+    }
 
-for release_type in release_types {
-    println!("{release_type}");
+    let current = ReleaseFetcher::new(client.clone(), "umls-full-release", kind::Current)
+        .send()
+        .await?;
+    if let Some(release) = current {
+        println!("{}: {}", release.file_name, release.download_url);
+    }
+
+    let releases = ReleaseFetcher::new(client, "rxnorm-weekly-updates", kind::All)
+        .send()
+        .await?;
+    println!("{} releases", releases.len());
+    Ok(())
 }
 ```
 
-Use `ReleaseFetcher` with `kind::Current` to request the current release:
+`ReleaseFetcher::new(client, category, kind)` owns its arguments, and `.send()`
+consumes the fetcher. Categories may be `&str`, `String`, `http::Uri`, or
+`release_type::ReleaseType` values. `kind::Current` returns `Option<Release>`;
+`kind::All` returns `Vec<Release>`.
 
-```rust,ignore
-use umls_downloader::{ReleaseFetcher, kind::Current};
-
-let fetcher = ReleaseFetcher::new("umls-full-release", Current);
-let release = fetcher.send(&http_client).await?;
-
-if let Some(release) = release {
-    println!("{}: {}", release.file_name, release.download_url);
-}
-```
-
-Use `kind::All` instead to request current and past releases:
-
-```rust,ignore
-use umls_downloader::{ReleaseFetcher, kind::All};
-
-let fetcher = ReleaseFetcher::new("rxnorm-weekly-updates", All);
-let releases = fetcher.send(&http_client).await?;
-```
+For category names, `Current` adds `current=true` to the request. Explicit URIs
+and `ReleaseType::endpoint` values are used as supplied: `Current` selects the
+first returned release without adding a filter, while `All` returns the full
+response. Include any desired filtering in those endpoints.
 
 ## Streaming a download
 
-`download_release` authenticates with the UTS Download API and returns a
-`ByteStream`. The caller owns the storage decision and can forward the stream
-to cloud object storage, another remote service, an HTTP response, memory, or a
-local file.
+Pass the release's `download_url` as an `http::Uri` to `ReleaseDownloader`.
+The returned stream yields `bytes::Bytes` chunks and typed
+`client::reqwest::Error` values. Pin it before consuming it.
 
-```rust,ignore
-use umls_downloader::download_release;
+```rust,no_run
+use futures_util::StreamExt;
+use umls_downloader::{Release, ReleaseDownloader, client::reqwest::Client};
 
-let source_uri = release.download_url.parse()?;
-let stream = download_release(&stream_http_client, source_uri, &api_key).await?;
-
-// Pass `stream` to the destination selected by your application.
-cloud_storage.upload("umls-release.zip", stream).await?;
+async fn stream_release(release: &Release) -> Result<(), Box<dyn std::error::Error>> {
+    let api_key = std::env::var("UMLS_API_KEY")?;
+    let source = release.download_url.parse::<http::Uri>()?;
+    let downloader = ReleaseDownloader::new(api_key, source)
+        .with_client(Client::default());
+    let stream = downloader.download().await?;
+    let mut stream = std::pin::pin!(stream);
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk?;
+        // Forward each chunk to the destination selected by your application.
+        println!("Received {} bytes", chunk.len());
+    }
+    Ok(())
+}
 ```
 
-The UTS API key can be obtained from your
-[UTS profile](https://uts.nlm.nih.gov/uts/profile).
+Add `http = "1"` when naming `http::Uri` directly, as in this example.
+The stream owns the response body; the caller chooses its storage destination.
+Obtain a UTS API key from your [UTS profile](https://uts.nlm.nih.gov/uts/profile).
 
 ## Downloading to a local file
 
-For local storage, use the convenience wrapper:
+Use `DownloadResource` to associate the source URI with a destination path:
 
-```rust,ignore
-use umls_downloader::download_release_to_path;
+```rust,no_run
+use umls_downloader::{DownloadResource, Release, ReleaseDownloader, client::reqwest::Client};
 
-let source_uri = release.download_url.parse()?;
-
-download_release_to_path(
-    &stream_http_client,
-    source_uri,
-    &api_key,
-    "umls-release.zip",
-)
-.await?;
+async fn save_release(release: &Release) -> Result<(), Box<dyn std::error::Error>> {
+    let api_key = std::env::var("UMLS_API_KEY")?;
+    let resource = DownloadResource::new(release.download_url.parse()?, "umls-release.zip");
+    ReleaseDownloader::new(api_key, resource)
+        .with_client(Client::default())
+        .download()
+        .await?;
+    Ok(())
+}
 ```
 
-The destination file is created or replaced. If the download fails after the
-file is created, a partial file may remain.
+This operation consumes the downloader and creates or replaces the destination
+file. A failure or cancellation after file creation can leave a partial file.
+File creation, writes, and flushing use synchronous filesystem I/O.
 
 ## Errors
 
-Download operations return `umls_downloader::Error`, which distinguishes:
-
-- HTTP request errors
-- URL and URI construction errors
-- response-stream errors
-- local file I/O errors
-
-Individual errors from a returned `ByteStream` are reported as `BoxError`
-values while the caller consumes the stream.
+Discovery and download operations return `Error<client::reqwest::Error>`.
+The outer error distinguishes client failures (`Client`), URL parsing (`Url`),
+URI construction (`Uri`), and local file I/O (`Io`). The transport error
+distinguishes JSON serialization (`Json`), reqwest failures (`Reqwest`), and
+HTTP request/response construction (`Http`). Errors while consuming a returned
+stream use `client::reqwest::Error` directly.
 
 ## API documentation
 
-Generate and open the Rust API documentation locally:
+Generate the API documentation, including HTTP execution methods:
 
 ```sh
-cargo doc --open
+cargo doc -p umls-downloader --features reqwest --no-deps --open
 ```
