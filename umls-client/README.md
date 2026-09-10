@@ -39,14 +39,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         if !page.has_next() {
             break;
         }
-        page = page.next().await?.into_page()?;
+        page = page.next()?.get().await?.into_page()?;
     }
     Ok(())
 }
 ```
 
-Search `next()` and `previous()` consume the page and execute the next request,
-retaining its client and filters. For a single result list, use `into_content()`.
+Search `next()` and `previous()` consume the page and return a request, retaining
+its client and filters without network I/O. Execute that request with
+`next()?.get().await?` or `previous()?.get().await?`. Navigation errors are
+returned before execution; HTTP and decoding errors come from `get().await`.
+For a single result list, use `into_content()`.
 For the wire response, create `search::raw::Search::default().with_client(client)`
 and call `.search(&config, &request).await?`; this executor can be reused.
 
@@ -91,6 +94,8 @@ or concept snapshot; `snapshot.info()` returns a borrowed unconfigured request.
 - Replace `Config::builder(key).client(client)` with client attachment on requests.
   The configuration client getter and builder setter have been removed.
 - Add `.with_client(client.clone())` before search `get()` or atom/concept `fetch()`.
+- Replace search pagination calls `page.next().await?` and `page.previous().await?`
+  with `page.next()?.get().await?` and `page.previous()?.get().await?`.
 - Replace the raw search function with the reusable `search::raw::Search` executor.
 - Explicit request types now include a client parameter: `Search<'a, C, T>`,
   `Atom<'a, C, S, T>`, and `Info<C, T>`. Builders initially use

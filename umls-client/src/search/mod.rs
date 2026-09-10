@@ -567,16 +567,39 @@ impl<'a> Response<SearchResponse, Search<'a, umls_http::reqwest::Client, return_
 impl<'a>
     Page<Content<ConceptSnapshot>, Search<'a, umls_http::reqwest::Client, return_type::Concept>>
 {
-    /// Requests the next page of concept results.
+    /// Consumes this page and returns a search request for the next page.
+    ///
+    /// Preserves the attached HTTP client and search filters without making a network
+    /// request. Call `get().await` on the returned request to fetch its results.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use umls_http::reqwest;
+    /// use umls_client::{config::Config, search::Request};
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// let config = Config::builder(std::env::var("UMLS_API_KEY")?).build()?;
+    /// let page = Request::builder("cough".parse()?)
+    ///     .concept(&config)
+    ///     .with_client(reqwest::Client::default())
+    ///     .get().await?.into_page()?;
+    /// if page.has_next() {
+    ///     let next_request = page.next()?;
+    ///     let next_page = next_request.get().await?.into_page()?;
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     ///
     /// # Errors
     ///
-    /// Returns [`PageError::NoNextPage`] at the final page. Pagination or
-    /// search failures are returned through [`PageError::Custom`].
-    pub async fn next(
+    /// Returns [`PageError::NoNextPage`] at the final page. A page-number
+    /// adjustment failure is wrapped in [`PageError::Custom`] as [`SearchError::Page`].
+    /// HTTP and response-decoding errors are returned by the subsequent `get()` call.
+    pub fn next(
         mut self,
     ) -> Result<
-        Response<SearchResponse, Search<'a, umls_http::reqwest::Client, return_type::Concept>>,
+        Search<'a, umls_http::reqwest::Client, return_type::Concept>,
         PageError<SearchError<umls_http::reqwest::Error>>,
     > {
         if !self.has_next() {
@@ -590,19 +613,43 @@ impl<'a>
             .map_err(SearchError::Page)
             .map_err(PageError::Custom)?;
 
-        self.client.get().await.map_err(PageError::Custom)
+        Ok(self.client)
     }
 
-    /// Requests the previous page of concept results.
+    /// Consumes this page and returns a search request for the previous page.
+    ///
+    /// Preserves the attached HTTP client and search filters without making a network
+    /// request. Call `get().await` on the returned request to fetch its results.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use umls_http::reqwest;
+    /// use umls_client::{config::Config, search::Request};
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// let config = Config::builder(std::env::var("UMLS_API_KEY")?).build()?;
+    /// let page = Request::builder("cough".parse()?)
+    ///     .concept(&config)
+    ///     .with_client(reqwest::Client::default())
+    ///     .get().await?.into_page()?;
+    /// if page.has_next() {
+    ///     let page = page.next()?.get().await?.into_page()?;
+    ///     let previous_request = page.previous()?;
+    ///     let previous_page = previous_request.get().await?.into_page()?;
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     ///
     /// # Errors
     ///
-    /// Returns [`PageError::NoPreviousPage`] at the first page. Pagination or
-    /// search failures are returned through [`PageError::Custom`].
-    pub async fn previous(
+    /// Returns [`PageError::NoPreviousPage`] at the first page. A page-number
+    /// adjustment failure is wrapped in [`PageError::Custom`] as [`SearchError::Page`].
+    /// HTTP and response-decoding errors are returned by the subsequent `get()` call.
+    pub fn previous(
         mut self,
     ) -> Result<
-        Response<SearchResponse, Search<'a, umls_http::reqwest::Client, return_type::Concept>>,
+        Search<'a, umls_http::reqwest::Client, return_type::Concept>,
         PageError<SearchError<umls_http::reqwest::Error>>,
     > {
         if !self.has_previous() {
@@ -616,7 +663,7 @@ impl<'a>
             .map_err(SearchError::Page)
             .map_err(PageError::Custom)?;
 
-        self.client.get().await.map_err(PageError::Custom)
+        Ok(self.client)
     }
 }
 

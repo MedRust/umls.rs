@@ -13,13 +13,13 @@ use ratatui::{
     text::Line,
     widgets::{Block, Borders, Cell, Paragraph, Row, Table, TableState, Wrap},
 };
-use umls_http::reqwest;
 use umls_client::{
     config::Config,
     search::{
         self, ConceptSnapshot, Content, Page, Response, Search, core::Term, return_type::Concept,
     },
 };
+use umls_http::reqwest;
 
 type ConceptPage<'a> =
     Page<Content<ConceptSnapshot>, Search<'a, umls_http::reqwest::Client, Concept>>;
@@ -191,8 +191,11 @@ async fn next_page(app: &mut App<'_>, terminal: &mut DefaultTerminal) {
     let _ = terminal.draw(|frame| render(frame, app));
 
     let page = app.page.take().expect("page was checked above");
-    match page.next().await {
-        Ok(response) => replace_page(app, response, "Loaded the next page."),
+    match page.next() {
+        Ok(search) => match search.get().await {
+            Ok(response) => replace_page(app, response, "Loaded the next page."),
+            Err(error) => app.status = format!("Could not load the page: {error}"),
+        },
         Err(error) => {
             app.status = format!("Could not load the next page: {error}");
         }
@@ -214,8 +217,13 @@ async fn previous_page(app: &mut App<'_>, terminal: &mut DefaultTerminal) {
     let _ = terminal.draw(|frame| render(frame, app));
 
     let page = app.page.take().expect("page was checked above");
-    match page.previous().await {
-        Ok(response) => replace_page(app, response, "Loaded the previous page."),
+    match page.previous() {
+        Ok(search) => match search.get().await {
+            Ok(response) => replace_page(app, response, "Loaded the previous page."),
+            Err(error) => {
+                app.status = format!("Could not load the page: {error}");
+            }
+        },
         Err(error) => {
             app.status = format!("Could not load the previous page: {error}");
         }
