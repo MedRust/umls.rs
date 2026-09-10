@@ -18,7 +18,7 @@ use serde::de::DeserializeOwned;
 /// # Examples
 ///
 /// ```
-/// use umls_downloader::client::reqwest::Client;
+/// use umls_http::reqwest::Client;
 /// let client: Client = Default::default();
 /// let shared = client.clone();
 /// ```
@@ -64,10 +64,22 @@ impl From<http::Error> for Error {
 
 #[cfg(feature = "reqwest")]
 impl Client {
-    /// Wraps a configured reqwest client for downloader operations.
+    /// Wraps a configured reqwest client for JSON and streaming requests.
     ///
     /// The client reuses connections across requests and can be cloned for independent request
     /// builders that share a connection pool.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::time::Duration;
+    /// use umls_http::reqwest::Client;
+    /// let inner = reqwest::Client::builder()
+    ///     .timeout(Duration::from_secs(30))
+    ///     .build()?;
+    /// let client = Client::new(inner);
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
     pub fn new(client: reqwest::Client) -> Self {
         Self(client)
     }
@@ -102,7 +114,7 @@ impl Client {
     /// # Examples
     ///
     /// ```no_run
-    /// use umls_downloader::client::reqwest::Client;
+    /// use umls_http::reqwest::Client;
     /// async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let client: Client = Default::default();
     /// let request = http::Request::get("https://uts-ws.nlm.nih.gov/releases").body(())?;
@@ -141,12 +153,16 @@ impl Client {
     /// # Examples
     ///
     /// ```no_run
-    /// use umls_downloader::client::reqwest::Client;
+    /// use umls_http::reqwest::Client;
     /// async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let client: Client = Default::default();
     /// let request = http::Request::get("https://uts-ws.nlm.nih.gov/releases").body(())?;
     /// let response = client.execute_stream(request).await?;
-    /// let stream = response.into_body();
+    /// use futures_util::StreamExt;
+    /// let mut stream = std::pin::pin!(response.into_body());
+    /// while let Some(chunk) = stream.next().await {
+    ///     println!("Received {} bytes", chunk?.len());
+    /// }
     /// Ok(())
     /// }
     /// ```

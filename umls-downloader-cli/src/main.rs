@@ -11,7 +11,7 @@ use ratatui::{
     widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap},
 };
 use umls_downloader::{
-    DownloadResource, Release, ReleaseDownloader, ReleaseFetcher, client,
+    DownloadResource, Release, ReleaseDownloader, ReleaseFetcher,
     kind::All,
     release_type::{self, ReleaseType},
 };
@@ -161,7 +161,7 @@ struct Download {
 }
 
 enum DownloadResult {
-    Completed(Result<(), umls_downloader::Error<umls_downloader::client::reqwest::Error>>),
+    Completed(Result<(), umls_downloader::Error<umls_http::reqwest::Error>>),
     Cancelled { quit: bool },
 }
 
@@ -181,7 +181,7 @@ fn destination_path(input: &str, file_name: &str) -> PathBuf {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
-    let client: client::reqwest::Client = Default::default();
+    let client: umls_http::reqwest::Client = Default::default();
     let mut terminal = ratatui::init();
     let result = run(&mut terminal, client.clone(), args.api_key).await;
     ratatui::restore();
@@ -190,7 +190,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 async fn run(
     terminal: &mut DefaultTerminal,
-    client: client::reqwest::Client,
+    client: umls_http::reqwest::Client,
     api_key: Option<String>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut app = App::new(api_key);
@@ -251,7 +251,7 @@ async fn run(
 }
 
 async fn run_download(
-    client: client::reqwest::Client,
+    client: umls_http::reqwest::Client,
     download: &Download,
 ) -> Result<DownloadResult, http::uri::InvalidUri> {
     let source = download.release.download_url.parse()?;
@@ -266,7 +266,7 @@ async fn run_download(
 
 async fn wait_for_download(
     operation: impl std::future::Future<
-        Output = Result<(), umls_downloader::Error<client::reqwest::Error>>,
+        Output = Result<(), umls_downloader::Error<umls_http::reqwest::Error>>,
     >,
     events: impl futures_util::Stream<Item = std::io::Result<Event>>,
 ) -> DownloadResult {
@@ -337,7 +337,7 @@ fn handle_key(app: &mut App, key: KeyEvent) -> Option<Download> {
     None
 }
 
-async fn load_selected_releases(app: &mut App, client: client::reqwest::Client) {
+async fn load_selected_releases(app: &mut App, client: umls_http::reqwest::Client) {
     let Some(release_type) = app.selected_release_type().cloned() else {
         app.set_releases(Vec::new());
         return;

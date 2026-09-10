@@ -1,10 +1,8 @@
 //! Describes release categories and fetches the categories advertised by UTS.
 
 use serde::{Deserialize, Serialize};
-
-use crate::client;
 #[cfg(feature = "reqwest")]
-use crate::client::reqwest;
+use umls_http::reqwest;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -103,6 +101,7 @@ impl ReleaseType {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg(feature = "reqwest")]
 struct ReleaseTypes {
     #[serde(rename = "releaseTypes")]
     types: Vec<ReleaseType>,
@@ -123,15 +122,22 @@ pub struct Client<C> {
     client: C,
 }
 
-impl Default for Client<client::WithoutClient> {
+impl<C> Client<C> {
+    /// Return the reference of client.
+    pub fn client(&self) -> &C {
+        &self.client
+    }
+}
+
+impl Default for Client<umls_http::WithoutClient> {
     fn default() -> Self {
         Self {
-            client: client::WithoutClient,
+            client: umls_http::WithoutClient,
         }
     }
 }
 
-impl Client<client::WithoutClient> {
+impl Client<umls_http::WithoutClient> {
     /// Attaches an HTTP client and returns the resulting release-category client.
     ///
     /// This operation consumes the builder without making a network request. Fetching is available
@@ -142,7 +148,8 @@ impl Client<client::WithoutClient> {
     /// ```
     /// # #[cfg(feature = "reqwest")]
     /// # {
-    /// use umls_downloader::{client::reqwest, release_type::Client};
+    /// use umls_downloader::{release_type::Client};
+    /// use umls_http::reqwest;
     /// let client = Client::default().with_client(reqwest::Client::default());
     /// # }
     /// ```
@@ -161,7 +168,8 @@ impl Client<reqwest::Client> {
     /// # Examples
     ///
     /// ```no_run
-    /// use umls_downloader::{client::reqwest, release_type::Client};
+    /// use umls_downloader::{release_type::Client};
+    /// use umls_http::reqwest;
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = Client::default().with_client(reqwest::Client::default());
     /// for category in client.fetch().await? {

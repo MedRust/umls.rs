@@ -1,0 +1,25 @@
+[package]
+name = "umls-http"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+serde_json = { version = "1.0.151", optional = true }
+reqwest = { version = "0.13.1", optional = true, features = ["json", "stream"] }
+bytes = "1.12.1"
+futures-core = "0.3.34"
+futures-util = "0.3.34"
+serde = "1.0.229"
+thiserror = "2.0.20"
+http = "1.5.0"
+tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread"] }
+
+[lints]
+workspace = true
+
+
+[features]
+reqwest = ["dep:reqwest", "dep:serde_json"]
+
+[dev-dependencies]
+httpmock = "0.8.3"
