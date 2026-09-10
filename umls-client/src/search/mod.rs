@@ -3,19 +3,20 @@
 use std::{marker::PhantomData, num::NonZeroU64};
 
 use serde::Deserialize;
+use umls_http::WithoutClient;
 use url::Url;
 
 use crate::{
     concept,
     config::Config,
-    search::{
-        core::{
-            DEFAULT_PAGE_NUMBER, DEFAULT_PAGE_SIZE, DisplayName, EmptyString, Inclusion, InputType,
-            ReturnIdType, SearchType, Term, TermMatch,
-        },
-        raw::{RawSearchDto, SearchResponse},
+    search::core::{
+        DEFAULT_PAGE_NUMBER, DEFAULT_PAGE_SIZE, DisplayName, EmptyString, Inclusion, InputType,
+        ReturnIdType, SearchType, Term, TermMatch,
     },
 };
+
+#[cfg(feature = "reqwest")]
+use crate::search::raw::{RawSearchDto, SearchResponse};
 
 /// Low-level request and response types for the UMLS search endpoint.
 pub mod raw;
@@ -188,13 +189,12 @@ impl Builder {
     ///
     /// The method override return id type to [ReturnIdType::Concept] before creation of [Search]
     /// object.
-    pub fn concept<'a>(self, config: &'a Config) -> Search<'a, return_type::Concept> {
+    pub fn concept<'a>(
+        self,
+        config: &'a Config,
+    ) -> Search<'a, WithoutClient, return_type::Concept> {
         let request = self.return_id_type(ReturnIdType::Concept).build();
-        Search {
-            config,
-            request,
-            _value: PhantomData,
-        }
+        Search::<WithoutClient, _>::new(config, request)
     }
 }
 
@@ -271,6 +271,7 @@ impl Request {
         &self.page
     }
 
+    #[cfg(feature = "reqwest")]
     pub(crate) fn page_mut(&mut self) -> &mut core::PageRequest {
         &mut self.page
     }
@@ -290,19 +291,51 @@ pub mod return_type {
 /// An executable UMLS search associated with a client configuration.
 ///
 /// `T` is a zero-sized marker describing the requested result type.
-pub struct Search<'a, T> {
+pub struct Search<'a, C, T> {
+    client: C,
     config: &'a Config,
     request: Request,
     _value: PhantomData<T>,
 }
 
-impl<'a, T> Search<'a, T> {
+impl<'a, C, T> Search<'a, C, T> {
+    fn new(config: &'a Config, request: Request) -> Search<'a, WithoutClient, T> {
+        Search {
+            client: WithoutClient,
+            config,
+            request,
+            _value: PhantomData,
+        }
+    }
+
+    #[cfg(feature = "reqwest")]
     pub(crate) fn request_mut(&mut self) -> &mut Request {
         &mut self.request
     }
+
+    /// Return the reference of client.
+    pub fn client(&self) -> &C {
+        &self.client
+    }
 }
 
-impl<'a> Search<'a, return_type::Concept> {
+impl<'a, T> Search<'a, WithoutClient, T> {
+    /// Attaches an owned HTTP client without sending a request.
+    ///
+    /// Execution requires the `reqwest` feature and a `reqwest::Client`.
+    /// Clone an existing client to share its connection pool across requests.
+    pub fn with_client<C>(self, client: C) -> Search<'a, C, T> {
+        Search {
+            client,
+            config: self.config,
+            request: self.request,
+            _value: PhantomData,
+        }
+    }
+}
+
+#[cfg(feature = "reqwest")]
+impl<'a> Search<'a, umls_http::reqwest::Client, return_type::Concept> {
     /// Executes a search that returns concept identifiers.
     ///
     /// The returned response can be converted into content with
@@ -315,8 +348,15 @@ impl<'a> Search<'a, return_type::Concept> {
     /// validation, or response decoding fails.
     pub async fn get(
         self,
-    ) -> Result<Response<SearchResponse, Search<'a, return_type::Concept>>, SearchError> {
-        let body = raw::search(self.config, &self.request)
+    ) -> Result<
+        Response<SearchResponse, Search<'a, umls_http::reqwest::Client, return_type::Concept>>,
+        SearchError<umls_http::reqwest::Error>,
+    > {
+        use umls_http::WithoutClient;
+
+        let body = raw::Search::<WithoutClient>::default()
+            .with_client(self.client.clone())
+            .search(self.config, &self.request)
             .await
             .map_err(SearchError::Raw)?;
 
@@ -327,10 +367,10 @@ impl<'a> Search<'a, return_type::Concept> {
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 /// An error produced while executing a high-level search.
-pub enum SearchError {
+pub enum SearchError<T> {
     /// The underlying raw search operation failed.
     #[error(transparent)]
-    Raw(#[from] raw::Error),
+    Raw(#[from] raw::Error<T>),
 
     /// The underlying raw pagination failer.
     #[error(transparent)]
@@ -456,6 +496,7 @@ impl<T, C> Page<T, C> {
         &self.client
     }
 
+    #[cfg(feature = "reqwest")]
     pub(crate) fn client_mut(&mut self) -> &mut C {
         &mut self.client
     }
@@ -468,19 +509,22 @@ pub struct Response<T, C> {
 }
 
 impl<T, C> Response<T, C> {
+    #[cfg(feature = "reqwest")]
     /// Creates a response wrapper from its body and retained client state.
     pub(crate) fn new(body: T, client: C) -> Self {
         Self { body, client }
     }
 }
 
+#[cfg(feature = "reqwest")]
 fn convert_raw_search_to_concept_snapshot(
     list: Vec<RawSearchDto>,
 ) -> Result<Vec<ConceptSnapshot>, ConceptSnapshotError> {
     list.into_iter().map(TryFrom::try_from).collect()
 }
 
-impl<'a> Response<SearchResponse, Search<'a, return_type::Concept>> {
+#[cfg(feature = "reqwest")]
+impl<'a> Response<SearchResponse, Search<'a, umls_http::reqwest::Client, return_type::Concept>> {
     /// Converts raw search records into concept snapshots.
     ///
     /// # Errors
@@ -501,7 +545,10 @@ impl<'a> Response<SearchResponse, Search<'a, return_type::Concept>> {
     pub fn into_page(
         self,
     ) -> Result<
-        Page<Content<ConceptSnapshot>, Search<'a, return_type::Concept>>,
+        Page<
+            Content<ConceptSnapshot>,
+            Search<'a, umls_http::reqwest::Client, return_type::Concept>,
+        >,
         PageError<ConceptSnapshotError>,
     > {
         let count = self.body.result.rec_count.and_then(NonZeroU64::new);
@@ -516,7 +563,10 @@ impl<'a> Response<SearchResponse, Search<'a, return_type::Concept>> {
     }
 }
 
-impl<'a> Page<Content<ConceptSnapshot>, Search<'a, return_type::Concept>> {
+#[cfg(feature = "reqwest")]
+impl<'a>
+    Page<Content<ConceptSnapshot>, Search<'a, umls_http::reqwest::Client, return_type::Concept>>
+{
     /// Requests the next page of concept results.
     ///
     /// # Errors
@@ -525,8 +575,10 @@ impl<'a> Page<Content<ConceptSnapshot>, Search<'a, return_type::Concept>> {
     /// search failures are returned through [`PageError::Custom`].
     pub async fn next(
         mut self,
-    ) -> Result<Response<SearchResponse, Search<'a, return_type::Concept>>, PageError<SearchError>>
-    {
+    ) -> Result<
+        Response<SearchResponse, Search<'a, umls_http::reqwest::Client, return_type::Concept>>,
+        PageError<SearchError<umls_http::reqwest::Error>>,
+    > {
         if !self.has_next() {
             return Err(PageError::NoNextPage);
         }
@@ -549,8 +601,10 @@ impl<'a> Page<Content<ConceptSnapshot>, Search<'a, return_type::Concept>> {
     /// search failures are returned through [`PageError::Custom`].
     pub async fn previous(
         mut self,
-    ) -> Result<Response<SearchResponse, Search<'a, return_type::Concept>>, PageError<SearchError>>
-    {
+    ) -> Result<
+        Response<SearchResponse, Search<'a, umls_http::reqwest::Client, return_type::Concept>>,
+        PageError<SearchError<umls_http::reqwest::Error>>,
+    > {
         if !self.has_previous() {
             return Err(PageError::NoPreviousPage);
         }
@@ -585,22 +639,42 @@ pub enum PageError<E: std::error::Error> {
 
 /// A compact concept representation returned by a search.
 ///
-/// Use [`concept::Info::fetch`] through [`Self::info`] to retrieve
-/// the complete [`concept::Concept`].
+/// With the `reqwest` feature, pass an owned snapshot to [`concept::Info::new`],
+/// attach a client with `with_client()`, and call `fetch(&config)` to retrieve
+/// the full concept. [`Self::info`] provides a borrowed resource reference.
+///
+/// # Example
+///
+/// ```no_run
+/// # #[cfg(feature = "reqwest")]
+/// use umls_http::reqwest;
+/// use umls_client::{concept::Info, config::Config, search::ConceptSnapshot};
+/// # #[cfg(feature = "reqwest")]
+/// async fn fetch_concept(
+///     snapshot: ConceptSnapshot,
+///     config: &Config,
+///     client: reqwest::Client,
+/// ) -> Result<(), Box<dyn std::error::Error>> {
+///     let concept = Info::new(snapshot).with_client(client).fetch(config).await?;
+///     println!("{}", concept.name);
+///     Ok(())
+/// }
+/// ```
 pub struct ConceptSnapshot {
     cui: concept::cui::Cui,
     root_source: DisplayName,
-    info: concept::Info<Url>,
+    pub(crate) info: concept::Info<umls_http::WithoutClient, Url>,
     name: DisplayName,
     semantic_types: Vec<DisplayName>,
 }
 
 impl ConceptSnapshot {
+    #[cfg(feature = "reqwest")]
     /// Creates a concept snapshot from validated search-result fields.
     pub(crate) fn new(
         cui: concept::cui::Cui,
         root_source: DisplayName,
-        info: concept::Info<Url>,
+        info: concept::Info<umls_http::WithoutClient, Url>,
         name: DisplayName,
         semantic_types: Vec<DisplayName>,
     ) -> Self {
@@ -624,7 +698,7 @@ impl ConceptSnapshot {
     }
 
     /// Returns the resource reference used to retrieve the full concept.
-    pub fn info(&self) -> &concept::Info<Url> {
+    pub fn info(&self) -> &concept::Info<umls_http::WithoutClient, Url> {
         &self.info
     }
 
@@ -645,6 +719,7 @@ impl std::fmt::Display for ConceptSnapshot {
     }
 }
 
+#[cfg(feature = "reqwest")]
 impl TryFrom<RawSearchDto> for ConceptSnapshot {
     type Error = ConceptSnapshotError;
 

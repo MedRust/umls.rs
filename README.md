@@ -17,7 +17,11 @@ The workspace supports release files for:
 An asynchronous client for UMLS concept search, concept retrieval, and
 concept atom retrieval, including filtering and pagination.
 
-Create a client with `umls_client::config::Config::builder(api_key)`. The
+Create configuration with `umls_client::config::Config::builder(api_key)`.
+Enable `umls-client`’s `reqwest` feature and attach an owned `reqwest::Client`
+to requests with `.with_client(client.clone())`. Configuration no longer owns
+the HTTP client. See [`umls-client/README.md`](umls-client/README.md) for
+search, pagination, atom retrieval, and API migration examples. The
 release defaults to `Version::Current`; pass a typed `Version::Release` to
 `.version()` before `.build()` to select a specific release. CUI-based all-atoms and
 preferred-atom requests honor this setting. Requests built from an explicit
@@ -57,7 +61,7 @@ which is required to preserve the full path prefix when joining atom endpoints.
 
 The `umls_client::atom` module documentation includes examples for filtered
 atom retrieval, and `Preferred::for_concept` documents preferred-atom retrieval.
-Generate the client documentation with `cargo doc -p umls-client --no-deps`.
+Generate the client documentation with `cargo doc -p umls-client --features reqwest --no-deps`.
 
 ### `umls-downloader`
 

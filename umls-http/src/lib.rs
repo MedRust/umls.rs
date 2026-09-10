@@ -20,4 +20,5 @@ pub mod reqwest;
 /// use umls_http::WithoutClient;
 /// let state = WithoutClient;
 /// ```
+#[derive(Default)]
 pub struct WithoutClient;

@@ -18,8 +18,8 @@ use serde::de::DeserializeOwned;
 /// # Examples
 ///
 /// ```
-/// use umls_http::reqwest::Client;
-/// let client: Client = Default::default();
+/// use umls_http::reqwest;
+/// let client: reqwest::Client = Default::default();
 /// let shared = client.clone();
 /// ```
 pub struct Client(reqwest::Client);
@@ -73,11 +73,11 @@ impl Client {
     ///
     /// ```
     /// use std::time::Duration;
-    /// use umls_http::reqwest::Client;
-    /// let inner = reqwest::Client::builder()
+    /// use umls_http::reqwest;
+    /// let inner = ::reqwest::Client::builder()
     ///     .timeout(Duration::from_secs(30))
     ///     .build()?;
-    /// let client = Client::new(inner);
+    /// let client = reqwest::Client::new(inner);
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
     pub fn new(client: reqwest::Client) -> Self {
@@ -114,9 +114,9 @@ impl Client {
     /// # Examples
     ///
     /// ```no_run
-    /// use umls_http::reqwest::Client;
+    /// use umls_http::reqwest;
     /// async fn example() -> Result<(), Box<dyn std::error::Error>> {
-    /// let client: Client = Default::default();
+    /// let client: reqwest::Client = Default::default();
     /// let request = http::Request::get("https://uts-ws.nlm.nih.gov/releases").body(())?;
     /// let response = client.execute::<(), serde_json::Value>(request).await?;
     /// let body = response.into_body();
@@ -153,9 +153,9 @@ impl Client {
     /// # Examples
     ///
     /// ```no_run
-    /// use umls_http::reqwest::Client;
+    /// use umls_http::reqwest;
     /// async fn example() -> Result<(), Box<dyn std::error::Error>> {
-    /// let client: Client = Default::default();
+    /// let client: reqwest::Client = Default::default();
     /// let request = http::Request::get("https://uts-ws.nlm.nih.gov/releases").body(())?;
     /// let response = client.execute_stream(request).await?;
     /// use futures_util::StreamExt;

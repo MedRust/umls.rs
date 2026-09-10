@@ -1,139 +1,207 @@
 //! Search the UMLS Metathesaurus and decode search results.
 //!
-//! The module exposes [`crate::search::raw::search`] for executing a validated
+//! The module exposes [`Search`] for executing a validated
 //! [`crate::search::Request`] and decoding the wire response.
+//! Enable the `reqwest` feature and attach an `umls_http::reqwest::Client`
+//! to execute requests. The executor can be reused across searches.
 
+#[cfg(feature = "reqwest")]
 use std::num::NonZeroU64;
 
+#[cfg(feature = "reqwest")]
 use secrecy::ExposeSecret;
 
+#[cfg(feature = "reqwest")]
 use serde::Deserialize;
+
+use umls_http::WithoutClient;
+
+#[cfg(feature = "reqwest")]
 use url::Url;
 
+#[cfg(feature = "reqwest")]
 use crate::{
     config::Config,
     search::{Request, core::DisplayName},
 };
 
+#[cfg(feature = "reqwest")]
+use umls_http::reqwest;
+
 #[derive(Debug, thiserror::Error)]
 /// An error produced while constructing, sending, or decoding a search.
-pub enum Error {
+pub enum Error<T> {
     /// The search endpoint or its query parameters could not be represented
     /// as a valid URL.
     #[error("URL parser error: {0}")]
     Url(url::ParseError),
 
-    /// The HTTP request failed, returned an unsuccessful status, or contained
-    /// a response body that could not be decoded.
-    #[error("Reqwest error: {0}")]
-    Reqwest(reqwest::Error),
+    /// The HTTP client failed to send the request, validate its status, or decode
+    /// the response. The underlying client error is retained as the source.
+    #[error("client error: {0}")]
+    Client(#[source] T),
 }
 
-/// Executes a UMLS Metathesaurus search.
+/// A reusable raw-search executor with explicit HTTP client state.
 ///
-/// The request is encoded as query parameters and sent using the HTTP client
-/// held by `config`.
+/// Start with `Search::default()` and attach an `umls_http::reqwest::Client`
+/// created with `Client::default()` or `Client::new(inner)` for a configured
+/// underlying reqwest client.
+/// Its `search()` method borrows the executor, configuration, and request.
 ///
-/// # Errors
+/// # Example
 ///
-/// Returns [`Error::Url`] when the endpoint URL cannot be constructed.
-/// Returns [`Error::Reqwest`] when the request fails, the server returns an
-/// unsuccessful status, or the response body cannot be deserialized.
-pub async fn search(config: &Config, request: &Request) -> Result<SearchResponse, Error> {
-    let path = format!("search/{}", config.version());
-    let url_string = config
-        .base_url()
-        .join(&path)
-        .map_err(Error::Url)?
-        .to_string();
-
-    let source_vocabularies_params = request
-        .source_vocabularies()
-        .iter()
-        .map(|x| x.as_ref())
-        .collect::<Vec<&str>>()
-        .join(",");
-
-    let semantic_types_params = request
-        .semantic_types()
-        .iter()
-        .map(|x| x.as_ref())
-        .collect::<Vec<&str>>()
-        .join(",");
-
-    let semantic_groups_params = request
-        .semantic_groups()
-        .iter()
-        .map(|x| x.as_ref())
-        .collect::<Vec<&str>>()
-        .join(",");
-
-    let url = Url::parse_with_params(
-        &url_string,
-        &[
-            ("apiKey", config.api_key().expose_secret()),
-            ("string", request.term().as_ref()),
-            ("inputType", request.input_type().as_ref()),
-            (
-                "includeObsolete",
-                &request.obsolete().is_included().to_string(),
-            ),
-            (
-                "includeSuppressible",
-                &request.suppressible().is_included().to_string(),
-            ),
-            ("returnIdType", request.return_id_type.as_ref()),
-            ("sabs", &source_vocabularies_params),
-            ("searchType", request.search_type().as_ref()),
-            ("semanticTypes", &semantic_types_params),
-            ("semanticGroups", &semantic_groups_params),
-            (
-                "partialSearch",
-                &request.term_match().allows_partial().to_string(),
-            ),
-            ("pageSize", &request.page().size().to_string()),
-            ("pageNumber", &request.page().number().to_string()),
-        ],
-    )
-    .map_err(Error::Url)?;
-
-    tracing::debug!(
-        input_type = request.input_type().as_ref(),
-        return_id_type = request.return_id_type.as_ref(),
-        search_type = request.search_type().as_ref(),
-        include_obsolete = request.obsolete().is_included(),
-        include_suppressible = request.suppressible().is_included(),
-        allows_partial_match = request.term_match().allows_partial(),
-        source_vocabulary_count = request.source_vocabularies().len(),
-        semantic_type_count = request.semantic_types().len(),
-        semantic_group_count = request.semantic_groups().len(),
-        page_size = request.page().size(),
-        page_number = request.page().number(),
-        "sending UMLS search request"
-    );
-
-    let response = config
-        .client()
-        .get(url)
-        .send()
-        .await
-        .map_err(Error::Reqwest)?
-        .error_for_status()
-        .map_err(Error::Reqwest)?;
-
-    let response: SearchResponse = response.json().await.map_err(Error::Reqwest)?;
-
-    tracing::debug!(
-        page_size = response.page_size,
-        page_number = response.page_number,
-        result_count = response.result.results.len(),
-        total_count = ?response.result.rec_count,
-        "received UMLS search response"
-    );
-
-    Ok(response)
+/// ```no_run
+/// # #[cfg(feature = "reqwest")]
+/// use umls_http::reqwest;
+/// use umls_client::{config::Config, search::{Request, raw::Search}};
+/// # #[cfg(feature = "reqwest")]
+/// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+/// let config = Config::builder(std::env::var("UMLS_API_KEY")?).build()?;
+/// let request = Request::builder("cough".parse()?).build();
+/// let executor = Search::default().with_client(reqwest::Client::default());
+/// let response = executor.search(&config, &request).await?;
+/// # Ok(())
+/// # }
+/// ```
+pub struct Search<C> {
+    client: C,
 }
 
+impl<C> Search<C> {
+    /// Returns a reference to the attached client or the unconfigured client marker.
+    pub fn client(&self) -> &C {
+        &self.client
+    }
+}
+
+impl Default for Search<WithoutClient> {
+    fn default() -> Self {
+        Self {
+            client: Default::default(),
+        }
+    }
+}
+
+impl Search<WithoutClient> {
+    /// Attaches an owned HTTP client without sending a request.
+    ///
+    /// Execution requires the `reqwest` feature and an `umls_http::reqwest::Client`.
+    /// Clone an existing client to share its connection pool across requests.
+    pub fn with_client<C>(self, client: C) -> Search<C> {
+        Search { client }
+    }
+}
+
+#[cfg(feature = "reqwest")]
+impl Search<reqwest::Client> {
+    /// Executes a UMLS Metathesaurus search.
+    ///
+    /// The request is encoded as query parameters and sent using the HTTP client
+    /// attached with [`Search::with_client`].
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Url`] when the endpoint URL cannot be constructed.
+    /// Returns [`Error::Client`] when the request fails, the server returns an
+    /// unsuccessful status, or the response body cannot be deserialized.
+    pub async fn search(
+        &self,
+        config: &Config,
+        request: &Request,
+    ) -> Result<SearchResponse, Error<reqwest::Error>> {
+        let path = format!("search/{}", config.version());
+        let url_string = config
+            .base_url()
+            .join(&path)
+            .map_err(Error::Url)?
+            .to_string();
+
+        let source_vocabularies_params = request
+            .source_vocabularies()
+            .iter()
+            .map(|x| x.as_ref())
+            .collect::<Vec<&str>>()
+            .join(",");
+
+        let semantic_types_params = request
+            .semantic_types()
+            .iter()
+            .map(|x| x.as_ref())
+            .collect::<Vec<&str>>()
+            .join(",");
+
+        let semantic_groups_params = request
+            .semantic_groups()
+            .iter()
+            .map(|x| x.as_ref())
+            .collect::<Vec<&str>>()
+            .join(",");
+
+        let url = Url::parse_with_params(
+            &url_string,
+            &[
+                ("apiKey", config.api_key().expose_secret()),
+                ("string", request.term().as_ref()),
+                ("inputType", request.input_type().as_ref()),
+                (
+                    "includeObsolete",
+                    &request.obsolete().is_included().to_string(),
+                ),
+                (
+                    "includeSuppressible",
+                    &request.suppressible().is_included().to_string(),
+                ),
+                ("returnIdType", request.return_id_type.as_ref()),
+                ("sabs", &source_vocabularies_params),
+                ("searchType", request.search_type().as_ref()),
+                ("semanticTypes", &semantic_types_params),
+                ("semanticGroups", &semantic_groups_params),
+                (
+                    "partialSearch",
+                    &request.term_match().allows_partial().to_string(),
+                ),
+                ("pageSize", &request.page().size().to_string()),
+                ("pageNumber", &request.page().number().to_string()),
+            ],
+        )
+        .map_err(Error::Url)?;
+
+        tracing::debug!(
+            input_type = request.input_type().as_ref(),
+            return_id_type = request.return_id_type.as_ref(),
+            search_type = request.search_type().as_ref(),
+            include_obsolete = request.obsolete().is_included(),
+            include_suppressible = request.suppressible().is_included(),
+            allows_partial_match = request.term_match().allows_partial(),
+            source_vocabulary_count = request.source_vocabularies().len(),
+            semantic_type_count = request.semantic_types().len(),
+            semantic_group_count = request.semantic_groups().len(),
+            page_size = request.page().size(),
+            page_number = request.page().number(),
+            "sending UMLS search request"
+        );
+
+        let request = http::Request::builder().uri(url.as_str()).body(()).unwrap();
+
+        let response: http::Response<SearchResponse> =
+            self.client.execute(request).await.map_err(Error::Client)?;
+
+        let response = response.into_body();
+
+        tracing::debug!(
+            page_size = response.page_size,
+            page_number = response.page_number,
+            result_count = response.result.results.len(),
+            total_count = ?response.result.rec_count,
+            "received UMLS search response"
+        );
+
+        Ok(response)
+    }
+}
+
+#[cfg(feature = "reqwest")]
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 /// The top-level response returned by the UMLS search endpoint.
@@ -146,6 +214,7 @@ pub struct SearchResponse {
     pub result: SearchResults,
 }
 
+#[cfg(feature = "reqwest")]
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 /// Search metadata and records contained in a [`SearchResponse`].
@@ -159,6 +228,7 @@ pub struct SearchResults {
     pub rec_count: Option<u64>,
 }
 
+#[cfg(feature = "reqwest")]
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 /// A raw record returned by the UMLS search endpoint.
@@ -175,6 +245,7 @@ pub struct RawSearchDto {
     pub semantic_types: Option<Vec<DisplayName>>,
 }
 
+#[cfg(feature = "reqwest")]
 #[cfg(test)]
 mod tests {
 

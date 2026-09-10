@@ -6,9 +6,11 @@ use thiserror::Error;
 use url::Url;
 
 #[derive(Debug)]
-/// Runtime configuration used for UMLS HTTP requests.
+/// Configuration data used for UMLS HTTP requests.
+///
+/// Stores the API key, base URL, and release version. HTTP clients are attached
+/// to individual search, concept, and atom requests with `with_client()`.
 pub struct Config {
-    client: reqwest::Client,
     base_url: Url,
     api_key: SecretString,
     version: Version,
@@ -21,11 +23,6 @@ impl Config {
     /// `current` release.
     pub fn builder(api_key: impl Into<SecretString>) -> Builder {
         Builder::new(api_key)
-    }
-
-    /// Returns the HTTP client used to send requests.
-    pub fn client(&self) -> &reqwest::Client {
-        &self.client
     }
 
     /// Returns the base URL used to construct UMLS endpoints.
@@ -52,7 +49,6 @@ impl Config {
 
 /// Builder for [`Config`].
 pub struct Builder {
-    client: reqwest::Client,
     base_url: Url,
     api_key: SecretString,
     version: Version,
@@ -62,17 +58,10 @@ impl Builder {
     /// Creates a builder with the default endpoint and `current` release.
     pub fn new(api_key: impl Into<SecretString>) -> Self {
         Self {
-            client: reqwest::Client::new(),
             base_url: "https://uts-ws.nlm.nih.gov/rest/".parse().unwrap(),
             api_key: api_key.into(),
             version: Version::Current,
         }
-    }
-
-    /// Replaces the HTTP client used for requests.
-    pub fn client(mut self, client: reqwest::Client) -> Self {
-        self.client = client;
-        self
     }
 
     /// Replaces the UMLS REST base URL.
@@ -191,7 +180,6 @@ impl Builder {
         }
 
         Ok(Config {
-            client: self.client,
             base_url: self.base_url,
             api_key: self.api_key,
             version: self.version,
