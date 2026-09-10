@@ -14,6 +14,7 @@ use ratatui::{
     text::{Line, Text},
     widgets::{Block, Borders, Paragraph, Wrap},
 };
+use umls_http::reqwest;
 use umls_client::{
     concept::{self, Concept, cui::Cui},
     config::Config,
@@ -72,6 +73,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
 async fn run(terminal: &mut DefaultTerminal, config: &Config) -> Result<(), Box<dyn Error>> {
     let mut app = App::new();
+    let client = reqwest::Client::default();
 
     while !app.should_quit {
         terminal.draw(|frame| render(frame, &app))?;
@@ -104,7 +106,7 @@ async fn run(terminal: &mut DefaultTerminal, config: &Config) -> Result<(), Box<
 
         match app.focus {
             Focus::Search => match key.code {
-                KeyCode::Enter => fetch_concept(&mut app, config, terminal).await,
+                KeyCode::Enter => fetch_concept(&mut app, config, &client, terminal).await,
                 KeyCode::Backspace => {
                     app.input.pop();
                 }
@@ -131,7 +133,12 @@ async fn run(terminal: &mut DefaultTerminal, config: &Config) -> Result<(), Box<
     Ok(())
 }
 
-async fn fetch_concept(app: &mut App, config: &Config, terminal: &mut DefaultTerminal) {
+async fn fetch_concept(
+    app: &mut App,
+    config: &Config,
+    client: &reqwest::Client,
+    terminal: &mut DefaultTerminal,
+) {
     let raw_cui = app.input.trim().to_owned();
     let cui = match Cui::new(&raw_cui) {
         Ok(cui) => cui,
@@ -144,7 +151,11 @@ async fn fetch_concept(app: &mut App, config: &Config, terminal: &mut DefaultTer
     app.status = format!("Loading {cui}…");
     let _ = terminal.draw(|frame| render(frame, app));
 
-    match concept::Info::new(cui).fetch(config).await {
+    match concept::Info::new(cui)
+        .with_client(client.clone())
+        .fetch(config)
+        .await
+    {
         Ok(concept) => {
             app.status = format!("Loaded {}.", concept.ui);
             app.concept = Some(concept);

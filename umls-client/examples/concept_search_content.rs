@@ -24,6 +24,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let content = search::Builder::new(term)
         .concept(&config)
+        .with_client(Default::default())
         .get()
         .await?
         .into_content()?;

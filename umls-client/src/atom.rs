@@ -7,7 +7,7 @@
 //!
 //! CUI-based all-atoms and preferred-atom requests use the release selected by
 //! [`crate::config::Builder::version`], which defaults to `current`. Requests
-//! built from an explicit atom-list [`Url`] retain its endpoint path and
+//! built from an explicit atom-list [`url::Url`] retain its endpoint path and
 //! release; the request adds authentication, filter, and pagination parameters.
 //!
 //! CUI-based requests resolve relative paths against the configured base URL.
@@ -19,8 +19,11 @@
 //! # Example
 //!
 //! ```no_run
+//! # #[cfg(feature = "reqwest")]
+//! use umls_http::reqwest;
 //! use umls_client::{atom, concept::cui::Cui, config::Config};
 //!
+//! # #[cfg(feature = "reqwest")]
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! let config = Config::builder(std::env::var("UMLS_API_KEY")?)
 //!     .base_url("https://uts-ws.nlm.nih.gov/rest/".parse()?)
@@ -31,6 +34,7 @@
 //!     .try_add_source_vocabulary("MSH")?
 //!     .language("ENG")?
 //!     .atoms(&config)
+//!     .with_client(reqwest::Client::default())
 //!     .fetch()
 //!     .await?
 //!     .into_content();
@@ -44,12 +48,25 @@
 
 use std::{marker::PhantomData, num::NonZeroU64};
 
-use secrecy::ExposeSecret;
-use serde::{self, Deserialize, Deserializer};
+use serde::{self, Deserialize};
+use umls_http::WithoutClient;
+
+#[cfg(feature = "reqwest")]
+use serde::Deserializer;
+
+#[cfg(feature = "reqwest")]
+use crate::concept::cui::Cui;
+
+#[cfg(feature = "reqwest")]
 use url::Url;
 
+#[cfg(feature = "reqwest")]
+use secrecy::ExposeSecret;
+
+#[cfg(feature = "reqwest")]
+use umls_http::reqwest;
+
 use crate::{
-    concept::cui::Cui,
     config,
     search::{
         Content, Response,
@@ -60,23 +77,15 @@ use crate::{
 /// An error produced while constructing, sending, or decoding an atom request.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
-pub enum Error {
+pub enum Error<T> {
     /// The atom endpoint or its query parameters could not be represented as a
     /// valid URL.
     #[error("URL error: {0}")]
     Url(#[from] url::ParseError),
 
-    /// The HTTP request could not be sent or a response could not be received.
-    #[error("atom request failed: {0}")]
-    Transport(#[source] reqwest::Error),
-
-    /// The server returned an unsuccessful HTTP status.
-    #[error("atom endpoint returned an unsuccessful status: {0}")]
-    HttpStatus(#[source] reqwest::Error),
-
-    /// The response body could not be decoded as an atom page.
-    #[error("failed to decode atom response: {0}")]
-    Decode(#[source] reqwest::Error),
+    /// A client error.
+    #[error("Client error: {0}")]
+    Client(#[source] T),
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -288,10 +297,12 @@ impl<T> Builder<T> {
 
     /// Builds an executable atom request using the supplied client configuration.
     ///
-    /// The marker `S` selects the atom operation. [`All`] is the marker used
-    /// for retrieving all atoms associated with a concept.
-    pub fn atoms<'a, S>(self, umls_config: &'a config::Config) -> Atom<'a, S, Batch<Config<T>>> {
-        Atom::new(umls_config, self.build())
+    /// The marker `S` selects the atom operation.
+    pub fn atoms<'a, S>(
+        self,
+        umls_config: &'a config::Config,
+    ) -> Atom<'a, WithoutClient, S, Batch<Config<T>>> {
+        Atom::<'a, WithoutClient, S, Batch<Config<T>>>::new(umls_config, self.build())
     }
 }
 
@@ -346,41 +357,52 @@ impl<T> Config<T> {
     }
 }
 
+#[cfg(feature = "reqwest")]
 /// Marker selecting retrieval of all atoms associated with a concept.
 pub struct All;
 
+#[cfg(feature = "reqwest")]
 /// Marker selecting retrieval of preferred atoms associated with a concept.
 pub struct Preferred;
 
+#[cfg(feature = "reqwest")]
 impl Preferred {
     /// Creates a request for the preferred atom associated with a concept.
     ///
-    /// Pass a validated [`Cui`] as `value`, then call [`Atom::fetch`] to
+    /// Pass a validated [`crate::concept::cui::Cui`] as `value`, attach a `reqwest::Client` with [`Atom::with_client`], then call `fetch()` to
     /// execute the request using the configured UMLS release.
     ///
     /// # Example
     ///
     /// ```no_run
+    /// # #[cfg(feature = "reqwest")]
+    /// use umls_http::reqwest;
     /// use umls_client::{
     ///     atom::Preferred,
     ///     concept::cui::Cui,
     ///     config::Config,
     /// };
     ///
+    /// # #[cfg(feature = "reqwest")]
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let config = Config::builder(std::env::var("UMLS_API_KEY")?)
     ///     .base_url("https://uts-ws.nlm.nih.gov/rest/".parse()?)
     ///     .try_version("2026AB")?
     ///     .build()?;
     /// let cui = Cui::new("C0010200")?;
-    /// let atom = Preferred::for_concept(&config, cui).fetch().await?;
+    /// let atom = Preferred::for_concept(&config, cui)
+    ///     .with_client(reqwest::Client::default())
+    ///     .fetch().await?;
     ///
     /// println!("{}: {}", atom.ui, atom.name);
     /// # Ok(())
     /// # }
     /// ```
-    pub fn for_concept<'a, T>(umls_config: &'a config::Config, value: T) -> Atom<'a, Self, T> {
-        Atom::new(umls_config, value)
+    pub fn for_concept<'a, T>(
+        umls_config: &'a config::Config,
+        value: T,
+    ) -> Atom<'a, WithoutClient, Self, T> {
+        Atom::<'a, WithoutClient, Self, T>::new(umls_config, value)
     }
 }
 
@@ -388,37 +410,60 @@ impl Preferred {
 ///
 /// `S` identifies the operation and `T` stores its request state. Most callers
 /// create this type through [`Builder::atoms`].
-pub struct Atom<'a, S, T> {
+pub struct Atom<'a, C, S, T> {
+    client: C,
     umls_config: &'a config::Config,
     value: T,
     _data: PhantomData<S>,
 }
 
-impl<'a, S, T> Atom<'a, S, T> {
+impl<'a, C, S, T> Atom<'a, C, S, T> {
     /// Creates an atom operation from client configuration and request state.
-    pub fn new(umls_config: &'a config::Config, value: T) -> Self {
-        Self {
+    pub fn new(umls_config: &'a config::Config, value: T) -> Atom<'a, WithoutClient, S, T> {
+        Atom {
+            client: WithoutClient,
             umls_config,
             value,
             _data: PhantomData,
         }
     }
 
-    /// Returns the operation's request state.
-    pub fn value(&self) -> &T {
-        &self.value
+    /// Returns a reference to client.
+    pub fn client(&self) -> &C {
+        &self.client
     }
 
-    /// Returns the client configuration used to execute the operation.
+    /// Returns a reference to umls config.
     pub fn umls_config(&self) -> &'a config::Config {
         self.umls_config
     }
+
+    /// Returns a reference to value.
+    pub fn value(&self) -> &T {
+        &self.value
+    }
 }
 
-impl<'a, S, T> Atom<'a, S, Batch<Config<T>>> {
-    fn inject_query_params(&self, url_string: &str) -> Result<Url, Error> {
+impl<'a, S, T> Atom<'a, WithoutClient, S, T> {
+    /// Attaches an owned HTTP client without sending a request.
+    ///
+    /// Execution requires the `reqwest` feature and a `reqwest::Client`.
+    /// Clone an existing client to share its connection pool across requests.
+    pub fn with_client<C>(self, client: C) -> Atom<'a, C, S, T> {
+        Atom {
+            client,
+            umls_config: self.umls_config,
+            value: self.value,
+            _data: self._data,
+        }
+    }
+}
+
+#[cfg(feature = "reqwest")]
+impl<'a, S, T> Atom<'a, reqwest::Client, S, Batch<Config<T>>> {
+    fn inject_query_params(&self, url_string: &str) -> Result<Url, Error<reqwest::Error>> {
         let source_vocabularies_params = self
-            .value()
+            .value
             .value()
             .source_vocabularies()
             .iter()
@@ -427,7 +472,7 @@ impl<'a, S, T> Atom<'a, S, Batch<Config<T>>> {
             .join(",");
 
         let tty_params = self
-            .value()
+            .value
             .value()
             .term_types()
             .iter()
@@ -435,14 +480,14 @@ impl<'a, S, T> Atom<'a, S, Batch<Config<T>>> {
             .collect::<Vec<&str>>()
             .join(",");
 
-        let include_obsolete = self.value().value().is_include_obsolete().to_string();
-        let include_suppressible = self.value().value().is_include_suppressible().to_string();
+        let include_obsolete = self.value.value().is_include_obsolete().to_string();
+        let include_suppressible = self.value.value().is_include_suppressible().to_string();
 
-        let page_number = self.value().number().to_string();
-        let page_size = self.value().size().to_string();
+        let page_number = self.value.number().to_string();
+        let page_size = self.value.size().to_string();
 
         let mut params = [
-            ("apiKey", self.umls_config().api_key().expose_secret()),
+            ("apiKey", self.umls_config.api_key().expose_secret()),
             ("sabs", &source_vocabularies_params),
             ("tty", &tty_params),
             ("includeObsolete", &include_obsolete),
@@ -452,7 +497,7 @@ impl<'a, S, T> Atom<'a, S, Batch<Config<T>>> {
         ]
         .to_vec();
 
-        if let Some(language) = self.value().value().language().map(|x| x.as_ref()) {
+        if let Some(language) = self.value.value().language().map(|x| x.as_ref()) {
             params.push(("language", language));
         }
 
@@ -460,7 +505,8 @@ impl<'a, S, T> Atom<'a, S, Batch<Config<T>>> {
     }
 }
 
-impl<'a> Atom<'a, All, Batch<Config<Cui>>> {
+#[cfg(feature = "reqwest")]
+impl<'a> Atom<'a, reqwest::Client, All, Batch<Config<Cui>>> {
     /// Fetches one filtered page of atoms for a validated CUI.
     ///
     /// Uses the release returned by [`crate::config::Config::version`].
@@ -471,36 +517,35 @@ impl<'a> Atom<'a, All, Batch<Config<Cui>>> {
     /// or response decoding fails.
     pub async fn fetch(
         self,
-    ) -> Result<Response<Page<Content<AtomResponse>>, Atom<'a, All, Batch<Config<Cui>>>>, Error>
-    {
+    ) -> Result<
+        Response<Page<Content<AtomResponse>>, Atom<'a, reqwest::Client, All, Batch<Config<Cui>>>>,
+        Error<reqwest::Error>,
+    > {
         let path = format!(
             "content/{}/CUI/{}/atoms",
-            self.umls_config().version().as_str(),
-            self.value().value().value().as_ref()
+            self.umls_config.version().as_str(),
+            self.value.value().value().as_ref()
         );
 
-        let url_string = self.umls_config().base_url().join(&path)?.to_string();
+        let url_string = self.umls_config.base_url().join(&path)?.to_string();
 
         let url = self.inject_query_params(&url_string)?;
 
-        let body = self
-            .umls_config()
-            .client()
-            .get(url)
-            .send()
-            .await
-            .map_err(Error::Transport)?
-            .error_for_status()
-            .map_err(Error::HttpStatus)?
-            .json::<Page<Content<AtomResponse>>>()
-            .await
-            .map_err(Error::Decode)?;
+        let request = http::Request::builder()
+            .uri(url.as_str())
+            .body(())
+            .map_err(reqwest::Error::Http)
+            .map_err(Error::Client)?;
 
-        Ok(Response::new(body, self))
+        let body: http::Response<Page<Content<AtomResponse>>> =
+            self.client.execute(request).await.map_err(Error::Client)?;
+
+        Ok(Response::new(body.into_body(), self))
     }
 }
 
-impl<'a> Atom<'a, All, Batch<Config<Url>>> {
+#[cfg(feature = "reqwest")]
+impl<'a> Atom<'a, reqwest::Client, All, Batch<Config<Url>>> {
     /// Fetches one filtered page of atoms from an atom-list URL.
     ///
     /// Uses the supplied URL without replacing its release with the configured
@@ -512,29 +557,30 @@ impl<'a> Atom<'a, All, Batch<Config<Url>>> {
     /// or response decoding fails.
     pub async fn fetch(
         self,
-    ) -> Result<Response<Page<Content<AtomResponse>>, Atom<'a, All, Batch<Config<Url>>>>, Error>
-    {
-        let url_string = self.value().value().value().to_string();
+    ) -> Result<
+        Response<Page<Content<AtomResponse>>, Atom<'a, reqwest::Client, All, Batch<Config<Url>>>>,
+        Error<reqwest::Error>,
+    > {
+        let url_string = self.value.value().value().to_string();
         let url = self.inject_query_params(&url_string)?;
 
-        let body = self
-            .umls_config()
-            .client()
-            .get(url)
-            .send()
-            .await
-            .map_err(Error::Transport)?
-            .error_for_status()
-            .map_err(Error::HttpStatus)?
-            .json::<Page<Content<AtomResponse>>>()
-            .await
-            .map_err(Error::Decode)?;
+        let request = http::Request::builder()
+            .uri(url.as_str())
+            .body(())
+            .map_err(reqwest::Error::Http)
+            .map_err(Error::Client)?;
+
+        let response: http::Response<Page<Content<AtomResponse>>> =
+            self.client.execute(request).await.map_err(Error::Client)?;
+
+        let body = response.into_body();
 
         Ok(Response::new(body, self))
     }
 }
 
-impl<'a> Atom<'a, All, Cui> {
+#[cfg(feature = "reqwest")]
+impl<'a> Atom<'a, reqwest::Client, All, Cui> {
     /// Fetches the first, unfiltered page of atoms for a validated CUI.
     ///
     /// Uses the release returned by [`crate::config::Config::version`].
@@ -543,52 +589,51 @@ impl<'a> Atom<'a, All, Cui> {
     ///
     /// Returns an error if URL construction, transport, HTTP status validation,
     /// or response decoding fails.
-    pub async fn fetch(self) -> Result<Content<AtomResponse>, Error> {
+    pub async fn fetch(self) -> Result<Content<AtomResponse>, Error<reqwest::Error>> {
         let path = format!(
             "content/{}/CUI/{}/atoms",
-            self.umls_config().version().as_str(),
-            self.value()
+            self.umls_config.version().as_str(),
+            self.value
         );
-        let url_string = self.umls_config().base_url().join(&path)?.to_string();
+        let url_string = self.umls_config.base_url().join(&path)?.to_string();
 
         let url = Url::parse_with_params(
             &url_string,
-            &[("apiKey", self.umls_config().api_key().expose_secret())],
+            &[("apiKey", self.umls_config.api_key().expose_secret())],
         )?;
 
-        let body = self
-            .umls_config()
-            .client()
-            .get(url)
-            .send()
-            .await
-            .map_err(Error::Transport)?
-            .error_for_status()
-            .map_err(Error::HttpStatus)?
-            .json::<Page<Content<AtomResponse>>>()
-            .await
-            .map_err(Error::Decode)?;
+        let request = http::Request::builder()
+            .uri(url.as_str())
+            .body(())
+            .map_err(reqwest::Error::Http)
+            .map_err(Error::Client)?;
+
+        let response: http::Response<Page<Content<AtomResponse>>> =
+            self.client.execute(request).await.map_err(Error::Client)?;
+
+        let body = response.into_body();
 
         Ok(body.content)
     }
 }
 
-impl<'a> Atom<'a, Preferred, Cui> {
-    /// Fetches the preferred concept atom for the given [`Cui`] using the
+#[cfg(feature = "reqwest")]
+impl<'a> Atom<'a, reqwest::Client, Preferred, Cui> {
+    /// Fetches the preferred concept atom for the given [`crate::concept::cui::Cui`] using the
     /// configured UMLS release.
     ///
     /// # Errors
     ///
     /// Returns an error if URL construction, transport, HTTP status validation,
     /// or response decoding fails.
-    pub async fn fetch(self) -> Result<AtomResponse, Error> {
+    pub async fn fetch(self) -> Result<AtomResponse, Error<reqwest::Error>> {
         let path = format!(
             "content/{}/CUI/{}/atoms/preferred",
-            self.umls_config().version().as_str(),
-            self.value()
+            self.umls_config.version().as_str(),
+            self.value
         );
         let url_string = self
-            .umls_config()
+            .umls_config
             .base_url()
             .join(&path)
             .map_err(Error::Url)?
@@ -596,21 +641,19 @@ impl<'a> Atom<'a, Preferred, Cui> {
 
         let url = Url::parse_with_params(
             &url_string,
-            &[("apiKey", self.umls_config().api_key().expose_secret())],
+            &[("apiKey", self.umls_config.api_key().expose_secret())],
         )?;
 
-        let body = self
-            .umls_config()
-            .client()
-            .get(url)
-            .send()
-            .await
-            .map_err(Error::Transport)?
-            .error_for_status()
-            .map_err(Error::HttpStatus)?
-            .json::<Page<AtomResponse>>()
-            .await
-            .map_err(Error::Decode)?;
+        let request = http::Request::builder()
+            .uri(url.as_str())
+            .body(())
+            .map_err(reqwest::Error::Http)
+            .map_err(Error::Client)?;
+
+        let response: http::Response<Page<AtomResponse>> =
+            self.client.execute(request).await.map_err(Error::Client)?;
+
+        let body = response.into_body();
 
         Ok(body.content)
     }
@@ -636,14 +679,15 @@ impl<T, C> Response<Page<Content<T>>, C> {
     }
 }
 
-impl<'a, T, U> super::search::Page<Content<T>, Atom<'a, All, Batch<Config<U>>>> {
+#[cfg(feature = "reqwest")]
+impl<'a, T, U> super::search::Page<Content<T>, Atom<'a, reqwest::Client, All, Batch<Config<U>>>> {
     /// Consumes this page and returns a request for the next page.
     ///
     /// # Errors
     ///
     /// Returns [`BatchError::Overflow`] if the response indicates that no next
     /// page exists or if the page number cannot be incremented.
-    pub fn next(mut self) -> Result<Atom<'a, All, Batch<Config<U>>>, BatchError> {
+    pub fn next(mut self) -> Result<Atom<'a, reqwest::Client, All, Batch<Config<U>>>, BatchError> {
         if !self.has_next() {
             return Err(BatchError::Overflow);
         }
@@ -659,7 +703,9 @@ impl<'a, T, U> super::search::Page<Content<T>, Atom<'a, All, Batch<Config<U>>>> 
     ///
     /// Returns [`BatchError::NoPreviousPage`] when this is the first page or
     /// the page number otherwise cannot be decremented.
-    pub fn previous(mut self) -> Result<Atom<'a, All, Batch<Config<U>>>, BatchError> {
+    pub fn previous(
+        mut self,
+    ) -> Result<Atom<'a, reqwest::Client, All, Batch<Config<U>>>, BatchError> {
         if !self.has_previous() {
             return Err(BatchError::NoPreviousPage);
         }
@@ -705,6 +751,7 @@ impl<T> Page<T> {
     }
 }
 
+#[cfg(feature = "reqwest")]
 fn deserialize_bool_from_string<'de, D>(deserializer: D) -> Result<bool, D::Error>
 where
     D: Deserializer<'de>,
@@ -718,6 +765,7 @@ where
     }
 }
 
+#[cfg(feature = "reqwest")]
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 /// A summary of one source-specific atom associated with a UMLS concept.

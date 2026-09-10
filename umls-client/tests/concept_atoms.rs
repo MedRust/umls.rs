@@ -1,5 +1,7 @@
 //! Integration tests for concept-atom retrieval and pagination.
 
+#![cfg(feature = "reqwest")]
+
 use httpmock::{Method, MockServer};
 use serde_json::json;
 use umls_client::{
@@ -9,6 +11,8 @@ use umls_client::{
 };
 use url::Url;
 use uuid::Uuid;
+
+use umls_http::reqwest;
 
 #[tokio::test]
 async fn fetch_first_page_content_of_concept_atoms() -> Result<(), Box<dyn std::error::Error>> {
@@ -65,6 +69,7 @@ async fn fetch_first_page_content_of_concept_atoms() -> Result<(), Box<dyn std::
 
     let content = atom::Config::builder(cui)
         .atoms(&umls_config)
+        .with_client(Default::default())
         .fetch()
         .await?
         .into_content();
@@ -142,6 +147,7 @@ async fn fetch_first_page_content_of_concept_atoms_with_differnt_version()
 
     let content = atom::Config::builder(cui)
         .atoms(&umls_config)
+        .with_client(Default::default())
         .fetch()
         .await?
         .into_content();
@@ -168,7 +174,12 @@ async fn reports_atom_url_errors() -> Result<(), Box<dyn std::error::Error>> {
         .build()?;
     let cui = Cui::new("C0010200")?;
 
-    let error = match atom::Config::builder(cui).atoms(&config).fetch().await {
+    let error = match atom::Config::builder(cui)
+        .atoms(&config)
+        .with_client(Default::default())
+        .fetch()
+        .await
+    {
         Ok(_) => panic!("a non-base URL cannot be joined with the atom path"),
         Err(error) => error,
     };
@@ -192,12 +203,17 @@ async fn reports_unsuccessful_atom_statuses() -> Result<(), Box<dyn std::error::
         .build()?;
     let cui = Cui::new("C0010200")?;
 
-    let error = match atom::Config::builder(cui).atoms(&config).fetch().await {
+    let error = match atom::Config::builder(cui)
+        .atoms(&config)
+        .with_client(Default::default())
+        .fetch()
+        .await
+    {
         Ok(_) => panic!("a 503 response must be reported as an HTTP status error"),
         Err(error) => error,
     };
 
-    assert!(matches!(error, Error::HttpStatus(_)));
+    assert!(matches!(error, Error::Client(_)));
     Ok(())
 }
 
@@ -216,12 +232,17 @@ async fn reports_invalid_atom_response_bodies() -> Result<(), Box<dyn std::error
         .build()?;
     let cui = Cui::new("C0010200")?;
 
-    let error = match atom::Config::builder(cui).atoms(&config).fetch().await {
+    let error = match atom::Config::builder(cui)
+        .atoms(&config)
+        .with_client(Default::default())
+        .fetch()
+        .await
+    {
         Ok(_) => panic!("an invalid response body must be reported as a decode error"),
         Err(error) => error,
     };
 
-    assert!(matches!(error, Error::Decode(_)));
+    assert!(matches!(error, Error::Client(_)));
     Ok(())
 }
 
@@ -319,6 +340,7 @@ async fn fetch_first_page_of_concept_atoms() -> Result<(), Box<dyn std::error::E
 
     let first_page = atom::Config::builder(cui)
         .atoms(&umls_config)
+        .with_client(Default::default())
         .fetch()
         .await?
         .into_page();
@@ -418,6 +440,7 @@ async fn fetch_first_page_content_of_concept_atoms_using_url()
 
     let content = atom::Config::builder(url)
         .atoms(&umls_config)
+        .with_client(Default::default())
         .fetch()
         .await?
         .into_content();
@@ -534,6 +557,7 @@ async fn fetch_first_page_of_concept_atoms_using_url() -> Result<(), Box<dyn std
 
     let first_page = atom::Config::builder(url)
         .atoms(&umls_config)
+        .with_client(Default::default())
         .fetch()
         .await?
         .into_page();
@@ -628,7 +652,10 @@ async fn fetch_first_page_content_of_concept_atoms_using_cui()
         .base_url(base_url)
         .build()?;
 
-    let content = Atom::<'_, All, Cui>::new(&umls_config, cui).fetch().await?;
+    let content = Atom::<'_, reqwest::Client, All, Cui>::new(&umls_config, cui)
+        .with_client(Default::default());
+
+    let content = content.fetch().await?;
 
     assert_eq!(content.list().len(), 1);
 
@@ -696,9 +723,10 @@ async fn fetch_preferred_concept_atom() -> Result<(), Box<dyn std::error::Error>
         .base_url(base_url)
         .build()?;
 
-    let content = Atom::<'_, Preferred, Cui>::new(&umls_config, cui)
-        .fetch()
-        .await?;
+    let content = Atom::<reqwest::Client, Preferred, Cui>::new(&umls_config, cui)
+        .with_client(reqwest::Client::default());
+
+    let content = content.fetch().await?;
 
     assert_eq!(content.ui.as_str(), "A24123438");
     assert!(!content.suppressible);
@@ -768,9 +796,10 @@ async fn fetch_preferred_concept_atom_from_different_version()
         .try_version(umls_version)?
         .build()?;
 
-    let content = Atom::<'_, Preferred, Cui>::new(&umls_config, cui)
-        .fetch()
-        .await?;
+    let content = Atom::<'_, reqwest::Client, Preferred, Cui>::new(&umls_config, cui)
+        .with_client(Default::default());
+
+    let content = content.fetch().await?;
 
     assert_eq!(content.ui.as_str(), "A24123438");
     assert!(!content.suppressible);

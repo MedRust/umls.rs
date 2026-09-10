@@ -1,13 +1,24 @@
+#[cfg(feature = "reqwest")]
+use http::Response;
+#[cfg(feature = "reqwest")]
 use secrecy::ExposeSecret;
+
+use umls_http::WithoutClient;
+
+#[cfg(feature = "reqwest")]
+use umls_http::reqwest;
+
+#[cfg(feature = "reqwest")]
 use url::Url;
 
+#[cfg(feature = "reqwest")]
 use serde::Deserialize;
 
-use crate::{
-    concept::cui::Cui,
-    config::Config,
-    search::{ConceptSnapshot, core::get_trimmed_non_empty_string},
-};
+#[cfg(feature = "reqwest")]
+use crate::search::core::get_trimmed_non_empty_string;
+
+#[cfg(feature = "reqwest")]
+use crate::{concept::cui::Cui, config::Config, search::ConceptSnapshot};
 
 /// Validated UMLS Concept Unique Identifiers (CUIs).
 pub mod cui {
@@ -17,7 +28,7 @@ pub mod cui {
     use crate::search::core::{EmptyString, get_trimmed_non_empty_string};
 
     #[derive(Debug, thiserror::Error)]
-    /// An error produced while validating a [`Cui`].
+    /// An error produced while validating a [`crate::concept::cui::Cui`].
     pub enum Error {
         /// The supplied identifier was empty after trimming.
         #[error("Empty String Error")]
@@ -237,13 +248,13 @@ pub mod cui {
     }
 }
 
+#[cfg(feature = "reqwest")]
 #[derive(Debug, thiserror::Error)]
 /// An error produced while locating or retrieving a concept.
-pub enum Error {
-    /// The HTTP request failed, returned an unsuccessful status, or contained
-    /// an invalid response body.
-    #[error("Reqwest error: {0}")]
-    Reqwest(reqwest::Error),
+pub enum Error<T> {
+    /// A client error.
+    #[error("Client error: {0}")]
+    Client(#[source] T),
 
     /// A concept endpoint URL could not be constructed.
     #[error("Url error: {0}")]
@@ -252,91 +263,130 @@ pub enum Error {
 
 /// A typed reference to information that can identify a UMLS concept.
 ///
-/// The available `get` method depends on whether the value is a [`Cui`], a
-/// [`Url`], or a [`ConceptSnapshot`].
-pub struct Info<T> {
+/// The available `fetch` method depends on whether the value is a [`crate::concept::cui::Cui`], a
+/// [`url::Url`], or a [`crate::search::ConceptSnapshot`]. Attach a `reqwest::Client` using
+/// [`Self::with_client`] before fetching; fetching consumes the request.
+pub struct Info<C, T> {
+    client: C,
     value: T,
 }
 
-impl<T> Info<T> {
-    /// Wraps a concept reference value.
-    pub fn new(value: T) -> Self {
-        Self { value }
-    }
-
+impl<C, T> Info<C, T> {
     /// Returns the wrapped reference value.
     pub fn value(&self) -> &T {
         &self.value
     }
+
+    /// Returns the wraper reference client.
+    pub fn client(&self) -> &C {
+        &self.client
+    }
 }
 
-impl Info<Cui> {
+impl<T> Info<WithoutClient, T> {
+    /// Wraps a concept reference value.
+    pub fn new(value: T) -> Self {
+        Self {
+            client: WithoutClient,
+            value,
+        }
+    }
+
+    /// Attaches an owned HTTP client without sending a request.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # #[cfg(feature = "reqwest")]
+    /// use umls_http::reqwest;
+    /// use umls_client::{concept::{Info, cui::Cui}, config::Config};
+    /// # #[cfg(feature = "reqwest")]
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// let config = Config::builder(std::env::var("UMLS_API_KEY")?).build()?;
+    /// let client = reqwest::Client::default();
+    /// let concept = Info::new(Cui::new("C0010200")?)
+    ///     .with_client(client).fetch(&config).await?;
+    /// println!("{}", concept.name);
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// Execution requires the `reqwest` feature and a `reqwest::Client`.
+    /// Clone an existing client to share its connection pool across requests.
+    pub fn with_client<C>(self, client: C) -> Info<C, T> {
+        Info {
+            client,
+            value: self.value,
+        }
+    }
+}
+
+#[cfg(feature = "reqwest")]
+impl Info<reqwest::Client, Cui> {
     /// Retrieves the concept identified by this CUI.
     ///
     /// # Errors
     ///
     /// Returns [`Error`] if endpoint construction, transport, HTTP status
     /// validation, or response decoding fails.
-    pub async fn fetch(&self, config: &Config) -> Result<Concept, Error> {
+    pub async fn fetch(self, config: &Config) -> Result<Concept, Error<reqwest::Error>> {
         let path = format!("content/{}/CUI/{}", config.version(), self.value.as_str());
         let url = config.base_url().join(&path).map_err(Error::Url)?;
 
-        Info::new(url).fetch(config).await
+        Info::new(url).with_client(self.client).fetch(config).await
     }
 }
 
-impl Info<Url> {
+#[cfg(feature = "reqwest")]
+impl Info<reqwest::Client, Url> {
     /// Retrieves a concept from the wrapped UMLS resource URL.
     ///
     /// # Errors
     ///
     /// Returns [`Error`] if URL construction, transport, HTTP status
     /// validation, or response decoding fails.
-    pub async fn fetch(&self, config: &Config) -> Result<Concept, Error> {
+    pub async fn fetch(self, config: &Config) -> Result<Concept, Error<reqwest::Error>> {
         let url = Url::parse_with_params(
             self.value.as_str(),
             &[("apiKey", config.api_key().expose_secret())],
         )
         .map_err(Error::Url)?;
 
-        let response = config
-            .client()
-            .get(url)
-            .send()
-            .await
-            .map_err(Error::Reqwest)?
-            .error_for_status()
-            .map_err(Error::Reqwest)?;
+        let request = http::Request::builder()
+            .uri(url.as_str())
+            .body(())
+            .map_err(reqwest::Error::Http)
+            .map_err(Error::Client)?;
 
-        let response = response
-            .json::<ConceptResponse>()
-            .await
-            .map_err(Error::Reqwest)?
-            .result;
+        let response: Response<ConceptResponse> =
+            self.client.execute(request).await.map_err(Error::Client)?;
 
-        Ok(response)
+        Ok(response.into_body().result)
     }
 }
 
-impl Info<ConceptSnapshot> {
+#[cfg(feature = "reqwest")]
+impl Info<reqwest::Client, ConceptSnapshot> {
     /// Retrieves the full concept represented by a search-result snapshot.
     ///
     /// # Errors
     ///
     /// Returns [`Error`] if the concept request cannot be completed or decoded.
-    pub async fn fetch(&self, config: &Config) -> Result<Concept, Error> {
-        self.value.info().fetch(config).await
+    pub async fn fetch(self, config: &Config) -> Result<Concept, Error<reqwest::Error>> {
+        self.value.info.with_client(self.client).fetch(config).await
     }
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg(feature = "reqwest")]
 struct ConceptResponse {
     result: Concept,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg(feature = "reqwest")]
 /// A full concept returned by the UMLS content endpoint.
 pub struct Concept {
     /// The response object's UMLS class discriminator.
@@ -375,6 +425,7 @@ pub struct Concept {
     pub name: String,
 }
 
+#[cfg(feature = "reqwest")]
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// A resource link that the UMLS API may represent with the `NONE` sentinel.
 pub enum OptionalResource {
@@ -384,6 +435,7 @@ pub enum OptionalResource {
     Unavailable,
 }
 
+#[cfg(feature = "reqwest")]
 impl<'de> Deserialize<'de> for OptionalResource {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -400,6 +452,7 @@ impl<'de> Deserialize<'de> for OptionalResource {
     }
 }
 
+#[cfg(feature = "reqwest")]
 #[derive(Debug, Deserialize)]
 /// The UMLS class discriminator for a concept response.
 pub enum ConceptClass {
@@ -407,6 +460,7 @@ pub enum ConceptClass {
     Concept,
 }
 
+#[cfg(feature = "reqwest")]
 #[derive(Debug, Deserialize)]
 /// A semantic type assigned to a concept.
 pub struct SemanticType {

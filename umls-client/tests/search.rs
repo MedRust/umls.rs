@@ -1,11 +1,13 @@
 //! A list of integration test for raw search function apis.
 
+#![cfg(feature = "reqwest")]
+
 use httpmock::{Method::GET, MockServer};
 use serde_json::json;
 
 use umls_client::{
     config::Config,
-    search::{Request, raw::search},
+    search::{Request, raw::Search},
 };
 use uuid::Uuid;
 
@@ -53,7 +55,9 @@ async fn successful_search_in_umls() -> Result<(), Box<dyn std::error::Error>> {
 
     let request = Request::builder("cough".parse()?).build();
 
-    let response = search(&config, &request).await?;
+    let object = Search::default().with_client(umls_http::reqwest::Client::default());
+
+    let response = object.search(&config, &request).await?;
 
     assert_eq!(response.page_size.get(), 1);
     assert_eq!(response.page_number.get(), 1);

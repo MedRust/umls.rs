@@ -13,6 +13,7 @@ use ratatui::{
     text::Line,
     widgets::{Block, Borders, Cell, Paragraph, Row, Table, TableState, Wrap},
 };
+use umls_http::reqwest;
 use umls_client::{
     config::Config,
     search::{
@@ -20,7 +21,8 @@ use umls_client::{
     },
 };
 
-type ConceptPage<'a> = Page<Content<ConceptSnapshot>, Search<'a, Concept>>;
+type ConceptPage<'a> =
+    Page<Content<ConceptSnapshot>, Search<'a, umls_http::reqwest::Client, Concept>>;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Focus {
@@ -65,6 +67,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
 async fn run(terminal: &mut DefaultTerminal, config: &Config) -> Result<(), Box<dyn Error>> {
     let mut app = App::new();
+    let client = reqwest::Client::default();
 
     while !app.should_quit {
         terminal.draw(|frame| render(frame, &mut app))?;
@@ -97,7 +100,7 @@ async fn run(terminal: &mut DefaultTerminal, config: &Config) -> Result<(), Box<
 
         match app.focus {
             Focus::Search => match key.code {
-                KeyCode::Enter => search(&mut app, config, terminal).await,
+                KeyCode::Enter => search(&mut app, config, &client, terminal).await,
                 KeyCode::Backspace => {
                     app.input.pop();
                 }
@@ -125,7 +128,12 @@ async fn run(terminal: &mut DefaultTerminal, config: &Config) -> Result<(), Box<
     Ok(())
 }
 
-async fn search<'a>(app: &mut App<'a>, config: &'a Config, terminal: &mut DefaultTerminal) {
+async fn search<'a>(
+    app: &mut App<'a>,
+    config: &'a Config,
+    client: &reqwest::Client,
+    terminal: &mut DefaultTerminal,
+) {
     let raw_term = app.input.trim().to_owned();
     if raw_term.is_empty() {
         app.status = "Enter a non-empty search term.".into();
@@ -143,7 +151,12 @@ async fn search<'a>(app: &mut App<'a>, config: &'a Config, terminal: &mut Defaul
     app.status = format!("Searching for {raw_term:?}…");
     let _ = terminal.draw(|frame| render(frame, app));
 
-    match search::Builder::new(term).concept(config).get().await {
+    match search::Builder::new(term)
+        .concept(config)
+        .with_client(client.clone())
+        .get()
+        .await
+    {
         Ok(response) => match response.into_page() {
             Ok(page) => {
                 let result_count = page.count().map_or(0, NonZeroU64::get);
@@ -211,7 +224,10 @@ async fn previous_page(app: &mut App<'_>, terminal: &mut DefaultTerminal) {
 
 fn replace_page<'a>(
     app: &mut App<'a>,
-    response: Response<search::raw::SearchResponse, Search<'a, Concept>>,
+    response: Response<
+        search::raw::SearchResponse,
+        Search<'a, umls_http::reqwest::Client, Concept>,
+    >,
     success_message: &str,
 ) {
     match response.into_page() {
