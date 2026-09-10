@@ -141,6 +141,20 @@ impl<C, Type, Kind: Copy> ReleaseFetcher<C, Type, Kind> {
     pub fn kind(&self) -> &Kind {
         &self.kind
     }
+
+    /// Returns the client reference.
+    ///
+    /// The returned reference has the same client supplied during construction.
+    pub fn client(&self) -> &C {
+        &self.client
+    }
+
+    /// Returns the reference to release type.
+    ///
+    /// The returned reference has the same release type supplied during construction.
+    pub fn release_type(&self) -> &Type {
+        &self.release_type
+    }
 }
 
 #[cfg(feature = "reqwest")]
@@ -505,30 +519,6 @@ impl ReleaseFetcher<reqwest::Client, String, kind::All> {
 
 #[cfg(feature = "reqwest")]
 impl ReleaseFetcher<reqwest::Client, ReleaseType, Current> {
-    /// Returns the release category used by this fetcher.
-    ///
-    /// The returned reference borrows the category supplied during construction without making
-    /// a network request or modifying the selection.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use umls_downloader::{ReleaseFetcher, kind::Current};
-    /// use umls_http::reqwest;
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let category = umls_downloader::release_type::ReleaseType {
-    ///     product: "UMLS".into(), name: "umls-full-release".into(),
-    ///     endpoint: "https://uts-ws.nlm.nih.gov/releases".into(),
-    /// };
-    /// let fetcher = ReleaseFetcher::new(reqwest::Client::default(), category, Current);
-    /// let selected = fetcher.release_type();
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub fn release_type(&self) -> &ReleaseType {
-        &self.release_type
-    }
-
     /// Fetches the first release for the selected category.
     ///
     /// Returns [`None`] for an empty response array and otherwise returns its first release.
@@ -569,30 +559,6 @@ impl ReleaseFetcher<reqwest::Client, ReleaseType, Current> {
 
 #[cfg(feature = "reqwest")]
 impl ReleaseFetcher<reqwest::Client, ReleaseType, kind::All> {
-    /// Returns the release category used by this fetcher.
-    ///
-    /// The returned reference borrows the category supplied during construction without making
-    /// a network request or modifying the selection.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use umls_downloader::{ReleaseFetcher, kind::All};
-    /// use umls_http::reqwest;
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let category = umls_downloader::release_type::ReleaseType {
-    ///     product: "UMLS".into(), name: "umls-full-release".into(),
-    ///     endpoint: "https://uts-ws.nlm.nih.gov/releases".into(),
-    /// };
-    /// let fetcher = ReleaseFetcher::new(reqwest::Client::default(), category, All);
-    /// let selected = fetcher.release_type();
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub fn release_type(&self) -> &ReleaseType {
-        &self.release_type
-    }
-
     /// Fetches all releases for the selected category.
     ///
     /// Returns every release in response order, including an empty [`Vec`] for an empty array.
@@ -685,6 +651,18 @@ pub struct ReleaseDownloader<C, T> {
     api_key: SecretString,
 }
 
+impl<C, T> ReleaseDownloader<C, T> {
+    /// Return the reference of client.
+    pub fn client(&self) -> &C {
+        &self.client
+    }
+
+    /// Return the reference of value.
+    pub fn value(&self) -> &T {
+        &self.value
+    }
+}
+
 impl<T> ReleaseDownloader<umls_http::WithoutClient, T> {
     /// Creates a downloader without attaching an HTTP client.
     ///
@@ -699,8 +677,11 @@ impl<T> ReleaseDownloader<umls_http::WithoutClient, T> {
     /// let downloader = ReleaseDownloader::new("api-key", source);
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
-    pub fn new(api_key: impl Into<SecretString>, value: T) -> Self {
-        Self {
+    pub fn new(
+        api_key: impl Into<SecretString>,
+        value: T,
+    ) -> ReleaseDownloader<umls_http::WithoutClient, T> {
+        ReleaseDownloader {
             client: umls_http::WithoutClient,
             value,
             api_key: api_key.into(),
@@ -839,6 +820,16 @@ impl<D> DownloadResource<D> {
             destination,
         }
     }
+
+    /// Return the reference of source uri.
+    pub fn source(&self) -> &http::Uri {
+        &self.source
+    }
+
+    /// Return the reference of destination.
+    pub fn destination(&self) -> &D {
+        &self.destination
+    }
 }
 
 #[cfg(feature = "reqwest")]
@@ -914,11 +905,14 @@ fn download_uri(
 }
 
 #[cfg(test)]
+#[cfg(feature = "reqwest")]
 mod tests {
 
     use super::*;
+    use bytes::Bytes;
     use httpmock::prelude::*;
     use std::{error::Error as _, time::Duration};
+    use umls_http::reqwest;
 
     #[test]
     fn category_names_select_current_or_all() {

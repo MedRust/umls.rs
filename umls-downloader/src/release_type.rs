@@ -101,6 +101,7 @@ impl ReleaseType {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg(feature = "reqwest")]
 struct ReleaseTypes {
     #[serde(rename = "releaseTypes")]
     types: Vec<ReleaseType>,
@@ -119,6 +120,13 @@ struct ReleaseTypes {
 /// ```
 pub struct Client<C> {
     client: C,
+}
+
+impl<C> Client<C> {
+    /// Return the reference of client.
+    pub fn client(&self) -> &C {
+        &self.client
+    }
 }
 
 impl Default for Client<umls_http::WithoutClient> {
