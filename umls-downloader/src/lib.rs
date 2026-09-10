@@ -2,7 +2,7 @@
 //! [UMLS Terminology Services (UTS)][uts] Release and Download APIs.
 //!
 //! Enable the optional `reqwest` feature to execute requests with
-//! `client::reqwest::Client`. Cloning the client shares its connection pool.
+//! `umls_http::reqwest::Client`. Cloning the client shares its connection pool.
 //! [`release_type::Client`] fetches categories, and [`ReleaseFetcher`] fetches release metadata.
 //! [`ReleaseFetcher::new`] takes the HTTP client, category, and selection kind;
 //! its `send()` method consumes the fetcher. [`ReleaseDownloader::new`] takes an API
@@ -35,14 +35,12 @@ use secrecy::ExposeSecret;
 use secrecy::SecretString;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+#[cfg(feature = "reqwest")]
+use umls_http::reqwest;
 
 #[cfg(feature = "reqwest")]
-use client::reqwest::{self, Client};
-
 use crate::{kind::Current, release_type::ReleaseType};
 
-/// Provides concrete HTTP clients and a marker for builders without a client.
-pub mod client;
 /// Provides release-category metadata and category discovery.
 pub mod release_type;
 
@@ -116,7 +114,8 @@ impl<C, Type, Kind: Copy> ReleaseFetcher<C, Type, Kind> {
     /// # Examples
     ///
     /// ```
-    /// use umls_downloader::{ReleaseFetcher, client::WithoutClient, kind::Current};
+    /// use umls_downloader::{ReleaseFetcher, kind::Current};
+    /// use umls_http::WithoutClient;
     /// let fetcher = ReleaseFetcher::new(WithoutClient, "umls-full-release", Current);
     /// ```
     pub fn new(client: C, release_type: Type, kind: Kind) -> Self {
@@ -134,7 +133,8 @@ impl<C, Type, Kind: Copy> ReleaseFetcher<C, Type, Kind> {
     /// # Examples
     ///
     /// ```
-    /// use umls_downloader::{ReleaseFetcher, client::WithoutClient, kind::Current};
+    /// use umls_downloader::{ReleaseFetcher, kind::Current};
+    /// use umls_http::WithoutClient;
     /// let fetcher = ReleaseFetcher::new(WithoutClient, "umls-full-release", Current);
     /// let selection: &Current = fetcher.kind();
     /// ```
@@ -153,7 +153,8 @@ impl ReleaseFetcher<reqwest::Client, http::Uri, Current> {
     /// # Examples
     ///
     /// ```
-    /// use umls_downloader::{ReleaseFetcher, client::reqwest::Client, kind::Current};
+    /// use umls_downloader::{ReleaseFetcher, kind::Current};
+    /// use umls_http::reqwest::Client;
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let category = "https://uts-ws.nlm.nih.gov/releases".parse::<http::Uri>()?;
     /// let fetcher = ReleaseFetcher::new(Client::default(), category, Current);
@@ -174,7 +175,8 @@ impl ReleaseFetcher<reqwest::Client, http::Uri, Current> {
     /// # Examples
     ///
     /// ```no_run
-    /// use umls_downloader::{ReleaseFetcher, client::reqwest::Client, kind::Current};
+    /// use umls_downloader::{ReleaseFetcher, kind::Current};
+    /// use umls_http::reqwest::Client;
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let category = concat!("https://uts-ws.nlm.nih.gov/releases?",
     ///     "releaseType=umls-full-release&current=true").parse::<http::Uri>()?;
@@ -217,7 +219,8 @@ impl ReleaseFetcher<reqwest::Client, http::Uri, kind::All> {
     /// # Examples
     ///
     /// ```
-    /// use umls_downloader::{ReleaseFetcher, client::reqwest::Client, kind::All};
+    /// use umls_downloader::{ReleaseFetcher, kind::All};
+    /// use umls_http::reqwest::Client;
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let category = "https://uts-ws.nlm.nih.gov/releases".parse::<http::Uri>()?;
     /// let fetcher = ReleaseFetcher::new(Client::default(), category, All);
@@ -238,7 +241,8 @@ impl ReleaseFetcher<reqwest::Client, http::Uri, kind::All> {
     /// # Examples
     ///
     /// ```no_run
-    /// use umls_downloader::{ReleaseFetcher, client::reqwest::Client, kind::All};
+    /// use umls_downloader::{ReleaseFetcher, kind::All};
+    /// use umls_http::reqwest::Client;
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let category = concat!("https://uts-ws.nlm.nih.gov/releases?",
     ///     "releaseType=umls-full-release").parse::<http::Uri>()?;
@@ -281,7 +285,8 @@ impl ReleaseFetcher<reqwest::Client, &str, Current> {
     /// # Examples
     ///
     /// ```
-    /// use umls_downloader::{ReleaseFetcher, client::reqwest::Client, kind::Current};
+    /// use umls_downloader::{ReleaseFetcher, kind::Current};
+    /// use umls_http::reqwest::Client;
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let category = "umls-full-release";
     /// let fetcher = ReleaseFetcher::new(Client::default(), category, Current);
@@ -301,7 +306,8 @@ impl ReleaseFetcher<reqwest::Client, &str, Current> {
     /// # Examples
     ///
     /// ```no_run
-    /// use umls_downloader::{ReleaseFetcher, client::reqwest::Client, kind::Current};
+    /// use umls_downloader::{ReleaseFetcher, kind::Current};
+    /// use umls_http::reqwest::Client;
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let category = "umls-full-release";
     /// let releases = ReleaseFetcher::new(Client::default(), category, Current)
@@ -336,7 +342,8 @@ impl ReleaseFetcher<reqwest::Client, &str, kind::All> {
     /// # Examples
     ///
     /// ```
-    /// use umls_downloader::{ReleaseFetcher, client::reqwest::Client, kind::All};
+    /// use umls_downloader::{ReleaseFetcher, kind::All};
+    /// use umls_http::reqwest::Client;
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let category = "umls-full-release";
     /// let fetcher = ReleaseFetcher::new(Client::default(), category, All);
@@ -356,7 +363,8 @@ impl ReleaseFetcher<reqwest::Client, &str, kind::All> {
     /// # Examples
     ///
     /// ```no_run
-    /// use umls_downloader::{ReleaseFetcher, client::reqwest::Client, kind::All};
+    /// use umls_downloader::{ReleaseFetcher, kind::All};
+    /// use umls_http::reqwest::Client;
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let category = "umls-full-release";
     /// let releases = ReleaseFetcher::new(Client::default(), category, All)
@@ -391,7 +399,8 @@ impl ReleaseFetcher<reqwest::Client, String, Current> {
     /// # Examples
     ///
     /// ```
-    /// use umls_downloader::{ReleaseFetcher, client::reqwest::Client, kind::Current};
+    /// use umls_downloader::{ReleaseFetcher, kind::Current};
+    /// use umls_http::reqwest::Client;
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let category = String::from("umls-full-release");
     /// let fetcher = ReleaseFetcher::new(Client::default(), category, Current);
@@ -411,7 +420,8 @@ impl ReleaseFetcher<reqwest::Client, String, Current> {
     /// # Examples
     ///
     /// ```no_run
-    /// use umls_downloader::{ReleaseFetcher, client::reqwest::Client, kind::Current};
+    /// use umls_downloader::{ReleaseFetcher, kind::Current};
+    /// use umls_http::reqwest::Client;
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let category = String::from("umls-full-release");
     /// let releases = ReleaseFetcher::new(Client::default(), category, Current)
@@ -446,7 +456,8 @@ impl ReleaseFetcher<reqwest::Client, String, kind::All> {
     /// # Examples
     ///
     /// ```
-    /// use umls_downloader::{ReleaseFetcher, client::reqwest::Client, kind::All};
+    /// use umls_downloader::{ReleaseFetcher, kind::All};
+    /// use umls_http::reqwest::Client;
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let category = String::from("umls-full-release");
     /// let fetcher = ReleaseFetcher::new(Client::default(), category, All);
@@ -466,7 +477,8 @@ impl ReleaseFetcher<reqwest::Client, String, kind::All> {
     /// # Examples
     ///
     /// ```no_run
-    /// use umls_downloader::{ReleaseFetcher, client::reqwest::Client, kind::All};
+    /// use umls_downloader::{ReleaseFetcher, kind::All};
+    /// use umls_http::reqwest::Client;
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let category = String::from("umls-full-release");
     /// let releases = ReleaseFetcher::new(Client::default(), category, All)
@@ -501,7 +513,8 @@ impl ReleaseFetcher<reqwest::Client, ReleaseType, Current> {
     /// # Examples
     ///
     /// ```
-    /// use umls_downloader::{ReleaseFetcher, client::reqwest::Client, kind::Current};
+    /// use umls_downloader::{ReleaseFetcher, kind::Current};
+    /// use umls_http::reqwest::Client;
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let category = umls_downloader::release_type::ReleaseType {
     ///     product: "UMLS".into(), name: "umls-full-release".into(),
@@ -525,7 +538,8 @@ impl ReleaseFetcher<reqwest::Client, ReleaseType, Current> {
     /// # Examples
     ///
     /// ```no_run
-    /// use umls_downloader::{ReleaseFetcher, client::reqwest::Client, kind::Current};
+    /// use umls_downloader::{ReleaseFetcher, kind::Current};
+    /// use umls_http::reqwest::Client;
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let category = umls_downloader::release_type::ReleaseType {
     ///     product: "UMLS".into(),
@@ -563,7 +577,8 @@ impl ReleaseFetcher<reqwest::Client, ReleaseType, kind::All> {
     /// # Examples
     ///
     /// ```
-    /// use umls_downloader::{ReleaseFetcher, client::reqwest::Client, kind::All};
+    /// use umls_downloader::{ReleaseFetcher, kind::All};
+    /// use umls_http::reqwest::Client;
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let category = umls_downloader::release_type::ReleaseType {
     ///     product: "UMLS".into(), name: "umls-full-release".into(),
@@ -587,7 +602,8 @@ impl ReleaseFetcher<reqwest::Client, ReleaseType, kind::All> {
     /// # Examples
     ///
     /// ```no_run
-    /// use umls_downloader::{ReleaseFetcher, client::reqwest::Client, kind::All};
+    /// use umls_downloader::{ReleaseFetcher, kind::All};
+    /// use umls_http::reqwest::Client;
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let category = umls_downloader::release_type::ReleaseType {
     ///     product: "UMLS".into(),
@@ -656,7 +672,8 @@ impl<T: std::error::Error> From<std::io::Error> for Error<T> {
 /// # Examples
 ///
 /// ```
-/// use umls_downloader::{ReleaseDownloader, client::WithoutClient};
+/// use umls_downloader::{ReleaseDownloader};
+/// use umls_http::WithoutClient;
 /// let source: http::Uri = "https://example.com/release.zip".parse()?;
 /// let downloader = ReleaseDownloader::new("api-key", source);
 /// let _ready = downloader.with_client(WithoutClient);
@@ -668,7 +685,7 @@ pub struct ReleaseDownloader<C, T> {
     api_key: SecretString,
 }
 
-impl<T> ReleaseDownloader<client::WithoutClient, T> {
+impl<T> ReleaseDownloader<umls_http::WithoutClient, T> {
     /// Creates a downloader without attaching an HTTP client.
     ///
     /// This method performs no I/O. The API key is retained for the eventual UTS download request.
@@ -684,21 +701,23 @@ impl<T> ReleaseDownloader<client::WithoutClient, T> {
     /// ```
     pub fn new(api_key: impl Into<SecretString>, value: T) -> Self {
         Self {
-            client: client::WithoutClient,
+            client: umls_http::WithoutClient,
             value,
             api_key: api_key.into(),
         }
     }
 
-    /// Attaches an HTTP client and returns an executable downloader.
+    /// Attaches an HTTP client and returns the resulting downloader.
     ///
     /// This method consumes the current downloader and performs no network I/O. The client is
     /// owned by the returned value, so it can be reused by cloning a cloneable client first.
+    /// Download methods require `umls_http::reqwest::Client` and the `reqwest` feature.
     ///
     /// # Examples
     ///
     /// ```
-    /// use umls_downloader::{ReleaseDownloader, client::WithoutClient};
+    /// use umls_downloader::{ReleaseDownloader};
+    /// use umls_http::WithoutClient;
     /// let source: http::Uri = "https://example.com/release.zip".parse()?;
     /// let downloader = ReleaseDownloader::new("api-key", source).with_client(WithoutClient);
     /// # let _ = downloader;
@@ -714,13 +733,31 @@ impl<T> ReleaseDownloader<client::WithoutClient, T> {
 }
 
 #[cfg(feature = "reqwest")]
-impl ReleaseDownloader<Client, http::Uri> {
+impl ReleaseDownloader<reqwest::Client, http::Uri> {
     /// Starts a release download and returns its response body as a stream.
     ///
     /// The request is sent when this method is awaited. The returned stream owns the response
     /// body and yields byte chunks as they arrive, with failures reported as [`reqwest::Error`].
     /// Pin the stream before consuming it with [`StreamExt::next`]. It does not create or modify
     /// a file.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use umls_downloader::{Release, ReleaseDownloader};
+    /// use umls_http::reqwest::Client;
+    /// # async fn example(release: &Release) -> Result<(), Box<dyn std::error::Error>> {
+    /// let api_key = std::env::var("UMLS_API_KEY")?;
+    /// use futures_util::StreamExt;
+    /// let source = release.download_url.parse::<http::Uri>()?;
+    /// let downloader = ReleaseDownloader::new(api_key, source).with_client(Client::default());
+    /// let mut stream = std::pin::pin!(downloader.download().await?);
+    /// while let Some(chunk) = stream.next().await {
+    ///     println!("Received {} bytes", chunk?.len());
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     ///
     /// # Errors
     ///
@@ -731,7 +768,7 @@ impl ReleaseDownloader<Client, http::Uri> {
     pub async fn download(
         &self,
     ) -> Result<
-        impl Stream<Item = Result<Bytes, client::reqwest::Error>> + Send + 'static + use<>,
+        impl Stream<Item = Result<Bytes, reqwest::Error>> + Send + 'static + use<>,
         Error<reqwest::Error>,
     > {
         let uri = download_uri(&self.value, self.api_key.expose_secret())?;
@@ -805,12 +842,27 @@ impl<D> DownloadResource<D> {
 }
 
 #[cfg(feature = "reqwest")]
-impl<D: AsRef<Path>> ReleaseDownloader<Client, DownloadResource<D>> {
+impl<D: AsRef<Path>> ReleaseDownloader<reqwest::Client, DownloadResource<D>> {
     /// Downloads the release and writes it to the configured destination path.
     ///
     /// Existing files are replaced. File creation and writes are synchronous, so callers should
     /// avoid invoking this operation on a latency-sensitive executor thread for large files.
     /// A failed request, stream error, or cancellation can leave a partial file.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use umls_downloader::{Release, ReleaseDownloader, DownloadResource};
+    /// use umls_http::reqwest::Client;
+    /// # async fn example(release: &Release) -> Result<(), Box<dyn std::error::Error>> {
+    /// let api_key = std::env::var("UMLS_API_KEY")?;
+    /// let resource = DownloadResource::new(release.download_url.parse()?, "release.zip");
+    /// ReleaseDownloader::new(api_key, resource)
+    ///     .with_client(Client::default())
+    ///     .download().await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     ///
     /// # Errors
     ///

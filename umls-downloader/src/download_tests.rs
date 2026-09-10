@@ -106,6 +106,7 @@ async fn stream_error_is_preserved_by_file_output() {
 }
 
 #[tokio::test]
+#[cfg(feature = "reqwest")]
 async fn download_response_stream_writes_local_archive() {
     let server = MockServer::start_async().await;
     let mock = server
@@ -118,7 +119,8 @@ async fn download_response_stream_writes_local_archive() {
         })
         .await;
     let source = "https://example.test/archive.zip".parse().unwrap();
-    let downloader = ReleaseDownloader::new("test+key", source).with_client(Client::default());
+    let downloader =
+        ReleaseDownloader::new("test+key", source).with_client(reqwest::Client::default());
     // Keep the production query construction; route only the origin to the local server.
     let uri = download_uri(&downloader.value, "test+key").unwrap();
     let local_uri = format!("{}{}", server.base_url(), uri.path_and_query().unwrap())
@@ -133,6 +135,7 @@ async fn download_response_stream_writes_local_archive() {
 }
 
 #[tokio::test]
+#[cfg(feature = "reqwest")]
 async fn cancelling_delayed_file_download_drops_stream_and_leaves_incomplete_file() {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -155,7 +158,7 @@ async fn cancelling_delayed_file_download_drops_stream_and_leaves_incomplete_fil
         "key",
         "https://example.test/archive".parse::<http::Uri>().unwrap(),
     )
-    .with_client(Client::default());
+    .with_client(reqwest::Client::default());
     let stream = downloader
         .download_from_uri(format!("http://{address}/download").parse().unwrap())
         .await

@@ -70,9 +70,19 @@ An asynchronous library with an optional reqwest transport for:
 
 See [`umls-downloader/README.md`](umls-downloader/README.md) for library usage
 and HTTP-client configuration. Enable its `reqwest` feature to execute requests
-with `umls_downloader::client::reqwest::Client`. Release discovery uses
+with `umls_http::reqwest::Client`. Release discovery uses
 `release_type::Client::fetch()` and `ReleaseFetcher::new(client, category, kind).send()`;
 downloads use `ReleaseDownloader::new(api_key, resource).with_client(client).download()`.
+
+### `umls-http`
+
+HTTP transport shared by the downloader library and CLI. Its optional `reqwest`
+feature provides `umls_http::reqwest::Client` for JSON responses and byte streams.
+Add `umls-http` as a direct dependency when importing the transport; the
+downloader no longer exposes a `client` module. The builder marker is now
+`umls_http::WithoutClient`.
+
+See [`umls-http/README.md`](umls-http/README.md) for setup and examples.
 
 ### `umls-downloader-cli`
 
@@ -137,7 +147,7 @@ cargo build --workspace
 Run all tests:
 
 ```sh
-cargo test --workspace
+cargo test --workspace --all-features
 ```
 
 Run the CLI directly from the workspace:
