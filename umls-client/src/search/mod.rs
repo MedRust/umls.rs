@@ -544,12 +544,12 @@ impl<'a> Response<SearchResponse, Search<'a, umls_http::reqwest::Client, return_
     /// [`ConceptSnapshot`].
     pub fn into_page(
         self,
-    ) -> Result<
+    ) -> PageResult<
         Page<
             Content<ConceptSnapshot>,
             Search<'a, umls_http::reqwest::Client, return_type::Concept>,
         >,
-        PageError<ConceptSnapshotError>,
+        ConceptSnapshotError,
     > {
         let count = self.body.result.rec_count.and_then(NonZeroU64::new);
         let size = self.body.page_size;
@@ -648,9 +648,9 @@ impl<'a>
     /// HTTP and response-decoding errors are returned by the subsequent `get()` call.
     pub fn previous(
         mut self,
-    ) -> Result<
+    ) -> PageResult<
         Search<'a, umls_http::reqwest::Client, return_type::Concept>,
-        PageError<SearchError<umls_http::reqwest::Error>>,
+        SearchError<umls_http::reqwest::Error>,
     > {
         if !self.has_previous() {
             return Err(PageError::NoPreviousPage);
@@ -666,6 +666,9 @@ impl<'a>
         Ok(self.client)
     }
 }
+
+/// A page result object.
+pub type PageResult<T, E> = Result<T, PageError<E>>;
 
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
