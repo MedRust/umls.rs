@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["umls-client", "umls-downloader", "umls-downloader-cli", "umls-http"]
+members = ["umls-client", "umls-downloader", "umls-downloader-cli", "umls-http", "umls-mcp"]
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

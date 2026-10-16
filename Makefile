@@ -1,5 +1,5 @@
 
-build: build-umls-http build-umls-client build-umls-downloader build-umls-downloader-cli
+build: build-umls-mcp build-umls-http build-umls-client build-umls-downloader build-umls-downloader-cli
 
 build-umls-client:
 	@echo "=> Building 'umls-client' crate"
@@ -17,7 +17,7 @@ build-umls-http:
 	@echo "=> Building 'umls-http' crate"
 	@make -C umls-http build
 
-test: test-umls-http test-umls-client test-umls-downloader test-umls-downloader-cli
+test: test-umls-mcp test-umls-http test-umls-client test-umls-downloader test-umls-downloader-cli
 
 test-umls-client:
 	@echo "=> Testing 'umls-client' crate"
@@ -38,3 +38,9 @@ test-umls-http:
 run:
 	@echo "=> Running UMLS downloader"
 	@make -C umls-downloader-cli run
+
+build-umls-mcp:
+	@cargo build -p umls-mcp
+
+test-umls-mcp:
+	@cargo test -p umls-mcp

@@ -1,0 +1,25 @@
+[package]
+name = "umls-mcp"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+description = "Stdio and Streamable HTTP MCP server for UMLS concept lookup"
+
+[lints]
+workspace = true
+
+[dependencies]
+axum = "0.8"
+clap = { version = "4", features = ["derive", "env"] }
+tokio-util = "0.7"
+rmcp = { version = "3", features = ["transport-io", "transport-streamable-http-server"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal"] }
+reqwest = "0.13"
+umls-client = { path = "../umls-client", features = ["reqwest"] }
+umls-http = { path = "../umls-http", features = ["reqwest"] }
+
+[dev-dependencies]
+httpmock = "0.8.3"
+rmcp = { version = "3", features = ["client", "transport-async-rw", "transport-streamable-http-client-reqwest"] }

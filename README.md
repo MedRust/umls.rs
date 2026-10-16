@@ -115,6 +115,13 @@ The API key is only required when a download begins. If it was not supplied by
 an argument or environment variable, the application opens a masked API-key
 prompt and requires a non-empty value.
 
+### `umls-mcp`
+
+An MCP server with stdio and Streamable HTTP transports for concept search,
+concept details, and paginated atoms. HTTP mode serves `/mcp` on port 3000 by
+default: `cargo run -p umls-mcp -- --transport http`.
+See [`umls-mcp/README.md`](umls-mcp/README.md) for client configuration and tools.
+
 ## CLI controls
 
 | Key | Action |
