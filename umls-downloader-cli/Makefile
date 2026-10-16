@@ -7,5 +7,5 @@ test:
 	@cargo test $(CARGO_FLAGS)
 
 run:
-	@cargo run
+	@cargo run $(CARGO_FLAGS)
 

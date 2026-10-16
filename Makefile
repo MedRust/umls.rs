@@ -35,12 +35,15 @@ test-umls-http:
 	@echo "Testing 'umls-http' crate"
 	@make -C umls-http test
 
-run:
+downloader:
 	@echo "=> Running UMLS downloader"
 	@make -C umls-downloader-cli run
 
 build-umls-mcp:
-	@cargo build -p umls-mcp
+	@make build -C umls-mcp
 
 test-umls-mcp:
-	@cargo test -p umls-mcp
+	@make test -C umls-mcp
+
+mcp:
+	@make server -C umls-mcp
