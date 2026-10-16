@@ -726,7 +726,7 @@ pub struct Page<T> {
     #[serde(rename = "pageCount")]
     count: NonZeroU64,
     #[serde(rename = "result")]
-    content: T,
+    pub(crate) content: T,
 }
 
 impl<T> Page<T> {
@@ -748,6 +748,16 @@ impl<T> Page<T> {
     /// Returns this page's decoded content.
     pub fn content(&self) -> &T {
         &self.content
+    }
+
+    /// A conversion of page content type without affecting the size, number, count.
+    pub fn try_map<U, E>(self, f: impl FnOnce(T) -> Result<U, E>) -> Result<Page<U>, E> {
+        Ok(Page {
+            size: self.size,
+            number: self.number,
+            count: self.count,
+            content: f(self.content)?,
+        })
     }
 }
 

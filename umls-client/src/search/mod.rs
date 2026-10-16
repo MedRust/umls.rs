@@ -378,8 +378,9 @@ pub enum SearchError<T> {
 }
 
 /// An owned collection of converted results.
+#[derive(Debug)]
 pub struct Content<T> {
-    list: Vec<T>,
+    pub(crate) list: Vec<T>,
 }
 
 impl<T> Content<T> {

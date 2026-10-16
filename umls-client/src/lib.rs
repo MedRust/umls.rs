@@ -41,3 +41,6 @@ pub mod config;
 pub mod search;
 
 pub mod atom;
+
+/// Fetch conept definitions.
+pub mod definition;
