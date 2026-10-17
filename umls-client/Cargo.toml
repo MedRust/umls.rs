@@ -44,3 +44,11 @@ required-features = ["reqwest"]
 [[example]]
 name = "concept_search_pages"
 required-features = ["reqwest"]
+
+[[example]]
+name = "fetch_concept_relations"
+required-features = ["reqwest"]
+
+[[example]]
+name = "fetch_concept_relations_in_batch"
+required-features = ["reqwest"]
