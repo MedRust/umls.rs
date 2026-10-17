@@ -47,3 +47,7 @@ test-umls-mcp:
 
 mcp:
 	@make server -C umls-mcp
+
+clean:
+	@echo "=> Removing artifacts..."
+	@cargo clean
