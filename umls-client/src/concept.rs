@@ -461,6 +461,7 @@ struct SerializableConcept {
     name: String,
 }
 
+#[cfg(feature = "reqwest")]
 impl From<SerializableConcept> for Concept {
     fn from(value: SerializableConcept) -> Self {
         let definitions = match value.definitions {
