@@ -3,6 +3,8 @@ use umls_http::WithoutClient;
 /// A UMLS concept relationship configuration module.
 #[cfg(feature = "reqwest")]
 pub mod config {
+    use std::collections::HashSet;
+
     use crate::{
         concept::cui::Cui,
         search::core::{DisplayName, EmptyString},
@@ -181,13 +183,34 @@ pub mod config {
 
         /// Build [`Config`] object.
         pub fn build(self) -> Config {
+            let labels = self
+                .labels
+                .into_iter()
+                .collect::<HashSet<_>>()
+                .into_iter()
+                .collect();
+
+            let additional_labels = self
+                .additional_labels
+                .into_iter()
+                .collect::<HashSet<_>>()
+                .into_iter()
+                .collect();
+
+            let source_vocabularies = self
+                .source_vocabularies
+                .into_iter()
+                .collect::<HashSet<_>>()
+                .into_iter()
+                .collect();
+
             Config {
                 cui: self.cui,
-                labels: self.labels,
-                additional_labels: self.additional_labels,
+                labels,
+                additional_labels,
                 include_obsolete: self.include_obsolete,
                 include_suppressible: self.include_suppressible,
-                source_vocabularies: self.source_vocabularies,
+                source_vocabularies,
             }
         }
     }
