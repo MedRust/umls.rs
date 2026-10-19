@@ -20,6 +20,8 @@ use crate::{
 /// A UMLS concept relationship configuration module.
 #[cfg(feature = "reqwest")]
 pub mod config {
+    use std::collections::HashSet;
+
     use crate::{
         concept::cui::Cui,
         search::core::{DisplayName, EmptyString},
@@ -75,7 +77,7 @@ pub mod config {
             &self.cui
         }
 
-        /// Returns a reference of relationship lables.
+        /// Returns a reference of relationship labels.
         pub fn labels(&self) -> &[DisplayName] {
             &self.labels
         }
@@ -127,7 +129,7 @@ pub mod config {
         /// Create a new instance of [`Builder`] for given CUI.
         ///
         /// The builder is created with empty relationship labels, additional relationship labels,
-        /// source vocabularies and execuded the obsolete and is_suppressible concepts.
+        /// source vocabularies and excluding the obsolete and is_suppressible concepts.
         pub fn new(cui: Cui) -> Self {
             Self {
                 cui,
@@ -190,21 +192,42 @@ pub mod config {
         /// Add source vocabulary where relationships are belongs to.
         pub fn try_add_source_vocabulary(
             mut self,
-            source_vcaobulary: impl TryInto<DisplayName, Error = EmptyString>,
+            source_vocabulary: impl TryInto<DisplayName, Error = EmptyString>,
         ) -> Result<Self, EmptyString> {
-            self.source_vocabularies.push(source_vcaobulary.try_into()?);
+            self.source_vocabularies.push(source_vocabulary.try_into()?);
             Ok(self)
         }
 
         /// Build [`Config`] object.
         pub fn build(self) -> Config {
+            let labels = self
+                .labels
+                .into_iter()
+                .collect::<HashSet<_>>()
+                .into_iter()
+                .collect();
+
+            let additional_labels = self
+                .additional_labels
+                .into_iter()
+                .collect::<HashSet<_>>()
+                .into_iter()
+                .collect();
+
+            let source_vocabularies = self
+                .source_vocabularies
+                .into_iter()
+                .collect::<HashSet<_>>()
+                .into_iter()
+                .collect();
+
             Config {
                 cui: self.cui,
-                labels: self.labels,
-                additional_labels: self.additional_labels,
+                labels,
+                additional_labels,
                 include_obsolete: self.include_obsolete,
                 include_suppressible: self.include_suppressible,
-                source_vocabularies: self.source_vocabularies,
+                source_vocabularies,
             }
         }
     }
