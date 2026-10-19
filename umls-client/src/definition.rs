@@ -1,8 +1,11 @@
-use serde::{Deserialize, Serialize};
+#[cfg(feature = "reqwest")]
+use secrecy::ExposeSecret;
 use umls_http::WithoutClient;
 
 #[cfg(feature = "reqwest")]
 use umls_http::reqwest;
+#[cfg(feature = "reqwest")]
+use url::Url;
 
 use crate::{
     concept::cui::Cui,
@@ -132,24 +135,54 @@ impl<V> Definition<WithoutClient, V> {
 }
 
 #[cfg(feature = "reqwest")]
+impl Definition<reqwest::Client, Url> {
+    /// Fetch concepts definitions for given URL.
+    ///
+    /// The method doesn't validate the URL.
+    pub async fn fetch(
+        self,
+        umls_config: &config::Config,
+    ) -> Result<Page<Content<dto::Definition>>, Box<dyn std::error::Error>> {
+        let url = Url::parse_with_params(
+            self.value().as_str(),
+            &[("apiKey", umls_config.api_key().expose_secret().to_string())],
+        )?;
+
+        let request = http::Request::builder().uri(url.as_str()).body(())?;
+
+        let response: http::Response<Page<Content<dto::RawDefinition>>> =
+            self.client().execute(request).await?;
+
+        let page = response
+            .into_body()
+            .try_map::<_, Box<dyn std::error::Error>>(|x| {
+                let pages = x
+                    .list
+                    .into_iter()
+                    .map(|x| x.try_into())
+                    .collect::<Result<Vec<dto::Definition>, _>>()?;
+                Ok(Content::new(pages))
+            })?;
+
+        Ok(page)
+    }
+}
+
+#[cfg(feature = "reqwest")]
 impl Definition<reqwest::Client, Batch<Config>> {
     /// Fetch concept definitions for respective value.
     pub async fn fetch(
         self,
         umls_config: &config::Config,
     ) -> Result<
-        Response<Page<Content<DefinitionDto>>, Definition<reqwest::Client, Batch<Config>>>,
+        Response<Page<Content<dto::Definition>>, Definition<reqwest::Client, Batch<Config>>>,
         Box<dyn std::error::Error>,
     > {
-        use secrecy::ExposeSecret;
-        use url::Url;
-
         let cui = self.value().value().cui();
         let path = format!("/content/{}/CUI/{}/definitions", umls_config.version(), cui);
         let url_string = umls_config.base_url().join(&path)?.as_str().to_owned();
 
         let mut vector = [
-            ("apiKey", umls_config.api_key().expose_secret().into()),
             ("pageSize", self.value().size().get().to_string()),
             ("pageNumber", self.value().number().get().to_string()),
         ]
@@ -169,22 +202,10 @@ impl Definition<reqwest::Client, Batch<Config>> {
 
         let url = Url::parse_with_params(&url_string, &vector)?;
 
-        let request = http::Request::builder().uri(url.as_str()).body(())?;
-
-        let response: http::Response<Page<Content<RawDefinition>>> =
-            self.client().execute(request).await?;
-
-        let page = response
-            .into_body()
-            .try_map::<_, Box<dyn std::error::Error>>(|x| {
-                let list = x
-                    .list
-                    .into_iter()
-                    .map(|x| x.try_into_definition_dto(cui.clone()))
-                    .collect::<Result<Vec<_>, _>>()?;
-
-                Ok(Content::new(list))
-            })?;
+        let page = Definition::new(url)
+            .with_client(self.client().clone())
+            .fetch(umls_config)
+            .await?;
 
         Ok(Response::new(page, self))
     }
@@ -198,16 +219,12 @@ impl Definition<reqwest::Client, Config> {
     pub async fn fetch(
         self,
         umls_config: &config::Config,
-    ) -> Result<Content<DefinitionDto>, Box<dyn std::error::Error>> {
-        use secrecy::ExposeSecret;
-        use url::Url;
-
+    ) -> Result<Content<dto::Definition>, Box<dyn std::error::Error>> {
         let cui = self.value().cui();
         let path = format!("/content/{}/CUI/{}/definitions", umls_config.version(), cui);
         let url_string = umls_config.base_url().join(&path)?.as_str().to_owned();
 
         let mut vector = [
-            ("apiKey", umls_config.api_key().expose_secret().into()),
             ("pageSize", search::core::DEFAULT_PAGE_SIZE.to_string()),
             ("pageNumber", search::core::DEFAULT_PAGE_NUMBER.to_string()),
         ]
@@ -226,98 +243,102 @@ impl Definition<reqwest::Client, Config> {
 
         let url = Url::parse_with_params(&url_string, &vector)?;
 
-        let request = http::Request::builder()
-            .uri(url.as_str())
-            .header("apiKey", umls_config.api_key().expose_secret())
-            .body(())?;
-
-        let response: http::Response<Page<Content<RawDefinition>>> =
-            self.client().execute(request).await?;
-
-        let page = response
-            .into_body()
-            .try_map::<_, Box<dyn std::error::Error>>(|x| {
-                let list = x
-                    .list
-                    .into_iter()
-                    .map(|x| x.try_into_definition_dto(cui.clone()))
-                    .collect::<Result<Vec<_>, _>>()?;
-
-                Ok(Content::new(list))
-            })?;
+        let page = Definition::new(url)
+            .with_client(self.client().clone())
+            .fetch(umls_config)
+            .await?;
 
         Ok(page.content)
     }
 }
 
-/// Represents possible the de/serializable class type.
-#[derive(Debug, Deserialize, Serialize, PartialEq, Eq, Clone, Copy)]
-pub enum ClassType {
-    /// A difinition class type.
-    Definition,
-}
-
+/// Encapsulates the definition DTO symbols.
 #[cfg(feature = "reqwest")]
-#[derive(Debug, Deserialize, Clone)]
-struct RawDefinition {
-    #[serde(rename = "classType")]
-    class_type: ClassType,
+pub mod dto {
+    use serde::{Deserialize, Serialize};
 
-    #[serde(rename = "sourceOriginated")]
-    source_originated: bool,
+    use crate::search::core::DisplayName;
 
-    #[serde(rename = "rootSource")]
-    root_source: DisplayName,
-
-    value: DisplayName,
-}
-
-/// A object that encapsulates the definition and metadata.
-#[derive(Debug)]
-pub struct DefinitionDto {
-    cui: Cui,
-    is_source_originated: bool,
-    root_source: DisplayName,
-    value: DisplayName,
-}
-
-impl DefinitionDto {
-    /// Return read-only reference to [`Cui`]
-    pub fn cui(&self) -> &Cui {
-        &self.cui
+    /// Represents possible the de/serializable class type.
+    #[derive(Debug, Deserialize, Serialize, PartialEq, Eq, Clone, Copy)]
+    pub enum ClassType {
+        /// A difinition class type.
+        Definition,
     }
 
-    /// Return if the definition is source originated.
-    pub fn is_source_originated(&self) -> bool {
-        self.is_source_originated
+    #[derive(Debug, Deserialize, Clone)]
+    pub(crate) struct RawDefinition {
+        #[serde(rename = "classType")]
+        class_type: ClassType,
+
+        #[serde(rename = "sourceOriginated")]
+        source_originated: bool,
+
+        #[serde(rename = "rootSource")]
+        root_source: DisplayName,
+
+        value: DisplayName,
     }
 
-    /// Returns a source vocabularie where the definition is oriented from.
-    pub fn root_source(&self) -> &DisplayName {
-        &self.root_source
+    /// The metadata of the respecitve definition.
+    pub struct MetaData {
+        source_originated: bool,
+        root_source: DisplayName,
     }
 
-    /// Returns the definition.
-    pub fn value(&self) -> &str {
-        self.value.as_ref()
-    }
-}
-
-#[cfg(feature = "reqwest")]
-impl RawDefinition {
-    fn try_into_definition_dto(
-        self,
-        cui: Cui,
-    ) -> Result<DefinitionDto, Box<dyn std::error::Error>> {
-        if self.class_type != ClassType::Definition {
-            panic!();
+    impl MetaData {
+        fn new(source_originated: bool, root_source: DisplayName) -> Self {
+            Self {
+                source_originated,
+                root_source,
+            }
         }
 
-        Ok(DefinitionDto {
-            cui,
-            is_source_originated: self.source_originated,
-            value: self.value,
-            root_source: self.root_source,
-        })
+        /// Returns the definition is source originated or not.
+        pub fn is_source_originated(&self) -> bool {
+            self.source_originated
+        }
+
+        /// Returns the root source vocabulary of the definition.
+        pub fn root_source(&self) -> &DisplayName {
+            &self.root_source
+        }
+    }
+
+    /// The definition object.
+    pub struct Definition {
+        value: DisplayName,
+        metadata: MetaData,
+    }
+
+    impl Definition {
+        fn new(value: DisplayName, metadata: MetaData) -> Self {
+            Self { value, metadata }
+        }
+
+        /// Returns human readable representation of definition.
+        pub fn value(&self) -> &DisplayName {
+            &self.value
+        }
+
+        /// Returns the reference to metadata.
+        pub fn metadata(&self) -> &MetaData {
+            &self.metadata
+        }
+    }
+
+    impl TryFrom<RawDefinition> for Definition {
+        type Error = Box<dyn std::error::Error>;
+
+        fn try_from(value: RawDefinition) -> Result<Self, Self::Error> {
+            if value.class_type != ClassType::Definition {
+                panic!();
+            }
+
+            let metadata = MetaData::new(value.source_originated, value.root_source);
+            let definition = Definition::new(value.value, metadata);
+
+            Ok(definition)
+        }
     }
 }

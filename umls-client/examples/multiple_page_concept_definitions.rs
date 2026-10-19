@@ -19,13 +19,13 @@ use umls_client::{
     atom::Batch,
     concept::cui::Cui,
     config::Config,
-    definition::{self, Definition, DefinitionDto},
+    definition::{self, Definition, dto},
     search::{Content, Page},
 };
 use umls_http::reqwest;
 
 type DefinitionPage =
-    Page<Content<DefinitionDto>, Definition<reqwest::Client, Batch<definition::Config>>>;
+    Page<Content<dto::Definition>, Definition<reqwest::Client, Batch<definition::Config>>>;
 
 #[derive(PartialEq, Eq)]
 enum Focus {
@@ -258,10 +258,11 @@ fn render(frame: &mut Frame<'_>, app: &mut App) {
         .flat_map(|page| page.content().list())
         .map(|definition| {
             Row::new([
-                Cell::from(definition.root_source().to_string()),
+                Cell::from(definition.metadata().root_source().to_string()),
                 Cell::from(
                     definition
                         .value()
+                        .as_ref()
                         .split_whitespace()
                         .collect::<Vec<_>>()
                         .join(" "),
@@ -285,10 +286,11 @@ fn render(frame: &mut Frame<'_>, app: &mut App) {
             .selected()
             .and_then(|index| page.content().list().get(index))
     });
-    let detail = Paragraph::new(selected.map_or(
-        "Select a result to read its full definition.",
-        DefinitionDto::value,
-    ))
+    let detail = Paragraph::new(
+        selected.map_or("Select a result to read its full definition.", |x| {
+            x.value().as_str()
+        }),
+    )
     .block(Block::bordered().title(" Full definition — PgUp/PgDn scroll "))
     .wrap(Wrap { trim: false });
     frame.render_widget(detail.scroll((app.detail_scroll, 0)), detail_area);

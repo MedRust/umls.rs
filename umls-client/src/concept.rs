@@ -16,6 +16,8 @@ use serde::Deserialize;
 
 #[cfg(feature = "reqwest")]
 use crate::search::core::get_trimmed_non_empty_string;
+#[cfg(feature = "reqwest")]
+use crate::{definition, relation};
 
 #[cfg(feature = "reqwest")]
 use crate::{concept::cui::Cui, config::Config, search::ConceptSnapshot};
@@ -361,7 +363,7 @@ impl Info<reqwest::Client, Url> {
         let response: Response<ConceptResponse> =
             self.client.execute(request).await.map_err(Error::Client)?;
 
-        Ok(response.into_body().result)
+        Ok(response.into_body().result.into())
     }
 }
 
@@ -381,13 +383,11 @@ impl Info<reqwest::Client, ConceptSnapshot> {
 #[serde(rename_all = "camelCase")]
 #[cfg(feature = "reqwest")]
 struct ConceptResponse {
-    result: Concept,
+    result: SerializableConcept,
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[cfg(feature = "reqwest")]
 /// A full concept returned by the UMLS content endpoint.
+#[cfg(feature = "reqwest")]
 pub struct Concept {
     /// The response object's UMLS class discriminator.
     pub class_type: ConceptClass,
@@ -409,20 +409,87 @@ pub struct Concept {
     pub attribute_count: u64,
     /// Number of content-view memberships associated with the concept.
     pub cv_member_count: u64,
-    /// Endpoint for the concept's atoms, when available.
-    pub atoms: OptionalResource,
-
     /// Endpoint for the concept's definitions, when available.
-    pub definitions: OptionalResource,
-
+    pub definitions: Option<definition::Definition<umls_http::WithoutClient, Url>>,
     /// Endpoint for the concept's relations, when available.
-    pub relations: OptionalResource,
-    /// Endpoint for the default preferred atom, when available.
-    pub default_preferred_atom: OptionalResource,
+    pub relations: Option<relation::Relation<umls_http::WithoutClient, Url>>,
     /// Number of relations associated with the concept.
     pub relation_count: u64,
     /// Human-readable preferred name of the concept.
     pub name: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg(feature = "reqwest")]
+#[allow(unused)]
+/// A full concept returned by the UMLS content endpoint.
+struct SerializableConcept {
+    /// The response object's UMLS class discriminator.
+    class_type: ConceptClass,
+    /// The concept identifier returned by UMLS.
+    ui: String,
+    /// Whether the concept is suppressible.
+    suppressible: bool,
+    /// Date on which the concept was added, in the API's textual format.
+    date_added: String,
+    /// Date of the concept's latest major revision.
+    major_revision_date: String,
+    /// Current concept status reported by UMLS.
+    status: String,
+    /// Semantic types assigned to the concept.
+    semantic_types: Vec<SemanticType>,
+    /// Number of atoms associated with the concept.
+    atom_count: u64,
+    /// Number of attributes associated with the concept.
+    attribute_count: u64,
+    /// Number of content-view memberships associated with the concept.
+    cv_member_count: u64,
+    /// Endpoint for the concept's atoms, when available.
+    atoms: OptionalResource,
+
+    /// Endpoint for the concept's definitions, when available.
+    definitions: OptionalResource,
+
+    /// Endpoint for the concept's relations, when available.
+    relations: OptionalResource,
+    /// Endpoint for the default preferred atom, when available.
+    default_preferred_atom: OptionalResource,
+    /// Number of relations associated with the concept.
+    relation_count: u64,
+    /// Human-readable preferred name of the concept.
+    name: String,
+}
+
+impl From<SerializableConcept> for Concept {
+    fn from(value: SerializableConcept) -> Self {
+        let definitions = match value.definitions {
+            OptionalResource::Available(url) => Some(definition::Definition::new(url)),
+            OptionalResource::Unavailable => None,
+        };
+
+        let relations = match value.relations {
+            OptionalResource::Available(url) => Some(relation::Relation::new(url)),
+            OptionalResource::Unavailable => None,
+        };
+
+        Concept {
+            class_type: value.class_type,
+            ui: value.ui,
+            suppressible: value.suppressible,
+            date_added: value.date_added,
+            major_revision_date: value.major_revision_date,
+            status: value.status,
+            semantic_types: value.semantic_types,
+            atom_count: value.atom_count,
+            attribute_count: value.attribute_count,
+            cv_member_count: value.cv_member_count,
+            definitions,
+            relations,
+            relation_count: value.relation_count,
+            name: value.name,
+        }
+    }
 }
 
 #[cfg(feature = "reqwest")]
