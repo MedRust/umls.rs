@@ -42,5 +42,8 @@ pub mod search;
 
 pub mod atom;
 
+/// Fetch concept relations.
+pub mod relation;
+
 /// Fetch conept definitions.
 pub mod definition;
