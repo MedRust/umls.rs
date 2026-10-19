@@ -180,9 +180,9 @@ impl UmlsServer {
         let response = atom::Config::builder(cui)
             .page_number(number)
             .page_size(size)
-            .atoms::<atom::All>(&self.config)
+            .atoms::<atom::All>()
             .with_client(self.client.clone())
-            .fetch()
+            .fetch(&self.config)
             .await;
         let Ok(response) = response else {
             return failure(
