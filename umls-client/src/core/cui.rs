@@ -4,7 +4,7 @@ use std::str::FromStr;
 use crate::search::core::{EmptyString, get_trimmed_non_empty_string};
 
 #[derive(Debug, thiserror::Error)]
-/// An error produced while validating a [`crate::concept::cui::Cui`].
+/// An error produced while validating a [`crate::core::cui::Cui`].
 pub enum Error {
     /// The supplied identifier was empty after trimming.
     #[error("Empty String Error")]

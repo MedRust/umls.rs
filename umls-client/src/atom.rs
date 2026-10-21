@@ -366,7 +366,7 @@ pub struct Preferred;
 impl Preferred {
     /// Creates a request for the preferred atom associated with a concept.
     ///
-    /// Pass a validated [`crate::concept::cui::Cui`] as `value`, attach a `reqwest::Client` with [`Atom::with_client`], then call `fetch()` to
+    /// Pass a validated [`crate::core::cui::Cui`] as `value`, attach a `reqwest::Client` with [`Atom::with_client`], then call `fetch()` to
     /// execute the request using the configured UMLS release.
     ///
     /// # Example
@@ -626,7 +626,7 @@ impl Atom<reqwest::Client, All, Url> {
 
 #[cfg(feature = "reqwest")]
 impl Atom<reqwest::Client, Preferred, Cui> {
-    /// Fetches the preferred concept atom for the given [`crate::concept::cui::Cui`] using the
+    /// Fetches the preferred concept atom for the given [`crate::core::cui::Cui`] using the
     /// configured UMLS release.
     ///
     /// # Errors

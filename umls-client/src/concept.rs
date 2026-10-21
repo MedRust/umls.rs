@@ -37,7 +37,7 @@ pub enum Error<T> {
 
 /// A typed reference to information that can identify a UMLS concept.
 ///
-/// The available `fetch` method depends on whether the value is a [`crate::concept::cui::Cui`], a
+/// The available `fetch` method depends on whether the value is a [`crate::core::cui::Cui`], a
 /// [`url::Url`], or a [`crate::search::ConceptSnapshot`]. Attach a `reqwest::Client` using
 /// [`Self::with_client`] before fetching; fetching consumes the request.
 pub struct Info<C, T> {
