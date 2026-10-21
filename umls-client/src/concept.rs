@@ -17,7 +17,7 @@ use serde::Deserialize;
 #[cfg(feature = "reqwest")]
 use crate::search::core::get_trimmed_non_empty_string;
 #[cfg(feature = "reqwest")]
-use crate::{definition, relation};
+use crate::{atom, definition, relation};
 
 #[cfg(feature = "reqwest")]
 use crate::{concept::cui::Cui, config::Config, search::ConceptSnapshot};
@@ -409,10 +409,14 @@ pub struct Concept {
     pub attribute_count: u64,
     /// Number of content-view memberships associated with the concept.
     pub cv_member_count: u64,
+    /// Endpoint for the concept's atoms, when available.
+    pub atoms: atom::Atom<umls_http::WithoutClient, atom::All, Url>,
     /// Endpoint for the concept's definitions, when available.
     pub definitions: Option<definition::Definition<umls_http::WithoutClient, Url>>,
     /// Endpoint for the concept's relations, when available.
     pub relations: Option<relation::Relation<umls_http::WithoutClient, Url>>,
+    /// Endpoint for the default preferred atom, when available.
+    pub default_preferred_atom: atom::Atom<umls_http::WithoutClient, atom::Preferred, Url>,
     /// Number of relations associated with the concept.
     pub relation_count: u64,
     /// Human-readable preferred name of the concept.
@@ -446,7 +450,7 @@ struct SerializableConcept {
     /// Number of content-view memberships associated with the concept.
     cv_member_count: u64,
     /// Endpoint for the concept's atoms, when available.
-    atoms: OptionalResource,
+    atoms: Url,
 
     /// Endpoint for the concept's definitions, when available.
     definitions: OptionalResource,
@@ -454,7 +458,7 @@ struct SerializableConcept {
     /// Endpoint for the concept's relations, when available.
     relations: OptionalResource,
     /// Endpoint for the default preferred atom, when available.
-    default_preferred_atom: OptionalResource,
+    default_preferred_atom: Url,
     /// Number of relations associated with the concept.
     relation_count: u64,
     /// Human-readable preferred name of the concept.
@@ -474,6 +478,10 @@ impl From<SerializableConcept> for Concept {
             OptionalResource::Unavailable => None,
         };
 
+        let atoms = atom::Atom::new(value.atoms);
+
+        let default_preferred_atom = atom::Atom::new(value.default_preferred_atom);
+
         Concept {
             class_type: value.class_type,
             ui: value.ui,
@@ -489,6 +497,8 @@ impl From<SerializableConcept> for Concept {
             relations,
             relation_count: value.relation_count,
             name: value.name,
+            atoms,
+            default_preferred_atom,
         }
     }
 }

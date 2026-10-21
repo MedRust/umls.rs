@@ -410,7 +410,7 @@ pub struct Atom<C, S, T> {
     _data: PhantomData<S>,
 }
 
-impl<C, S, T> Atom<C, S, T> {
+impl<S, T> Atom<WithoutClient, S, T> {
     /// Creates an atom operation from client configuration and request state.
     pub fn new(value: T) -> Atom<WithoutClient, S, T> {
         Atom {
@@ -419,7 +419,9 @@ impl<C, S, T> Atom<C, S, T> {
             _data: PhantomData,
         }
     }
+}
 
+impl<C, S, T> Atom<C, S, T> {
     /// Returns a reference to client.
     pub fn client(&self) -> &C {
         &self.client
@@ -522,16 +524,12 @@ impl Atom<reqwest::Client, All, Batch<Config<Cui>>> {
 
         let url = self.inject_query_params(umls_config, &url_string)?;
 
-        let request = http::Request::builder()
-            .uri(url.as_str())
-            .body(())
-            .map_err(reqwest::Error::Http)
-            .map_err(Error::Client)?;
+        let body = Atom::<_, All, _>::new(url)
+            .with_client(self.client().clone())
+            .fetch(umls_config)
+            .await?;
 
-        let body: http::Response<Page<Content<AtomResponse>>> =
-            self.client.execute(request).await.map_err(Error::Client)?;
-
-        Ok(Response::new(body.into_body(), self))
+        Ok(Response::new(body, self))
     }
 }
 
@@ -556,16 +554,10 @@ impl Atom<reqwest::Client, All, Batch<Config<Url>>> {
         let url_string = self.value.value().value().to_string();
         let url = self.inject_query_params(umls_config, &url_string)?;
 
-        let request = http::Request::builder()
-            .uri(url.as_str())
-            .body(())
-            .map_err(reqwest::Error::Http)
-            .map_err(Error::Client)?;
-
-        let response: http::Response<Page<Content<AtomResponse>>> =
-            self.client.execute(request).await.map_err(Error::Client)?;
-
-        let body = response.into_body();
+        let body = Atom::<_, All, _>::new(url)
+            .with_client(self.client().clone())
+            .fetch(umls_config)
+            .await?;
 
         Ok(Response::new(body, self))
     }
@@ -590,10 +582,30 @@ impl Atom<reqwest::Client, All, Cui> {
             umls_config.version().as_str(),
             self.value
         );
-        let url_string = umls_config.base_url().join(&path)?.to_string();
+        let url = umls_config.base_url().join(&path)?;
 
+        Atom::<_, All, _>::new(url)
+            .with_client(self.client)
+            .fetch(umls_config)
+            .await
+            .map(|x| x.content)
+    }
+}
+
+#[cfg(feature = "reqwest")]
+impl Atom<reqwest::Client, All, Url> {
+    /// Fetches one page of concept atoms from an atom-list URL endpoint.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if URL parsing, transport, HTTP status validation,
+    /// or response decoding fails.
+    pub async fn fetch(
+        self,
+        umls_config: &config::Config,
+    ) -> Result<Page<Content<AtomResponse>>, Error<reqwest::Error>> {
         let url = Url::parse_with_params(
-            &url_string,
+            self.value().as_str(),
             &[("apiKey", umls_config.api_key().expose_secret())],
         )?;
 
@@ -608,7 +620,7 @@ impl Atom<reqwest::Client, All, Cui> {
 
         let body = response.into_body();
 
-        Ok(body.content)
+        Ok(body)
     }
 }
 
@@ -630,14 +642,29 @@ impl Atom<reqwest::Client, Preferred, Cui> {
             umls_config.version().as_str(),
             self.value
         );
-        let url_string = umls_config
-            .base_url()
-            .join(&path)
-            .map_err(Error::Url)?
-            .to_string();
+        let url = umls_config.base_url().join(&path).map_err(Error::Url)?;
 
+        Atom::<_, Preferred, _>::new(url)
+            .with_client(self.client)
+            .fetch(umls_config)
+            .await
+    }
+}
+
+#[cfg(feature = "reqwest")]
+impl Atom<reqwest::Client, Preferred, Url> {
+    /// Fetches the preferred concept atom from a preferred-atom URL endpoint.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if URL parsing, transport, HTTP status validation,
+    /// or response decoding fails.
+    pub async fn fetch(
+        self,
+        umls_config: &config::Config,
+    ) -> Result<AtomResponse, Error<reqwest::Error>> {
         let url = Url::parse_with_params(
-            &url_string,
+            self.value().as_str(),
             &[("apiKey", umls_config.api_key().expose_secret())],
         )?;
 

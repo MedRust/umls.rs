@@ -652,7 +652,7 @@ async fn fetch_first_page_content_of_concept_atoms_using_cui()
         .base_url(base_url)
         .build()?;
 
-    let content = Atom::<reqwest::Client, All, Cui>::new(cui).with_client(Default::default());
+    let content = Atom::<_, All, Cui>::new(cui).with_client(Default::default());
 
     let content = content.fetch(&umls_config).await?;
 
@@ -722,8 +722,7 @@ async fn fetch_preferred_concept_atom() -> Result<(), Box<dyn std::error::Error>
         .base_url(base_url)
         .build()?;
 
-    let content =
-        Atom::<reqwest::Client, Preferred, Cui>::new(cui).with_client(reqwest::Client::default());
+    let content = Atom::<_, Preferred, Cui>::new(cui).with_client(reqwest::Client::default());
 
     let content = content.fetch(&umls_config).await?;
 
@@ -795,7 +794,7 @@ async fn fetch_preferred_concept_atom_from_different_version()
         .try_version(umls_version)?
         .build()?;
 
-    let content = Atom::<reqwest::Client, Preferred, Cui>::new(cui).with_client(Default::default());
+    let content = Atom::<_, Preferred, Cui>::new(cui).with_client(Default::default());
 
     let content = content.fetch(&umls_config).await?;
 
