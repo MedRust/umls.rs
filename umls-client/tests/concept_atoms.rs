@@ -6,8 +6,8 @@ use httpmock::{Method, MockServer};
 use serde_json::json;
 use umls_client::{
     atom::{self, All, Atom, Error, Preferred},
-    concept::cui::Cui,
     config,
+    core::cui::Cui,
 };
 use url::Url;
 use uuid::Uuid;

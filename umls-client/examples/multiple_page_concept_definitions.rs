@@ -17,8 +17,8 @@ use ratatui::{
 };
 use umls_client::{
     atom::Batch,
-    concept::cui::Cui,
     config::Config,
+    core::cui::Cui,
     definition::{self, Definition, dto},
     search::{Content, Page},
 };

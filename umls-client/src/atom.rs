@@ -21,7 +21,7 @@
 //! ```no_run
 //! # #[cfg(feature = "reqwest")]
 //! use umls_http::reqwest;
-//! use umls_client::{atom, concept::cui::Cui, config::Config};
+//! use umls_client::{atom, core::cui::Cui, config::Config};
 //!
 //! # #[cfg(feature = "reqwest")]
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
@@ -55,7 +55,7 @@ use umls_http::WithoutClient;
 use serde::Deserializer;
 
 #[cfg(feature = "reqwest")]
-use crate::concept::cui::Cui;
+use crate::core::cui::Cui;
 
 #[cfg(feature = "reqwest")]
 use url::Url;
@@ -376,7 +376,7 @@ impl Preferred {
     /// use umls_http::reqwest;
     /// use umls_client::{
     ///     atom::Preferred,
-    ///     concept::cui::Cui,
+    ///     core::cui::Cui,
     ///     config::Config,
     /// };
     ///

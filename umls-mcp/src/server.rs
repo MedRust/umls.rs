@@ -7,12 +7,7 @@ use rmcp::{
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::{num::NonZeroU64, sync::Arc};
-use umls_client::{
-    atom,
-    concept::{Info, cui::Cui},
-    config::Config,
-    search,
-};
+use umls_client::{atom, concept::Info, config::Config, core::cui::Cui, search};
 use umls_http::reqwest::Client;
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
