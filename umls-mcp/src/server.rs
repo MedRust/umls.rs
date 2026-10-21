@@ -339,7 +339,7 @@ mod tests {
                 "suppressible": false, "status": "R", "dateAdded": "01-01-1990",
                 "majorRevisionDate": "01-01-2024", "semanticTypes": [{"name": "Sign or Symptom", "uri": "NONE"}],
                 "atomCount": 2, "attributeCount": 0, "cvMemberCount": 0, "relationCount": 1,
-                "atoms": "NONE", "definitions": "NONE", "relations": "NONE", "defaultPreferredAtom": "NONE"
+                "atoms": format!("{}/content/current/CUI/C0155502/atoms", mock_server.base_url()), "definitions": "NONE", "relations": "NONE", "defaultPreferredAtom": format!("{}/content/current/CUI/C0155502/atoms/preferred", mock_server.base_url())
             }}));
         }).await;
         let config = Config::builder("secret-test-key")
