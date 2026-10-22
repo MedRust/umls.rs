@@ -4,10 +4,16 @@ use rmcp::{
     model::{CallToolResult, ContentBlock},
     schemars, tool, tool_handler, tool_router,
 };
-use serde::Deserialize;
-use serde_json::{Value, json};
+use serde::{Deserialize, Serialize};
+use serde_json::json;
 use std::{num::NonZeroU64, sync::Arc};
-use umls_client::{atom, concept::Info, config::Config, core::cui::Cui, search};
+use umls_client::{
+    atom,
+    concept::Info,
+    config::Config,
+    core::{aui::Aui, cui::Cui},
+    search,
+};
 use umls_http::reqwest::Client;
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -26,6 +32,12 @@ struct SearchArgs {
 struct ConceptArgs {
     /// CUI consisting of C followed by seven digits, for example C0010200.
     cui: String,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+struct AtomInfoArgs {
+    aui: String,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -61,8 +73,11 @@ fn failure(message: &str) -> CallToolResult {
     CallToolResult::error(vec![ContentBlock::text(message)])
 }
 
-fn success(value: Value) -> CallToolResult {
-    CallToolResult::success(vec![ContentBlock::text(value.to_string())])
+fn success<T: Serialize>(value: &T) -> CallToolResult {
+    let Ok(value) = serde_json::to_string(value) else {
+        return failure("Failed to serialize the response");
+    };
+    CallToolResult::success(vec![ContentBlock::text(value)])
 }
 
 #[tool_router]
@@ -117,7 +132,7 @@ impl UmlsServer {
             })
             .collect();
         success(
-            json!({"results": results, "page": page.number().get(), "page_size": page.size().get(),
+            &json!({"results": results, "page": page.number().get(), "page_size": page.size().get(),
             "total_pages": page.total_pages().map(NonZeroU64::get), "has_next": page.has_next(),
             "version": self.config.version().as_str()}),
         )
@@ -146,13 +161,42 @@ impl UmlsServer {
             );
         };
         success(
-            json!({"cui": value.ui, "name": value.name, "status": value.status,
+            &json!({"cui": value.ui, "name": value.name, "status": value.status,
             "suppressible": value.suppressible, "atom_count": value.atom_count,
             "relation_count": value.relation_count, "date_added": value.date_added,
             "major_revision_date": value.major_revision_date,
             "semantic_types": value.semantic_types.iter().map(|item| &item.name).collect::<Vec<_>>(),
             "version": self.config.version().as_str()}),
         )
+    }
+
+    #[tool(
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = true
+        ),
+        description = "Retrieve UMLS atom details by AUI, including name, root source vocabulary, is suppressible and/or obsolete, term type and langauge."
+    )]
+    async fn get_atom_info(&self, Parameters(args): Parameters<AtomInfoArgs>) -> CallToolResult {
+        let Ok(display_name) = args.aui.parse() else {
+            return failure("AUI should not be empty");
+        };
+
+        let Ok(aui) = Aui::new(display_name) else {
+            return failure("Invalid aui format");
+        };
+
+        let response = Info::new(aui)
+            .with_client(self.client.clone())
+            .fetch(&self.config)
+            .await;
+        let Ok(value) = response else {
+            return failure("UMLS atom lookup failed; check AUI, credentials, server availability");
+        };
+
+        success(&value)
     }
 
     #[tool(
@@ -191,7 +235,7 @@ impl UmlsServer {
             "obsolete": item.obsolete, "suppressible": item.suppressible,
         })).collect();
         success(
-            json!({"results": results, "page": page.number().get(), "page_size": page.size().get(),
+            &json!({"results": results, "page": page.number().get(), "page_size": page.size().get(),
             "total_pages": page.total_pages().map(NonZeroU64::get), "has_next": page.has_next(),
             "version": self.config.version().as_str()}),
         )
@@ -209,6 +253,8 @@ impl rmcp::ServerHandler for UmlsServer {}
 mod tests {
     use super::*;
     use httpmock::prelude::*;
+    use serde_json::Value;
+    use umls_client::atom::AtomResponse;
 
     fn server(base_url: &str) -> UmlsServer {
         let config = Config::builder("secret-test-key")
@@ -382,6 +428,69 @@ mod tests {
                 .unwrap()
                 .contains("secret-test-key")
         );
+        mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn returns_atom_information() {
+        let mock_server = MockServer::start_async().await;
+
+        let mock = mock_server
+        .mock_async(|when, then| {
+            when.method(GET)
+                .path("/content/current/AUI/A8345234")
+                .query_param_exists("apiKey");
+            then.status(200)
+            .json_body(json!({
+                "pageSize": 25,
+                "pageNumber": 1,
+                "pageCount": 1,
+                "result": {
+                    "classType": "Atom",
+                    "ui": "A8345234",
+                    "sourceDescriptor": "https://uts-ws.nlm.nih.gov/rest/content/2026AA/source/ICD9CM/386.11",
+                    "sourceConcept": "NONE",
+                    "concept": "https://uts-ws.nlm.nih.gov/rest/content/2026AA/CUI/C0155502",
+                    "suppressible": "false",
+                    "obsolete": "false",
+                    "rootSource": "ICD9CM",
+                    "termType": "PT",
+                    "code": "https://uts-ws.nlm.nih.gov/rest/content/2026AA/source/ICD9CM/386.11",
+                    "language": "ENG",
+                    "name": "Benign paroxysmal positional vertigo",
+                    "ancestors": "NONE",
+                    "descendants": "NONE",
+                    "attributes": "NONE",
+                    "relations": "https://uts-ws.nlm.nih.gov/rest/content/2026AA/AUI/A8345234/relations",
+                    "children": "NONE",
+                    "parents": "NONE"
+                }
+            }));
+        })
+        .await;
+
+        let result = server(&mock_server.base_url())
+            .get_atom_info(Parameters(AtomInfoArgs {
+                aui: "A8345234".into(),
+            }))
+            .await;
+
+        assert!(!result.is_error.unwrap_or(false));
+        let response =
+            serde_json::from_str::<AtomResponse>(&result.content[0].as_text().unwrap().text)
+                .unwrap();
+
+        assert_eq!(response.ui.as_str(), "A8345234");
+        assert_eq!(
+            response.name.as_str(),
+            "Benign paroxysmal positional vertigo"
+        );
+        assert_eq!(response.language.as_str(), "ENG");
+        assert_eq!(response.term_type.as_str(), "PT");
+        assert_eq!(response.root_source.as_str(), "ICD9CM");
+        assert!(!response.suppressible);
+        assert!(!response.obsolete);
+
         mock.assert_async().await;
     }
 }
