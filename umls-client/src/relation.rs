@@ -23,7 +23,7 @@ pub mod config {
     use std::collections::HashSet;
 
     use crate::{
-        concept::cui::Cui,
+        core::cui::Cui,
         search::core::{DisplayName, EmptyString},
     };
 
@@ -34,7 +34,7 @@ pub mod config {
     /// # Example
     /// ```
     /// use umls_client::relation::config::Config;
-    /// use umls_client::concept::cui::Cui;
+    /// use umls_client::core::cui::Cui;
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let cui: Cui = "C0010200".parse()?;
     /// let config = Config::builder(cui.clone()).build();

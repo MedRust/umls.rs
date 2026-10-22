@@ -14,11 +14,12 @@ use ratatui::{
     text::{Line, Text},
     widgets::{Block, Borders, Paragraph, Wrap},
 };
-use umls_http::reqwest;
 use umls_client::{
-    concept::{self, Concept, cui::Cui},
+    concept::{self, Concept},
     config::Config,
+    core::cui::Cui,
 };
+use umls_http::reqwest;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Focus {

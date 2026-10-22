@@ -8,7 +8,7 @@ use umls_http::reqwest;
 use url::Url;
 
 use crate::{
-    concept::cui::Cui,
+    core::cui::Cui,
     search::core::{DisplayName, EmptyString},
 };
 

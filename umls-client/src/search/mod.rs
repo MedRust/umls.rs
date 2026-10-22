@@ -712,7 +712,7 @@ pub enum PageError<E: std::error::Error> {
 /// }
 /// ```
 pub struct ConceptSnapshot {
-    cui: concept::cui::Cui,
+    cui: crate::core::cui::Cui,
     root_source: DisplayName,
     pub(crate) info: concept::Info<umls_http::WithoutClient, Url>,
     name: DisplayName,
@@ -723,7 +723,7 @@ impl ConceptSnapshot {
     #[cfg(feature = "reqwest")]
     /// Creates a concept snapshot from validated search-result fields.
     pub(crate) fn new(
-        cui: concept::cui::Cui,
+        cui: crate::core::cui::Cui,
         root_source: DisplayName,
         info: concept::Info<umls_http::WithoutClient, Url>,
         name: DisplayName,
@@ -775,7 +775,7 @@ impl TryFrom<RawSearchDto> for ConceptSnapshot {
     type Error = ConceptSnapshotError;
 
     fn try_from(value: RawSearchDto) -> Result<Self, Self::Error> {
-        let cui: concept::cui::Cui = value
+        let cui: crate::core::cui::Cui = value
             .ui
             .as_str()
             .parse()
@@ -804,7 +804,7 @@ impl TryFrom<RawSearchDto> for ConceptSnapshot {
 pub enum ConceptSnapshotError {
     /// The result contained an invalid concept identifier.
     #[error("CUI format error: {0}")]
-    Cui(concept::cui::Error),
+    Cui(crate::core::cui::Error),
 
     /// The result omitted its root source.
     #[error("Missing root source")]

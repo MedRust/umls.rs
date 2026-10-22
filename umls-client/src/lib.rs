@@ -42,6 +42,9 @@ pub mod search;
 
 pub mod atom;
 
+/// The core compoenents shared between modules.
+pub mod core;
+
 /// Fetch concept relations.
 pub mod relation;
 
