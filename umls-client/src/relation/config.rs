@@ -209,3 +209,60 @@ impl Builder {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    #[test]
+    fn build_default_configuration() -> Result<(), Box<dyn std::error::Error>> {
+        let cui = "C0010200".parse()?;
+
+        let config = Config::builder(cui).build();
+
+        assert_eq!(config.cui().as_str(), "C0010200");
+        assert!(config.labels().is_empty());
+        assert!(config.additional_labels().is_empty());
+        assert!(config.source_vocabularies().is_empty());
+        assert!(!config.include_obsolete());
+        assert!(!config.include_suppressible());
+
+        Ok(())
+    }
+
+    #[test]
+    fn build_configuration() -> Result<(), Box<dyn std::error::Error>> {
+        let cui = "C0010200".parse()?;
+
+        let config = Config::builder(cui)
+            .try_add_label("CHD")?
+            .try_add_label("CHD")?
+            .try_add_additional_label("isa")?
+            .try_add_additional_label("isa")?
+            .try_add_source_vocabulary("Disease or Syndrome")?
+            .try_add_source_vocabulary("Disease or Syndrome")?
+            .include_suppressible()
+            .include_obsolete()
+            .build();
+
+        assert_eq!(config.cui().as_str(), "C0010200");
+
+        assert!(!config.labels().is_empty());
+        assert_eq!(config.labels().first().unwrap().as_str(), "CHD");
+
+        assert!(!config.additional_labels().is_empty());
+        assert_eq!(config.additional_labels().first().unwrap().as_str(), "isa");
+
+        assert!(!config.source_vocabularies().is_empty());
+        assert_eq!(
+            config.source_vocabularies().first().unwrap().as_str(),
+            "Disease or Syndrome"
+        );
+
+        assert!(config.include_obsolete());
+        assert!(config.include_suppressible());
+
+        Ok(())
+    }
+}
