@@ -1,6 +1,7 @@
 use crate::search::core::DisplayName;
 
-fn is_valid_aui(value: &str) -> bool {
+fn is_valid_aui(value: &DisplayName) -> bool {
+    let value = value.as_str();
     [7, 8].contains(&value.len())
         && value.starts_with('A')
         && value[1..].bytes().all(|byte| byte.is_ascii_digit())
@@ -18,7 +19,7 @@ pub struct Aui(DisplayName);
 impl Aui {
     /// Create new atom unique identifier for given object.
     pub fn new(aui: DisplayName) -> Result<Self, InvalidFormat> {
-        if !is_valid_aui(aui.as_str()) {
+        if !is_valid_aui(&aui) {
             return Err(InvalidFormat(aui.as_str().into()));
         }
 
@@ -53,5 +54,71 @@ impl TryFrom<DisplayName> for Aui {
 impl std::fmt::Display for Aui {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.as_str())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    #[test]
+    fn validate_aui() {
+        let strings = [
+            "A123456",
+            "A1234567",
+            "  A123456",
+            "A123456   ",
+            "    A123456    ",
+        ];
+        for value in strings {
+            let value = is_valid_aui(&value.try_into().unwrap());
+            assert!(value);
+        }
+
+        let invalid_strings = ["1234567A", "A12345", "A12345678", "1234A56", "1234A567"];
+        for invalid_string in invalid_strings {
+            let value = is_valid_aui(&invalid_string.try_into().unwrap());
+            assert!(!value);
+        }
+    }
+
+    #[test]
+    fn create_new_aui() {
+        let strings = ["A123456", "A1234567"];
+        for value in strings {
+            let result = Aui::new(value.try_into().unwrap());
+            match result {
+                Ok(aui) => {
+                    assert_eq!(aui.as_str(), value);
+                }
+                Err(_) => panic!("Invalid aui format: {}", value),
+            }
+        }
+
+        let invalid_strings = ["1234567A", "A12345", "A12345678", "1234A56", "1234A567"];
+        for invalid_string in invalid_strings {
+            let result = Aui::new(invalid_string.try_into().unwrap());
+            assert!(matches!(result, Err(InvalidFormat(_))));
+        }
+    }
+
+    #[test]
+    fn format_representation() {
+        for string in ["A123456", "A1234567"] {
+            let display_name: DisplayName = string.parse().unwrap();
+            let aui = Aui::new(display_name).unwrap();
+            let display_string = format!("{}", aui);
+            assert_eq!(display_string, string);
+        }
+    }
+
+    #[test]
+    fn as_ref_presentation() {
+        for string in ["A123456", "A1234567"] {
+            let display_name: DisplayName = string.parse().unwrap();
+            let aui = Aui::new(display_name).unwrap();
+            assert_eq!(aui.as_ref(), string);
+        }
     }
 }
