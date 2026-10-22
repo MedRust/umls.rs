@@ -52,3 +52,7 @@ required-features = ["reqwest"]
 [[example]]
 name = "fetch_concept_relations_in_batch"
 required-features = ["reqwest"]
+
+[[example]]
+name = "get_atom_info"
+required-features = ["reqwest"]
