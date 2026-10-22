@@ -52,7 +52,7 @@ use serde::{self, Deserialize};
 use umls_http::WithoutClient;
 
 #[cfg(feature = "reqwest")]
-use serde::Deserializer;
+use serde::Serialize;
 
 #[cfg(feature = "reqwest")]
 use crate::core::cui::Cui;
@@ -784,21 +784,31 @@ impl<T> Page<T> {
 }
 
 #[cfg(feature = "reqwest")]
-fn deserialize_bool_from_string<'de, D>(deserializer: D) -> Result<bool, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let value = String::deserialize(deserializer)?;
+mod bool_as_string {
+    use serde::{Deserialize, Deserializer, Serializer, de};
 
-    match value.as_str() {
-        "true" => Ok(true),
-        "false" => Ok(false),
-        _ => Err(serde::de::Error::custom("expected \"true\" or \"false\"")),
+    pub fn serialize<S>(value: &bool, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(if *value { "true" } else { "false" })
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<bool, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        match value.as_str() {
+            "true" => Ok(true),
+            "false" => Ok(false),
+            _ => Err(de::Error::custom("expected \"true\" or \"false\"")),
+        }
     }
 }
 
 #[cfg(feature = "reqwest")]
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 /// A summary of one source-specific atom associated with a UMLS concept.
 pub struct AtomResponse {
@@ -806,11 +816,11 @@ pub struct AtomResponse {
     pub ui: DisplayName,
 
     /// Whether the atom is suppressible.
-    #[serde(deserialize_with = "deserialize_bool_from_string")]
+    #[serde(with = "bool_as_string")]
     pub suppressible: bool,
 
     /// Whether the atom is obsolete.
-    #[serde(deserialize_with = "deserialize_bool_from_string")]
+    #[serde(with = "bool_as_string")]
     pub obsolete: bool,
     /// The abbreviation of the atom's root source vocabulary.
     pub root_source: DisplayName,

@@ -413,6 +413,15 @@ impl<'de> serde::Deserialize<'de> for DisplayName {
     }
 }
 
+impl serde::Serialize for DisplayName {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.as_str().serialize(serializer)
+    }
+}
+
 #[derive(Debug, Clone)]
 /// Pagination parameters for a UMLS search request.
 pub struct PageRequest {
