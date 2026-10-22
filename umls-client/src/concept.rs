@@ -15,6 +15,10 @@ use url::Url;
 use serde::Deserialize;
 
 #[cfg(feature = "reqwest")]
+use crate::atom::{AtomResponse, Page};
+#[cfg(feature = "reqwest")]
+use crate::core::aui::Aui;
+#[cfg(feature = "reqwest")]
 use crate::search::core::get_trimmed_non_empty_string;
 #[cfg(feature = "reqwest")]
 use crate::{atom, definition, relation};
@@ -318,4 +322,34 @@ pub struct SemanticType {
     pub name: String,
     /// UMLS resource URL for the semantic type.
     pub uri: OptionalResource,
+}
+
+#[cfg(feature = "reqwest")]
+impl Info<reqwest::Client, Aui> {
+    /// Fetch atom information for given atom.
+    pub async fn fetch(self, config: &Config) -> Result<AtomResponse, Error<reqwest::Error>> {
+        let path = format!("content/{}/AUI/{}", config.version(), self.value());
+        let url = config.base_url().join(&path).map_err(Error::Url)?;
+        let url = Url::parse_with_params(
+            url.as_str(),
+            &[("apiKey", config.api_key().expose_secret().to_owned())],
+        )
+        .map_err(Error::Url)?;
+
+        let request = http::Request::builder()
+            .method("GET")
+            .uri(url.as_str())
+            .body(())
+            .map_err(reqwest::Error::Http)
+            .map_err(Error::Client)?;
+
+        let response: http::Response<Page<AtomResponse>> = self
+            .client()
+            .execute(request)
+            .await
+            .map_err(Error::Client)?;
+        let response = response.into_body();
+
+        Ok(response.content)
+    }
 }
