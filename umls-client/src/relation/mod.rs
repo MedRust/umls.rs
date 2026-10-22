@@ -5,7 +5,7 @@ pub mod config;
 use umls_http::WithoutClient;
 
 #[cfg(feature = "reqwest")]
-use serde::{Deserialize, Deserializer};
+use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "reqwest")]
 use secrecy::ExposeSecret;
@@ -228,18 +228,31 @@ impl Relation<Client, Url> {
 }
 
 #[cfg(feature = "reqwest")]
-fn deserialize_optional_string<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let value = String::deserialize(deserializer)?;
+mod optional_string {
+    use serde::{Deserialize, Deserializer, Serializer};
 
-    Ok(if value == "NONE" { None } else { Some(value) })
+    pub fn serialize<S>(value: &Option<String>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(value.as_deref().unwrap_or("NONE"))
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = Option::<String>::deserialize(deserializer)?;
+        Ok(match value {
+            Some(val) if val == "NONE" => None,
+            other => other,
+        })
+    }
 }
 
 /// A relationship DTO object.
 #[cfg(feature = "reqwest")]
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RelationDto {
     /// UMLS Relationship Unique Identifier (RUI)
@@ -247,7 +260,7 @@ pub struct RelationDto {
     /// Represents respective object is suppressible.
     pub suppressible: bool,
     /// The source unique identifier if present.
-    #[serde(deserialize_with = "deserialize_optional_string")]
+    #[serde(with = "optional_string")]
     pub source_ui: Option<String>,
     /// Represents respective object is obsolete.
     pub obsolete: bool,
@@ -256,7 +269,7 @@ pub struct RelationDto {
     /// The root source vocabularies.
     pub root_source: String,
     /// The grou id if present.
-    #[serde(deserialize_with = "deserialize_optional_string")]
+    #[serde(with = "optional_string")]
     pub group_id: Option<String>,
     /// The attribute count.
     pub attribute_count: u32,
@@ -269,7 +282,7 @@ pub struct RelationDto {
     /// The relationship label.
     pub relation_label: String,
     /// The additional relationship label.
-    #[serde(deserialize_with = "deserialize_optional_string")]
+    #[serde(with = "optional_string")]
     pub additional_relation_label: Option<String>,
     /// The related id.
     pub related_id: String,
