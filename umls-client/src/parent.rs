@@ -57,20 +57,42 @@ impl Parent<umls_http::reqwest::Client, Url> {
     pub async fn fetch(
         self,
         umls_config: &config::Config,
-    ) -> Result<Page<Content<AtomResponse>>, Box<dyn std::error::Error>> {
+    ) -> Result<Page<Content<AtomResponse>>, Error<umls_http::reqwest::Error>> {
         let url = Url::parse_with_params(
             self.value().as_str(),
             &[("apiKey", umls_config.api_key().expose_secret().to_owned())],
-        )?;
+        )
+        .map_err(Error::Url)?;
 
         let request = http::Request::builder()
             .method("GET")
             .uri(url.as_str())
-            .body(())?;
+            .body(())
+            .map_err(Error::Http)?;
 
-        let response: http::Response<Page<Content<AtomResponse>>> =
-            self.client().execute(request).await?;
+        let response: http::Response<Page<Content<AtomResponse>>> = self
+            .client()
+            .execute(request)
+            .await
+            .map_err(Error::Client)?;
 
         Ok(response.into_body())
     }
+}
+
+#[cfg(feature = "reqwest")]
+/// An error object to fetch data.
+#[derive(Debug, thiserror::Error)]
+pub enum Error<T> {
+    /// A Client error.
+    #[error("Client Error: {0}")]
+    Client(T),
+
+    /// Url Error.
+    #[error("Url Error: {0}")]
+    Url(url::ParseError),
+
+    /// Http error.
+    #[error("Http Error: {0}")]
+    Http(http::Error),
 }
