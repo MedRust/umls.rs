@@ -1,3 +1,15 @@
+#[cfg(feature = "reqwest")]
+use secrecy::ExposeSecret;
+#[cfg(feature = "reqwest")]
+use url::Url;
+
+#[cfg(feature = "reqwest")]
+use crate::{
+    atom::{AtomResponse, Page},
+    config,
+    search::Content,
+};
+
 /// UMLS parent client.
 pub struct Parent<C, T> {
     client: C,
@@ -33,5 +45,32 @@ impl<C, T> Parent<C, T> {
     /// Returns a reference of value object.
     pub fn value(&self) -> &T {
         &self.value
+    }
+}
+
+#[cfg(feature = "reqwest")]
+impl Parent<umls_http::reqwest::Client, Url> {
+    /// Fetch parents of UMLS atom.
+    ///
+    /// The method doesn't validate the URL at runtime. The method only fullfill the requirements
+    /// and call specified http client.
+    pub async fn fetch(
+        self,
+        umls_config: &config::Config,
+    ) -> Result<Page<Content<AtomResponse>>, Box<dyn std::error::Error>> {
+        let url = Url::parse_with_params(
+            self.value().as_str(),
+            &[("apiKey", umls_config.api_key().expose_secret().to_owned())],
+        )?;
+
+        let request = http::Request::builder()
+            .method("GET")
+            .uri(url.as_str())
+            .body(())?;
+
+        let response: http::Response<Page<Content<AtomResponse>>> =
+            self.client().execute(request).await?;
+
+        Ok(response.into_body())
     }
 }
