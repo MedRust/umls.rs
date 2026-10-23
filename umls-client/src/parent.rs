@@ -4,6 +4,9 @@ use secrecy::ExposeSecret;
 use url::Url;
 
 #[cfg(feature = "reqwest")]
+use crate::core::aui::Aui;
+
+#[cfg(feature = "reqwest")]
 use crate::{
     atom::{AtomResponse, Page},
     config,
@@ -93,6 +96,27 @@ impl Parent<umls_http::reqwest::Client, Url> {
             .map_err(Error::Client)?;
 
         Ok(response.into_body())
+    }
+}
+
+#[cfg(feature = "reqwest")]
+impl Parent<umls_http::reqwest::Client, Aui> {
+    /// Fetch a first page of parents of specified UMLS [`Aui`].
+    pub async fn fetch(
+        self,
+        umls_config: &config::Config,
+    ) -> Result<Page<Content<AtomResponse>>, Error<umls_http::reqwest::Error>> {
+        let path = format!(
+            "content/{}/AUI/{}/parents",
+            umls_config.version(),
+            self.value()
+        );
+        let url = umls_config.base_url().join(&path).map_err(Error::Url)?;
+
+        Parent::new(url)
+            .with_client(self.client)
+            .fetch(umls_config)
+            .await
     }
 }
 
