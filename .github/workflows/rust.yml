@@ -18,6 +18,6 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Build
-      run: make run -e
+      run: make build -e
     - name: Run tests
       run: make test -e
