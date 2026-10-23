@@ -50,3 +50,5 @@ pub mod relation;
 
 /// Fetch conept definitions.
 pub mod definition;
+/// Fetch parents from UMLS.
+pub mod parent;
