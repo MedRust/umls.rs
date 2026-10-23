@@ -262,7 +262,11 @@ impl UmlsServer {
             idempotent_hint = true,
             open_world_hint = true
         ),
-        description = "Retrieve one page of concept relations"
+        description = "Retrieve a page of concept relations with suppressibility, obsolete, source originated, \
+            root source, related from id name, related id name, relation label, additional relation label. \
+            The tool required CUI, relationship lables, additional relationship labels, include obsolete, \
+            suppressible, source vocabularies and optional page number and page number. If not specified \
+            return default page size(25) and default page number(1)."
     )]
     async fn get_concept_relations(
         &self,
