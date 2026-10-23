@@ -2,7 +2,7 @@ use crate::search::core::DisplayName;
 
 fn is_valid_aui(value: &DisplayName) -> bool {
     let value = value.as_str();
-    [7, 8].contains(&value.len())
+    [8, 9].contains(&value.len())
         && value.starts_with('A')
         && value[1..].bytes().all(|byte| byte.is_ascii_digit())
 }
@@ -65,18 +65,18 @@ mod tests {
     #[test]
     fn validate_aui() {
         let strings = [
-            "A123456",
             "A1234567",
-            "  A123456",
-            "A123456   ",
-            "    A123456    ",
+            "A12345678",
+            "  A1234567",
+            "A1234567   ",
+            "    A1234567    ",
         ];
         for value in strings {
             let value = is_valid_aui(&value.try_into().unwrap());
             assert!(value);
         }
 
-        let invalid_strings = ["1234567A", "A12345", "A12345678", "1234A56", "1234A567"];
+        let invalid_strings = ["1234567A", "A12345", "A123456789", "1234A56"];
         for invalid_string in invalid_strings {
             let value = is_valid_aui(&invalid_string.try_into().unwrap());
             assert!(!value);
@@ -85,7 +85,7 @@ mod tests {
 
     #[test]
     fn create_new_aui() {
-        let strings = ["A123456", "A1234567"];
+        let strings = ["A1234567", "A12345678"];
         for value in strings {
             let result = Aui::new(value.try_into().unwrap());
             match result {
@@ -96,7 +96,7 @@ mod tests {
             }
         }
 
-        let invalid_strings = ["1234567A", "A12345", "A12345678", "1234A56", "1234A567"];
+        let invalid_strings = ["1234567A", "A123456", "A123456789", "1234A56", "1234A567"];
         for invalid_string in invalid_strings {
             let result = Aui::new(invalid_string.try_into().unwrap());
             assert!(matches!(result, Err(InvalidFormat(_))));
@@ -105,7 +105,7 @@ mod tests {
 
     #[test]
     fn format_representation() {
-        for string in ["A123456", "A1234567"] {
+        for string in ["A1234567", "A12345678"] {
             let display_name: DisplayName = string.parse().unwrap();
             let aui = Aui::new(display_name).unwrap();
             let display_string = format!("{}", aui);
@@ -115,7 +115,7 @@ mod tests {
 
     #[test]
     fn as_ref_presentation() {
-        for string in ["A123456", "A1234567"] {
+        for string in ["A1234567", "A12345678"] {
             let display_name: DisplayName = string.parse().unwrap();
             let aui = Aui::new(display_name).unwrap();
             assert_eq!(aui.as_ref(), string);
