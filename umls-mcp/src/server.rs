@@ -8,11 +8,12 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{num::NonZeroU64, sync::Arc};
 use umls_client::{
-    atom,
+    atom::{self, Batch},
     concept::Info,
     config::Config,
     core::{aui::Aui, cui::Cui},
-    search,
+    relation,
+    search::{self, core::DisplayName},
 };
 use umls_http::reqwest::Client;
 
@@ -48,6 +49,19 @@ struct AtomArgs {
     /// One-based page number; defaults to 1.
     page: Option<u64>,
     /// Results per page, from 1 to 100; defaults to 25.
+    page_size: Option<u64>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+struct ConceptRelationArgs {
+    cui: String,
+    relation_labels: Vec<String>,
+    additional_relation_labels: Vec<String>,
+    include_obsolete: bool,
+    include_suppressible: bool,
+    source_vocabularies: Vec<String>,
+    page_number: Option<u64>,
     page_size: Option<u64>,
 }
 
@@ -240,6 +254,93 @@ impl UmlsServer {
             "version": self.config.version().as_str()}),
         )
     }
+
+    #[tool(
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = true
+        ),
+        description = "Retrieve a page of concept relations with suppressibility, obsolete, source originated, \
+            root source, related from id name, related id name, relation label, additional relation label. \
+            The tool required CUI, relationship lables, additional relationship labels, include obsolete, \
+            suppressible, source vocabularies and optional page number and page number. If not specified \
+            return default page size(25) and default page number(1)."
+    )]
+    async fn get_concept_relations(
+        &self,
+        Parameters(args): Parameters<ConceptRelationArgs>,
+    ) -> CallToolResult {
+        let Ok(cui) = Cui::new(&args.cui) else {
+            return failure("Invalid formated cui");
+        };
+
+        let (number, size) = match pagination(args.page_number, args.page_size) {
+            Ok(value) => value,
+            Err(message) => return failure(message),
+        };
+
+        let mut builder = relation::config::Config::builder(cui);
+
+        if args.include_obsolete {
+            builder = builder.include_obsolete();
+        }
+
+        if args.include_suppressible {
+            builder = builder.include_suppressible();
+        }
+
+        let Ok(labels) = args
+            .relation_labels
+            .iter()
+            .map(|x| x.parse())
+            .collect::<Result<Vec<DisplayName>, _>>()
+        else {
+            return failure("Failed to create UMLS relationship labels.");
+        };
+
+        let Ok(additional_labels) = args
+            .additional_relation_labels
+            .iter()
+            .map(|x| x.parse())
+            .collect::<Result<Vec<DisplayName>, _>>()
+        else {
+            return failure("Failed to create UMLS additional relationship labels.");
+        };
+
+        let Ok(source_vocabularies) = args
+            .source_vocabularies
+            .iter()
+            .map(|x| x.parse())
+            .collect::<Result<Vec<DisplayName>, _>>()
+        else {
+            return failure("Failed to create UMLS source vocabularies.");
+        };
+
+        let config = builder
+            .labels(labels)
+            .additional_labels(additional_labels)
+            .source_vocabularies(source_vocabularies)
+            .build();
+
+        let batch = Batch::new(size, number, config);
+
+        let response = relation::Relation::new(batch)
+            .with_client(self.client.clone())
+            .fetch(&self.config)
+            .await;
+
+        let Ok(response) = response else {
+            return failure(
+                "UMLS relations lookup failed, check CUI, credentials, services availability",
+            );
+        };
+
+        let page = response.into_page();
+
+        success(&page.content().list())
+    }
 }
 
 #[tool_handler(
@@ -254,7 +355,7 @@ mod tests {
     use super::*;
     use httpmock::prelude::*;
     use serde_json::Value;
-    use umls_client::atom::AtomResponse;
+    use umls_client::{atom::AtomResponse, relation::RelationDto};
 
     fn server(base_url: &str) -> UmlsServer {
         let config = Config::builder("secret-test-key")
@@ -492,5 +593,65 @@ mod tests {
         assert!(!response.obsolete);
 
         mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn return_concept_relations() -> Result<(), Box<dyn std::error::Error>> {
+        let mock_server = MockServer::start_async().await;
+        let mock = mock_server
+            .mock_async(|when, then| {
+                when.method(GET)
+                    .path("/content/current/CUI/C0010200/relations")
+                    .query_param_exists("apiKey")
+                    .query_param("pageNumber", "1")
+                    .query_param("pageSize", "25");
+                then.status(200).json_body(json!({
+                    "pageSize": 25,
+                    "pageNumber": 1,
+                    "pageCount": 74,
+                    "result": [
+                        {
+                            "ui": "R117544592",
+                            "suppressible": false,
+                            "sourceUi": "NONE",
+                            "obsolete": false,
+                            "sourceOriginated": false,
+                            "rootSource": "MEDCIN",
+                            "groupId": "NONE",
+                            "attributeCount": 0,
+                            "classType": "AtomClusterRelation",
+                            "relatedFromId": "https://uts-ws.nlm.nih.gov/rest/content/2026AA/source/MEDCIN/247",
+                            "relatedFromIdName": "cough",
+                            "relationLabel": "PAR",
+                            "additionalRelationLabel": "inverse_isa",
+                            "relatedId": "https://uts-ws.nlm.nih.gov/rest/content/2026AA/source/MEDCIN/1512",
+                            "relatedIdName": "cough causes awakening from sleep"
+                        },
+                    ]
+                }));
+            })
+            .await;
+
+        let result = server(&mock_server.base_url())
+            .get_concept_relations(Parameters(ConceptRelationArgs {
+                cui: "C0010200".into(),
+                relation_labels: Vec::new(),
+                additional_relation_labels: Vec::new(),
+                include_obsolete: false,
+                include_suppressible: false,
+                source_vocabularies: Vec::new(),
+                page_number: Some(1),
+                page_size: Some(25),
+            }))
+            .await;
+
+        assert!(!result.is_error.unwrap_or(false));
+        let text = result.content[0].as_text().unwrap().text.clone();
+        println!("{}", text.as_str());
+        _ = serde_json::from_str::<Vec<RelationDto>>(&text).unwrap();
+
+        mock.assert_async().await;
+
+        Ok(())
     }
 }
