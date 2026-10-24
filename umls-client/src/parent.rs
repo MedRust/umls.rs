@@ -1,3 +1,5 @@
+use std::marker::PhantomData;
+
 #[cfg(feature = "reqwest")]
 use secrecy::ExposeSecret;
 #[cfg(feature = "reqwest")]
@@ -19,13 +21,22 @@ use crate::{
     search::Content,
 };
 
-/// UMLS parent client.
-pub struct Parent<C, T> {
-    client: C,
-    value: T,
+/// The parent types.
+pub mod types {
+    /// Represents the Atom parent types.
+    ///
+    /// It used as state for [`super::Parent`] to fetch immediate parents of UMLS atom.
+    pub struct Atom;
 }
 
-impl<T> Parent<umls_http::WithoutClient, T> {
+/// UMLS parent client.
+pub struct Parent<U, C, T> {
+    client: C,
+    value: T,
+    _type: PhantomData<U>,
+}
+
+impl<U, T> Parent<U, umls_http::WithoutClient, T> {
     /// Create and return a new instance of [`Parent`] for given value.
     ///
     /// The client is created with http client [`umls_http::WithoutClient`].
@@ -33,19 +44,21 @@ impl<T> Parent<umls_http::WithoutClient, T> {
         Self {
             client: umls_http::WithoutClient,
             value,
+            _type: PhantomData,
         }
     }
 
     /// Create a new [`Parent`] object with specified client.
-    pub fn with_client<C>(self, client: C) -> Parent<C, T> {
+    pub fn with_client<C>(self, client: C) -> Parent<U, C, T> {
         Parent {
             client,
             value: self.value,
+            _type: PhantomData,
         }
     }
 }
 
-impl<C, T> Parent<C, T> {
+impl<U, C, T> Parent<U, C, T> {
     /// Returns a reference of client object.
     pub fn client(&self) -> &C {
         &self.client
@@ -58,7 +71,7 @@ impl<C, T> Parent<C, T> {
 }
 
 #[cfg(feature = "reqwest")]
-impl Parent<umls_http::reqwest::Client, Url> {
+impl Parent<types::Atom, umls_http::reqwest::Client, Url> {
     /// Fetch parents of UMLS atom.
     ///
     /// The method only fullfill the requirements and call specified http client.
@@ -106,7 +119,7 @@ impl Parent<umls_http::reqwest::Client, Url> {
 }
 
 #[cfg(feature = "reqwest")]
-impl Parent<umls_http::reqwest::Client, Aui> {
+impl Parent<types::Atom, umls_http::reqwest::Client, Aui> {
     /// Fetch a first page of parents of specified UMLS [`Aui`].
     pub async fn fetch(
         self,
@@ -127,7 +140,7 @@ impl Parent<umls_http::reqwest::Client, Aui> {
 }
 
 #[cfg(feature = "reqwest")]
-impl Parent<umls_http::reqwest::Client, Batch<Aui>> {
+impl Parent<types::Atom, umls_http::reqwest::Client, Batch<Aui>> {
     /// Fetch multiple pages (one at a time) with given batch.
     pub async fn fetch(
         self,
@@ -158,14 +171,18 @@ impl Parent<umls_http::reqwest::Client, Batch<Aui>> {
 }
 
 #[cfg(feature = "reqwest")]
-impl search::Page<Content<AtomResponse>, Parent<umls_http::reqwest::Client, Batch<Aui>>> {
+impl
+    search::Page<Content<AtomResponse>, Parent<types::Atom, umls_http::reqwest::Client, Batch<Aui>>>
+{
     /// Consumes this page and returns a request for the next page.
     ///
     /// # Errors
     ///
     /// Returns [`BatchError::Overflow`] if the response indicates that no next
     /// page exists or if the page number cannot be incremented.
-    pub fn next(mut self) -> Result<Parent<umls_http::reqwest::Client, Batch<Aui>>, BatchError> {
+    pub fn next(
+        mut self,
+    ) -> Result<Parent<types::Atom, umls_http::reqwest::Client, Batch<Aui>>, BatchError> {
         if !self.has_next() {
             return Err(BatchError::Overflow);
         }
@@ -183,7 +200,7 @@ impl search::Page<Content<AtomResponse>, Parent<umls_http::reqwest::Client, Batc
     /// the page number otherwise cannot be decremented.
     pub fn previous(
         mut self,
-    ) -> Result<Parent<umls_http::reqwest::Client, Batch<Aui>>, BatchError> {
+    ) -> Result<Parent<types::Atom, umls_http::reqwest::Client, Batch<Aui>>, BatchError> {
         if !self.has_previous() {
             return Err(BatchError::NoPreviousPage);
         }
