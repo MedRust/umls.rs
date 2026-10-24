@@ -8,6 +8,12 @@ use crate::core::aui::Aui;
 
 #[cfg(feature = "reqwest")]
 use crate::{
+    atom::{Batch, BatchError},
+    search::{self, Response},
+};
+
+#[cfg(feature = "reqwest")]
+use crate::{
     atom::{AtomResponse, Page},
     config,
     search::Content,
@@ -117,6 +123,74 @@ impl Parent<umls_http::reqwest::Client, Aui> {
             .with_client(self.client)
             .fetch(umls_config)
             .await
+    }
+}
+
+#[cfg(feature = "reqwest")]
+impl Parent<umls_http::reqwest::Client, Batch<Aui>> {
+    /// Fetch multiple pages (one at a time) with given batch.
+    pub async fn fetch(
+        self,
+        umls_config: &config::Config,
+    ) -> Result<Response<Page<Content<AtomResponse>>, Self>, Error<umls_http::reqwest::Error>> {
+        let path = format!(
+            "content/{}/AUI/{}/parents",
+            umls_config.version(),
+            self.value().value()
+        );
+        let url = umls_config.base_url().join(&path).map_err(Error::Url)?;
+        let url = Url::parse_with_params(
+            url.as_str(),
+            &[
+                ("pageSize", self.value().size().get().to_string()),
+                ("pageNumber", self.value().number().get().to_string()),
+            ],
+        )
+        .map_err(Error::Url)?;
+
+        let page = Parent::new(url)
+            .with_client(self.client().clone())
+            .fetch(umls_config)
+            .await?;
+
+        Ok(Response::new(page, self))
+    }
+}
+
+#[cfg(feature = "reqwest")]
+impl search::Page<Content<AtomResponse>, Parent<umls_http::reqwest::Client, Batch<Aui>>> {
+    /// Consumes this page and returns a request for the next page.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`BatchError::Overflow`] if the response indicates that no next
+    /// page exists or if the page number cannot be incremented.
+    pub fn next(mut self) -> Result<Parent<umls_http::reqwest::Client, Batch<Aui>>, BatchError> {
+        if !self.has_next() {
+            return Err(BatchError::Overflow);
+        }
+
+        self.client_mut().value.checked_next()?;
+
+        Ok(self.client)
+    }
+
+    /// Consumes this page and returns a request for the previous page.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`BatchError::NoPreviousPage`] when this is the first page or
+    /// the page number otherwise cannot be decremented.
+    pub fn previous(
+        mut self,
+    ) -> Result<Parent<umls_http::reqwest::Client, Batch<Aui>>, BatchError> {
+        if !self.has_previous() {
+            return Err(BatchError::NoPreviousPage);
+        }
+
+        self.client_mut().value.checked_previous()?;
+
+        Ok(self.client)
     }
 }
 
