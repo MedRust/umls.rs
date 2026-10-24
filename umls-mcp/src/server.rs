@@ -12,6 +12,7 @@ use umls_client::{
     concept::Info,
     config::Config,
     core::{aui::Aui, cui::Cui},
+    parent::Parent,
     relation,
     search::{self, core::DisplayName},
 };
@@ -65,6 +66,14 @@ struct ConceptRelationArgs {
     page_size: Option<u64>,
 }
 
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct AtomParentsArgs {
+    aui: String,
+    page_number: Option<u64>,
+    page_size: Option<u64>,
+}
+
 #[derive(Clone)]
 pub(crate) struct UmlsServer {
     config: Arc<Config>,
@@ -87,7 +96,7 @@ fn failure(message: &str) -> CallToolResult {
     CallToolResult::error(vec![ContentBlock::text(message)])
 }
 
-fn success<T: Serialize>(value: &T) -> CallToolResult {
+fn success<T: Serialize + ?Sized>(value: &T) -> CallToolResult {
     let Ok(value) = serde_json::to_string(value) else {
         return failure("Failed to serialize the response");
     };
@@ -340,6 +349,48 @@ impl UmlsServer {
         let page = response.into_page();
 
         success(&page.content().list())
+    }
+
+    #[tool(
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = true
+        ),
+        description = "Get known UMLS atom immediate parents. The tool requires UMLS AUI, optional \
+            page size and number. If page size and number are not provided it's set to default which \
+            is 25 page size and 1 page number. In return get the list of atom response with each atom's \
+            suppressibility, obsolete, root source, term type language, name."
+    )]
+    async fn get_atom_parents(
+        &self,
+        Parameters(args): Parameters<AtomParentsArgs>,
+    ) -> CallToolResult {
+        let Ok(display_name) = args.aui.parse() else {
+            return failure("Parse empty string");
+        };
+
+        let Ok(aui) = Aui::new(display_name) else {
+            return failure("Invalid format UMLS atom unique identifier");
+        };
+
+        let (number, size) = match pagination(args.page_number, args.page_size) {
+            Ok(value) => value,
+            Err(message) => return failure(message),
+        };
+
+        let batch = Batch::new(size, number, aui);
+
+        let Ok(response) = Parent::new(batch)
+            .with_client(self.client.clone())
+            .fetch(&self.config)
+            .await
+        else {
+            return failure("Failed to return response");
+        };
+
+        success(response.into_content().list())
     }
 }
 
@@ -649,6 +700,39 @@ mod tests {
         let text = result.content[0].as_text().unwrap().text.clone();
         println!("{}", text.as_str());
         _ = serde_json::from_str::<Vec<RelationDto>>(&text).unwrap();
+
+        mock.assert_async().await;
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn return_atom_parents() -> Result<(), Box<dyn std::error::Error>> {
+        let mock_server = MockServer::start_async().await;
+        let mock = mock_server
+            .mock_async(|when, then| {
+                when.method(GET)
+                    .path("/content/current/AUI/A10134087/parents")
+                    .query_param_exists("apiKey");
+
+                then.status(200).json_body(json!({"pageSize":25,"pageNumber":1,"result":[{"classType":"Atom","ui":"A19720766","sourceDescriptor":"NONE","sourceConcept":"https://uts-ws.nlm.nih.gov/rest/content/2026AA/source/HL7V3.0/2.16.840.1.113883.5.112","concept":"https://uts-ws.nlm.nih.gov/rest/content/2026AA/CUI/C0013153","suppressible":"false","obsolete":"false","rootSource":"HL7V3.0","termType":"CSY","code":"https://uts-ws.nlm.nih.gov/rest/content/2026AA/source/HL7V3.0-V-HL7V3.0/RouteOfAdministration","language":"ENG","name":"RouteOfAdministration","ancestors":"https://uts-ws.nlm.nih.gov/rest/content/2026AA/AUI/A19720766/ancestors","descendants":"https://uts-ws.nlm.nih.gov/rest/content/2026AA/AUI/A19720766/descendants","attributes":"https://uts-ws.nlm.nih.gov/rest/content/2026AA/AUI/A19720766/attributes","relations":"https://uts-ws.nlm.nih.gov/rest/content/2026AA/AUI/A19720766/relations","children":"https://uts-ws.nlm.nih.gov/rest/content/2026AA/AUI/A19720766/children","parents":"https://uts-ws.nlm.nih.gov/rest/content/2026AA/AUI/A19720766/parents"}],"pageCount":1}));
+            })
+            .await;
+
+        let base_url = mock_server.base_url();
+
+        let result = server(&base_url)
+            .get_atom_parents(Parameters(AtomParentsArgs {
+                aui: "A10134087".to_string(),
+                page_number: Some(1),
+                page_size: Some(25),
+            }))
+            .await;
+
+        assert!(!result.is_error.unwrap_or(false));
+        let text = result.content[0].as_text().unwrap().text.clone();
+        println!("{}", text.as_str());
+        _ = serde_json::from_str::<Vec<AtomResponse>>(&text).unwrap();
 
         mock.assert_async().await;
 
