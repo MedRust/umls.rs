@@ -1,3 +1,15 @@
+#[cfg(feature = "reqwest")]
+use secrecy::ExposeSecret;
+#[cfg(feature = "reqwest")]
+use url::Url;
+
+#[cfg(feature = "reqwest")]
+use crate::{
+    atom::{AtomResponse, Page},
+    config,
+    search::Content,
+};
+
 /// UMLS parent client.
 pub struct Parent<C, T> {
     client: C,
@@ -34,4 +46,73 @@ impl<C, T> Parent<C, T> {
     pub fn value(&self) -> &T {
         &self.value
     }
+}
+
+#[cfg(feature = "reqwest")]
+impl Parent<umls_http::reqwest::Client, Url> {
+    /// Fetch parents of UMLS atom.
+    ///
+    /// The method only fullfill the requirements and call specified http client.
+    /// The function will raise [`Error::Validation`] if sepcified URL validation failed against the
+    /// base URL of specified UMLS configuration.
+    pub async fn fetch(
+        self,
+        umls_config: &config::Config,
+    ) -> Result<Page<Content<AtomResponse>>, Error<umls_http::reqwest::Error>> {
+        if self.value().scheme() != umls_config.base_url().scheme()
+            || self.value().host_str() != umls_config.base_url().host_str()
+            || self.value().port_or_known_default()
+                != umls_config.base_url().port_or_known_default()
+            || !self.value().username().is_empty()
+            || self.value().password().is_some()
+            || !(self.value().path() == umls_config.base_url().path().trim_end_matches('/')
+                || self.value().path().starts_with(&format!(
+                    "{}/",
+                    umls_config.base_url().path().trim_end_matches('/')
+                )))
+        {
+            return Err(Error::Validation(self.value().clone()));
+        }
+
+        let url = Url::parse_with_params(
+            self.value().as_str(),
+            &[("apiKey", umls_config.api_key().expose_secret().to_owned())],
+        )
+        .map_err(Error::Url)?;
+
+        let request = http::Request::builder()
+            .method("GET")
+            .uri(url.as_str())
+            .body(())
+            .map_err(Error::Http)?;
+
+        let response: http::Response<Page<Content<AtomResponse>>> = self
+            .client()
+            .execute(request)
+            .await
+            .map_err(Error::Client)?;
+
+        Ok(response.into_body())
+    }
+}
+
+#[cfg(feature = "reqwest")]
+/// An error object to fetch data.
+#[derive(Debug, thiserror::Error)]
+pub enum Error<T> {
+    /// A Client error.
+    #[error("Client Error: {0}")]
+    Client(T),
+
+    /// Url Error.
+    #[error("Url Error: {0}")]
+    Url(url::ParseError),
+
+    /// Http error.
+    #[error("Http Error: {0}")]
+    Http(http::Error),
+
+    /// Represents URL validation error.
+    #[error("URL Validation Error")]
+    Validation(Url),
 }
