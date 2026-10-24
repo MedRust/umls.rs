@@ -260,3 +260,4 @@ cargo fmt --all -- --check
 - [ ] **Secret Safety**: API keys wrapped in `SecretString` and never leaked in logs.
 - [ ] **Serde Symmetry**: Fields with custom serialization round-trip correctly.
 - [ ] **Errors Handled**: No `.unwrap()` or `.expect()` in non-test library code.
+- [ ] **Code Coverage**: Use unit and integration tests to find the what portion of the code is not tested and notify it.
