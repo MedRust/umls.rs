@@ -52,12 +52,28 @@ impl<C, T> Parent<C, T> {
 impl Parent<umls_http::reqwest::Client, Url> {
     /// Fetch parents of UMLS atom.
     ///
-    /// The method doesn't validate the URL at runtime. The method only fullfill the requirements
-    /// and call specified http client.
+    /// The method only fullfill the requirements and call specified http client.
+    /// The function will raise [`Error::Validation`] if sepcified URL validation failed against the
+    /// base URL of specified UMLS configuration.
     pub async fn fetch(
         self,
         umls_config: &config::Config,
     ) -> Result<Page<Content<AtomResponse>>, Error<umls_http::reqwest::Error>> {
+        if self.value().scheme() != umls_config.base_url().scheme()
+            || self.value().host_str() != umls_config.base_url().host_str()
+            || self.value().port_or_known_default()
+                != umls_config.base_url().port_or_known_default()
+            || !self.value().username().is_empty()
+            || self.value().password().is_some()
+            || !(self.value().path() == umls_config.base_url().path().trim_end_matches('/')
+                || self.value().path().starts_with(&format!(
+                    "{}/",
+                    umls_config.base_url().path().trim_end_matches('/')
+                )))
+        {
+            return Err(Error::Validation(self.value().clone()));
+        }
+
         let url = Url::parse_with_params(
             self.value().as_str(),
             &[("apiKey", umls_config.api_key().expose_secret().to_owned())],
@@ -95,4 +111,8 @@ pub enum Error<T> {
     /// Http error.
     #[error("Http Error: {0}")]
     Http(http::Error),
+
+    /// Represents URL validation error.
+    #[error("URL Validation Error")]
+    Validation(Url),
 }

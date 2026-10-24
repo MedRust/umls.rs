@@ -2,7 +2,10 @@
 #![cfg(feature = "reqwest")]
 
 use httpmock::{Method::GET, MockServer};
-use umls_client::{config, parent::Parent};
+use umls_client::{
+    config,
+    parent::{Error, Parent},
+};
 use url::Url;
 
 #[tokio::test]
@@ -49,6 +52,36 @@ async fn fetch_atom_parents() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(response.name.as_str(), "RouteOfAdministration");
 
     mock.assert_async().await;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn validation_url_object() -> Result<(), Box<dyn std::error::Error>> {
+    let client = umls_http::reqwest::Client::default();
+
+    let base_url: Url = "https://uts-ws.nlm.nih.gov/rest/".parse()?;
+    let umls_config = config::Config::builder("some_api_key")
+        .base_url(base_url)
+        .build()?;
+
+    let urls: Vec<Url> = vec![
+        "http://localhost:8080/rest/content/current/AUI/A10134087/parents".parse()?,
+        "https://localhost:8080/rest/content/current/AUI/A10134087/parents".parse()?,
+        "https://uts-ws.nlm.nih.gov:8080/rest/content/current/AUI/A10134087/parents".parse()?,
+    ];
+
+    for url in urls {
+        let result = Parent::new(url)
+            .with_client(client.clone())
+            .fetch(&umls_config)
+            .await;
+
+        assert!(matches!(
+            result,
+            Err(Error::<umls_http::reqwest::Error>::Validation(_))
+        ));
+    }
 
     Ok(())
 }
