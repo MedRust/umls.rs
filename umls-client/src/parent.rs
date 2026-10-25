@@ -132,7 +132,7 @@ impl Parent<types::Atom, umls_http::reqwest::Client, Aui> {
         );
         let url = umls_config.base_url().join(&path).map_err(Error::Url)?;
 
-        Parent::new(url)
+        Parent::<types::Atom, _, _>::new(url)
             .with_client(self.client)
             .fetch(umls_config)
             .await
@@ -161,7 +161,7 @@ impl Parent<types::Atom, umls_http::reqwest::Client, Batch<Aui>> {
         )
         .map_err(Error::Url)?;
 
-        let page = Parent::new(url)
+        let page = Parent::<types::Atom, _, _>::new(url)
             .with_client(self.client().clone())
             .fetch(umls_config)
             .await?;

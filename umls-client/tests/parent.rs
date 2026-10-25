@@ -2,7 +2,7 @@
 #![cfg(feature = "reqwest")]
 
 use httpmock::{Method::GET, MockServer};
-use umls_client::parent::Error;
+use umls_client::parent::{self, Error};
 use umls_client::{config, core::aui::Aui, parent::Parent, search::core::DisplayName};
 use url::Url;
 
@@ -31,7 +31,7 @@ async fn fetch_atom_parents_using_url() -> Result<(), Box<dyn std::error::Error>
         .version(config::Version::Current)
         .build()?;
 
-    let pages = Parent::new(url)
+    let pages = Parent::<parent::types::Atom, _, _>::new(url)
         .with_client(client)
         .fetch(&umls_config)
         .await?;
@@ -70,7 +70,7 @@ async fn validation_url_object() -> Result<(), Box<dyn std::error::Error>> {
     ];
 
     for url in urls {
-        let result = Parent::new(url)
+        let result = Parent::<parent::types::Atom, _, _>::new(url)
             .with_client(client.clone())
             .fetch(&umls_config)
             .await;
