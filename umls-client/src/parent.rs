@@ -515,6 +515,96 @@ impl Parent<types::Source, umls_http::reqwest::Client, SourceConcept> {
     }
 }
 
+#[cfg(feature = "reqwest")]
+impl Parent<types::Source, umls_http::reqwest::Client, Batch<SourceConcept>> {
+    /// Fetches one page of source-asserted parent concepts using a batch pagination configuration.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error`] if:
+    /// - [`Error::Validation`]: The target URL scheme, host, port or path prefix does not match
+    ///   [`umls_config.base_url()`](crate::config::Config::base_url).
+    /// - [`Error::Url`]: The URL with credentials and query parameters could not be constructed.
+    /// - [`Error::Http`]: The HTTP request could not be constructed.
+    /// - [`Error::Client`]: The transport failed or the server returned an error status.
+    /// - [`Error::Domain`]: One or more response fields failed validation when converting into a
+    ///   [`SourceAtomCluster`].
+    pub async fn fetch(
+        self,
+        umls_config: &config::Config,
+    ) -> Result<Response<Page<Content<SourceAtomCluster>>, Self>, Error<umls_http::reqwest::Error>>
+    {
+        let path = format!(
+            "content/{}/source/{}/{}/parents",
+            umls_config.version(),
+            self.value().value().source(),
+            self.value().value().code()
+        );
+        let url = umls_config.base_url().join(&path).map_err(Error::Url)?;
+        let url = Url::parse_with_params(
+            url.as_str(),
+            &[
+                ("pageSize", self.value().size().get().to_string()),
+                ("pageNumber", self.value().number().get().to_string()),
+            ],
+        )
+        .map_err(Error::Url)?;
+
+        let page = Parent::<types::Source, _, _>::new(url)
+            .with_client(self.client().clone())
+            .fetch(umls_config)
+            .await?;
+
+        Ok(Response::new(page, self))
+    }
+}
+
+#[cfg(feature = "reqwest")]
+impl
+    search::Page<
+        Content<SourceAtomCluster>,
+        Parent<types::Source, umls_http::reqwest::Client, Batch<SourceConcept>>,
+    >
+{
+    /// Consumes this page and returns a request for the next page.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`BatchError::Overflow`] if the response indicates that no next page exists or if
+    /// the page number cannot be incremented.
+    pub fn next(
+        mut self,
+    ) -> Result<Parent<types::Source, umls_http::reqwest::Client, Batch<SourceConcept>>, BatchError>
+    {
+        if !self.has_next() {
+            return Err(BatchError::Overflow);
+        }
+
+        self.client_mut().value.checked_next()?;
+
+        Ok(self.client)
+    }
+
+    /// Consumes this page and returns a request for the previous page.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`BatchError::NoPreviousPage`] when this is the first page or
+    /// the page number otherwise cannot be decremented.
+    pub fn previous(
+        mut self,
+    ) -> Result<Parent<types::Source, umls_http::reqwest::Client, Batch<SourceConcept>>, BatchError>
+    {
+        if !self.has_previous() {
+            return Err(BatchError::NoPreviousPage);
+        }
+
+        self.client_mut().value.checked_previous()?;
+
+        Ok(self.client)
+    }
+}
+
 #[cfg(test)]
 #[cfg(feature = "reqwest")]
 mod tests {
