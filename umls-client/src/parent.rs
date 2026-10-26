@@ -222,6 +222,7 @@ impl
     }
 }
 
+#[non_exhaustive]
 #[cfg(feature = "reqwest")]
 /// An error object to fetch data.
 #[derive(Debug, thiserror::Error)]
