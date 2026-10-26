@@ -245,6 +245,10 @@ pub enum Error<T> {
     /// Failed to create a domain object.
     #[error("Invalid Domain object error.")]
     Domain,
+
+    /// Represents invalid base URL.
+    #[error("Invalid base URL")]
+    InvalidBaseUrl,
 }
 
 #[cfg(feature = "reqwest")]
@@ -489,13 +493,19 @@ impl Parent<types::Source, umls_http::reqwest::Client, SourceConcept> {
         self,
         umls_config: &config::Config,
     ) -> Result<Page<Content<SourceAtomCluster>>, Error<umls_http::reqwest::Error>> {
-        let path = format!(
-            "content/{}/source/{}/{}/parents",
-            umls_config.version(),
-            self.value().source(),
-            self.value().code()
-        );
-        let url = umls_config.base_url().join(&path).map_err(Error::Url)?;
+        let version = umls_config.version().to_string();
+
+        let mut url = umls_config.base_url().clone();
+        url.path_segments_mut()
+            .map_err(|_| Error::InvalidBaseUrl)?
+            .extend(&[
+                "content",
+                &version,
+                "source",
+                self.value().source().as_ref(),
+                self.value().code().as_ref(),
+                "parents",
+            ]);
 
         Parent::<types::Source, _, _>::new(url)
             .with_client(self.client)
