@@ -5,14 +5,14 @@ use rmcp::{
     schemars, tool, tool_handler, tool_router,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::json;
+use serde_json::{Value, json};
 use std::{num::NonZeroU64, sync::Arc};
 use umls_client::{
     atom::{self, Batch},
     concept::Info,
     config::Config,
     core::{aui::Aui, cui::Cui},
-    parent::Parent,
+    parent::{Parent, SourceConcept},
     relation,
     search::{self, core::DisplayName},
 };
@@ -70,6 +70,15 @@ struct ConceptRelationArgs {
 #[serde(deny_unknown_fields)]
 pub struct AtomParentsArgs {
     aui: String,
+    page_number: Option<u64>,
+    page_size: Option<u64>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SourceAssertedParentArgs {
+    source_vocabulary: String,
+    code: String,
     page_number: Option<u64>,
     page_size: Option<u64>,
 }
@@ -391,6 +400,66 @@ impl UmlsServer {
         };
 
         success(response.into_content().list())
+    }
+
+    #[tool(
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = true
+        ),
+        description = "Get parents of source asserted concept or atoms. To get the requires source \
+            vocabulary with respective code. and optional batch parameters page size and page number. \
+            In response the tool return a list of parenents with ui, name, root source vocabulary, \
+            atom count, content view members count, obsolete and suppressible."
+    )]
+    async fn get_source_asserted_concept_parents(
+        &self,
+        Parameters(args): Parameters<SourceAssertedParentArgs>,
+    ) -> CallToolResult {
+        let Ok(source) = args.source_vocabulary.parse() else {
+            return failure("Empty source vocabulary");
+        };
+
+        let Ok(code) = args.code.parse() else {
+            return failure("Empty code");
+        };
+
+        let (number, size) = match pagination(args.page_number, args.page_size) {
+            Ok(value) => value,
+            Err(message) => return failure(message),
+        };
+
+        let source_concept = SourceConcept::new(source, code);
+        let batch = Batch::new(size, number, source_concept);
+
+        let Ok(response) = Parent::new(batch)
+            .with_client(self.client.clone())
+            .fetch(&self.config)
+            .await
+        else {
+            return failure("Failed to fetch source-asserted parents for identifier");
+        };
+
+        let value = response
+            .into_content()
+            .list()
+            .iter()
+            .map(|x| {
+                json!({
+                    "ui": x.ui(),
+                    "suppressible": x.suppressible(),
+                    "obsolete": x.obsolete(),
+                    "rootSource": x.root_source(),
+                    "atomCount": x.atom_count(),
+                    "cVMemberCount": x.cv_member_count(),
+                    "name": x.name()
+                })
+            })
+            .collect::<Vec<Value>>();
+
+        success(&value)
     }
 }
 
@@ -736,6 +805,50 @@ mod tests {
 
         mock.assert_async().await;
 
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn return_source_asserted_atom_concepts() -> Result<(), Box<dyn std::error::Error>> {
+        let mock_server = MockServer::start_async().await;
+        let mock = mock_server
+            .mock_async(|when, then| {
+                when.method(GET)
+                    .path("/content/current/source/SNOMEDCT_US/9468002/parents")
+                    .query_param_exists("apiKey")
+                    .query_param("pageSize", "1")
+                    .query_param("pageNumber", "1");
+
+                then.status(200)
+                    .header("CONTENT-TYPE", "application/json")
+                    .json_body(json!({"pageSize":1,"pageNumber":1,"result":[{"classType":"SourceAtomCluster","ui":"82065001","suppressible":false,"obsolete":false,"rootSource":"SNOMEDCT_US","atomCount":7,"cVMemberCount":0,"attributes":"https://uts-ws.nlm.nih.gov/rest/content/2026AA/source/SNOMEDCT_US/82065001/attributes","atoms":"https://uts-ws.nlm.nih.gov/rest/content/2026AA/source/SNOMEDCT_US/82065001/atoms","ancestors":"https://uts-ws.nlm.nih.gov/rest/content/2026AA/source/SNOMEDCT_US/82065001/ancestors","parents":"https://uts-ws.nlm.nih.gov/rest/content/2026AA/source/SNOMEDCT_US/82065001/parents","children":"https://uts-ws.nlm.nih.gov/rest/content/2026AA/source/SNOMEDCT_US/82065001/children","descendants":"https://uts-ws.nlm.nih.gov/rest/content/2026AA/source/SNOMEDCT_US/82065001/descendants","relations":"https://uts-ws.nlm.nih.gov/rest/content/2026AA/source/SNOMEDCT_US/82065001/relations","definitions":"NONE","concepts":"https://uts-ws.nlm.nih.gov/rest/search/2026AA?string=82065001&sabs=SNOMEDCT_US&searchType=exact&inputType=sourceUi","defaultPreferredAtom":"https://uts-ws.nlm.nih.gov/rest/content/2026AA/source/SNOMEDCT_US/82065001/atoms/preferred","name":"Fracture of carpal bone"}],"pageCount":2}));
+            })
+            .await;
+
+        let result = server(&mock_server.base_url())
+            .get_source_asserted_concept_parents(Parameters(SourceAssertedParentArgs {
+                source_vocabulary: "SNOMEDCT_US".into(),
+                code: "9468002".into(),
+                page_number: Some(1),
+                page_size: Some(1),
+            }))
+            .await;
+
+        let body = body(result);
+
+        assert!(body.is_array());
+        let array = body.as_array().unwrap();
+        let first = array.first().unwrap();
+        assert!(first.is_object());
+        assert_eq!(first["ui"], "82065001");
+        assert_eq!(first["name"], "Fracture of carpal bone");
+        assert!(!first["suppressible"].as_bool().unwrap());
+        assert!(!first["obsolete"].as_bool().unwrap());
+        assert_eq!(first["rootSource"], "SNOMEDCT_US");
+        assert_eq!(first["atomCount"].as_u64().unwrap(), 7);
+        assert_eq!(first["cVMemberCount"].as_u64().unwrap(), 0);
+
+        mock.assert_async().await;
         Ok(())
     }
 }

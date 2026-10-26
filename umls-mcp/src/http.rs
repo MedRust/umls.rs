@@ -76,7 +76,7 @@ mod tests {
             let transport = StreamableHttpClientTransport::from_uri(url);
             let client = ().serve(transport).await.unwrap();
             let tools = client.list_all_tools().await.unwrap();
-            assert_eq!(tools.len(), 6);
+            assert_eq!(tools.len(), 7);
             let response = client
                 .call_tool(
                     CallToolRequestParams::new("get_concept")
