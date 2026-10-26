@@ -222,6 +222,7 @@ impl
     }
 }
 
+#[non_exhaustive]
 #[cfg(feature = "reqwest")]
 /// An error object to fetch data.
 #[derive(Debug, thiserror::Error)]
@@ -245,6 +246,10 @@ pub enum Error<T> {
     /// Failed to create a domain object.
     #[error("Invalid Domain object error.")]
     Domain,
+
+    /// Represents invalid base URL.
+    #[error("Invalid base URL")]
+    InvalidBaseUrl,
 }
 
 #[cfg(feature = "reqwest")]
@@ -420,6 +425,93 @@ impl TryFrom<SerializableSourceAtomCluster> for SourceAtomCluster {
             atom_count: wire.atom_count,
             cv_member_count: wire.cv_member_count,
         })
+    }
+}
+
+/// A source-asserted concept identified by its source vocabulary and code.
+#[cfg(feature = "reqwest")]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SourceConcept {
+    source: DisplayName,
+    code: DisplayName,
+}
+
+#[cfg(feature = "reqwest")]
+impl SourceConcept {
+    /// Creates a new [`SourceConcept`] with the given source vocabulary and code.
+    pub fn new(source: DisplayName, code: DisplayName) -> Self {
+        Self { source, code }
+    }
+
+    /// Returns the root source vocabulary abbreviation (e.g. SNOMEDCT_US).
+    pub fn source(&self) -> &DisplayName {
+        &self.source
+    }
+
+    /// Returns the unique code/identifier of associated source vocabulary.
+    pub fn code(&self) -> &DisplayName {
+        &self.code
+    }
+}
+
+#[cfg(feature = "reqwest")]
+impl Parent<types::Source, umls_http::reqwest::Client, SourceConcept> {
+    /// Fetches one page of source-asserted parent concepts using [`SourceConcept`].
+    ///
+    /// # Errors
+    /// Returns [`Error`] if:
+    /// - [`Error::Validation`]: The target URL scheme, host, port or path prefix does not match
+    ///   [`umls_config.base_url()`](crate::config::Config::base_url).
+    /// - [`Error::Url`]: The URL with credentials and query parameters could not be constructed.
+    /// - [`Error::Http`]: The HTTP request could not be constructed.
+    /// - [`Error::Client`]: The transport failed or the server returned an error status.
+    /// - [`Error::Domain`]: One or more response fields failed validation when converting into a
+    ///   [`SourceAtomCluster`].
+    ///
+    /// # Example
+    /// ```no_run
+    /// # #[cfg(feature = "reqwest")]
+    /// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
+    /// use umls_client::{config::Config, parent::{Parent, types::Source, SourceConcept}};
+    /// use umls_http::reqwest::Client;
+    /// use url::Url;
+    ///
+    /// let config = Config::builder("your-api-key").build()?;
+    /// let source_concept = SourceConcept::new("SNOMEDCT_US".try_into()?, "82065001".try_into()?);
+    ///
+    /// let page = Parent::<Source, _, _>::new(source_concept)
+    ///     .with_client(Client::default())
+    ///     .fetch(&config)
+    ///     .await?;
+    ///
+    /// for parent in page.content().list() {
+    ///     println!("{}: {}", parent.ui(), parent.name());
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn fetch(
+        self,
+        umls_config: &config::Config,
+    ) -> Result<Page<Content<SourceAtomCluster>>, Error<umls_http::reqwest::Error>> {
+        let version = umls_config.version().to_string();
+
+        let mut url = umls_config.base_url().clone();
+        url.path_segments_mut()
+            .map_err(|_| Error::InvalidBaseUrl)?
+            .extend(&[
+                "content",
+                &version,
+                "source",
+                self.value().source().as_ref(),
+                self.value().code().as_ref(),
+                "parents",
+            ]);
+
+        Parent::<types::Source, _, _>::new(url)
+            .with_client(self.client)
+            .fetch(umls_config)
+            .await
     }
 }
 

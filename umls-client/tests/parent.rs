@@ -2,7 +2,7 @@
 #![cfg(feature = "reqwest")]
 
 use httpmock::{Method::GET, MockServer};
-use umls_client::parent::{self, Error};
+use umls_client::parent::{self, Error, SourceConcept};
 use umls_client::{config, core::aui::Aui, parent::Parent, search::core::DisplayName};
 use url::Url;
 
@@ -204,5 +204,51 @@ async fn source_asserted_parents_validation_failed() -> Result<(), Box<dyn std::
             Err(Error::<umls_http::reqwest::Error>::Validation(_))
         ));
     }
+    Ok(())
+}
+
+#[tokio::test]
+async fn fetch_source_asserted_concepts_using_source_atom_cluster()
+-> Result<(), Box<dyn std::error::Error>> {
+    let mock_server = MockServer::start_async().await;
+    let mock = mock_server
+        .mock_async(|when, then| {
+            when.method(GET)
+                .path("/content/current/source/SNOMEDCT_US/9468002/parents")
+                .query_param_exists("apiKey");
+            let json_string = include_str!("fixtures/source_asserted_parents.json");
+            let json: serde_json::Value = serde_json::from_str(json_string).unwrap();
+            then.status(200).json_body(json);
+        })
+        .await;
+
+    let base_url: Url = mock_server.base_url().parse()?;
+
+    let umls_config = config::Config::builder("some_api_key")
+        .base_url(base_url)
+        .build()?;
+
+    let source_atom_cluster = SourceConcept::new("SNOMEDCT_US".try_into()?, "9468002".try_into()?);
+
+    let page = Parent::new(source_atom_cluster)
+        .with_client(Default::default())
+        .fetch(&umls_config)
+        .await?;
+
+    assert_eq!(page.size().get(), 1);
+    assert_eq!(page.number().get(), 1);
+    assert_eq!(page.count().get(), 2);
+    assert!(!page.content().list().is_empty());
+    assert_eq!(page.content().list().len(), 1);
+
+    let object = page.content().list().first().unwrap();
+    assert_eq!(object.ui().as_str(), "82065001");
+    assert!(!object.suppressible());
+    assert!(!object.obsolete());
+    assert_eq!(object.root_source().as_str(), "SNOMEDCT_US");
+    assert_eq!(object.atom_count(), 7);
+    assert_eq!(object.cv_member_count(), 0);
+
+    mock.assert_async().await;
     Ok(())
 }
