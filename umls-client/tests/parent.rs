@@ -131,3 +131,78 @@ async fn fetch_atom_parents_using_aui() -> Result<(), Box<dyn std::error::Error>
 
     Ok(())
 }
+
+#[tokio::test]
+async fn fetch_source_asserted_parents_using_url() -> Result<(), Box<dyn std::error::Error>> {
+    let mock_server = MockServer::start_async().await;
+    let mock = mock_server
+        .mock_async(|when, then| {
+            when.method(GET)
+                .path("/content/current/source/SNOMEDCT_US/9468002/parents")
+                .query_param_exists("apiKey");
+            let json_string = include_str!("fixtures/source_asserted_parents.json");
+            let json: serde_json::Value = serde_json::from_str(json_string).unwrap();
+            then.status(200).json_body(json);
+        })
+        .await;
+
+    let base_url: Url = mock_server.base_url().parse()?;
+
+    let url = base_url.join("content/current/source/SNOMEDCT_US/9468002/parents")?;
+
+    let umls_config = config::Config::builder("some_api_key")
+        .base_url(base_url)
+        .build()?;
+
+    let page = Parent::<parent::types::Source, _, _>::new(url)
+        .with_client(Default::default())
+        .fetch(&umls_config)
+        .await?;
+
+    assert_eq!(page.size().get(), 1);
+    assert_eq!(page.number().get(), 1);
+    assert_eq!(page.count().get(), 2);
+    assert!(!page.content().list().is_empty());
+    assert_eq!(page.content().list().len(), 1);
+
+    let object = page.content().list().first().unwrap();
+    assert_eq!(object.ui().as_str(), "82065001");
+    assert!(!object.suppressible());
+    assert!(!object.obsolete());
+    assert_eq!(object.root_source().as_str(), "SNOMEDCT_US");
+    assert_eq!(object.atom_count(), 7);
+    assert_eq!(object.cv_member_count(), 0);
+
+    mock.assert_async().await;
+    Ok(())
+}
+
+#[tokio::test]
+async fn source_asserted_parents_validation_failed() -> Result<(), Box<dyn std::error::Error>> {
+    let client = umls_http::reqwest::Client::default();
+
+    let base_url: Url = "https://uts-ws.nlm.nih.gov/rest/".parse()?;
+    let umls_config = config::Config::builder("some_api_key")
+        .base_url(base_url)
+        .build()?;
+
+    let urls: Vec<Url> = vec![
+        "http://localhost:8080/rest/content/current/source/SNOMEDCT_US/9468002/parents".parse()?,
+        "https://localhost:8080/rest/content/current/source/SNOMEDCT_US/9468002/parents".parse()?,
+        "https://uts-ws.nlm.nih.gov:8080/rest/content/current/source/SNOMEDCT_US/9468002/parents"
+            .parse()?,
+    ];
+
+    for url in urls {
+        let result = Parent::<parent::types::Atom, _, _>::new(url)
+            .with_client(client.clone())
+            .fetch(&umls_config)
+            .await;
+
+        assert!(matches!(
+            result,
+            Err(Error::<umls_http::reqwest::Error>::Validation(_))
+        ));
+    }
+    Ok(())
+}

@@ -422,3 +422,81 @@ impl TryFrom<SerializableSourceAtomCluster> for SourceAtomCluster {
         })
     }
 }
+
+#[cfg(test)]
+#[cfg(feature = "reqwest")]
+mod tests {
+
+    use super::*;
+
+    #[test]
+    fn success_on_serializable_source_atom_cluster_to_source_atom_cluster() {
+        let object = SerializableSourceAtomCluster {
+            ui: "82065001".into(),
+            suppressible: false,
+            obsolete: false,
+            root_source: "SNOMEDCT_US".into(),
+            atom_count: 7,
+            cv_member_count: 0,
+            name: "Fracture of carpal bone".into(),
+        };
+
+        let result: Result<SourceAtomCluster, EmptyString> = object.try_into();
+        assert!(result.is_ok());
+
+        let object = result.unwrap();
+        assert_eq!(object.ui().as_str(), "82065001");
+        assert_eq!(object.name().as_str(), "Fracture of carpal bone");
+        assert!(!object.suppressible());
+        assert!(!object.obsolete());
+        assert_eq!(object.root_source().as_str(), "SNOMEDCT_US");
+    }
+
+    #[test]
+    fn failed_on_empty_ui() {
+        let object = SerializableSourceAtomCluster {
+            ui: "".into(),
+            suppressible: false,
+            obsolete: false,
+            root_source: "SNOMEDCT_US".into(),
+            atom_count: 7,
+            cv_member_count: 0,
+            name: "Fracture of carpal bone".into(),
+        };
+
+        let result: Result<SourceAtomCluster, EmptyString> = object.try_into();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn failed_on_empty_name() {
+        let object = SerializableSourceAtomCluster {
+            ui: "82065001".into(),
+            suppressible: false,
+            obsolete: false,
+            root_source: "SNOMEDCT_US".into(),
+            atom_count: 7,
+            cv_member_count: 0,
+            name: "".into(),
+        };
+
+        let result: Result<SourceAtomCluster, EmptyString> = object.try_into();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn failed_on_empty_root_source() {
+        let object = SerializableSourceAtomCluster {
+            ui: "82065001".into(),
+            suppressible: false,
+            obsolete: false,
+            root_source: "".into(),
+            atom_count: 7,
+            cv_member_count: 0,
+            name: "Fracture of carpal bone".into(),
+        };
+
+        let result: Result<SourceAtomCluster, EmptyString> = object.try_into();
+        assert!(result.is_err());
+    }
+}
