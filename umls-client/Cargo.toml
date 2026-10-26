@@ -56,3 +56,8 @@ required-features = ["reqwest"]
 [[example]]
 name = "get_atom_info"
 required-features = ["reqwest"]
+
+
+[[example]]
+name = "get_source_parent_concepts"
+required-features = ["reqwest"]
