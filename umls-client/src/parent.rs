@@ -2,12 +2,18 @@ use std::marker::PhantomData;
 
 #[cfg(feature = "reqwest")]
 use secrecy::ExposeSecret;
+
+#[cfg(feature = "reqwest")]
+use serde::{Deserialize, Serialize};
+
 #[cfg(feature = "reqwest")]
 use url::Url;
 
 #[cfg(feature = "reqwest")]
 use crate::core::aui::Aui;
 
+#[cfg(feature = "reqwest")]
+use crate::search::core::{DisplayName, EmptyString};
 #[cfg(feature = "reqwest")]
 use crate::{
     atom::{Batch, BatchError},
@@ -27,6 +33,11 @@ pub mod types {
     ///
     /// It used as state for [`super::Parent`] to fetch immediate parents of UMLS atom.
     pub struct Atom;
+
+    /// Represents the source parent types.
+    ///
+    /// It used as state for [`super::Parent`] to fetch source-asserted parents.
+    pub struct Source;
 }
 
 /// UMLS parent client.
@@ -230,4 +241,262 @@ pub enum Error<T> {
     /// Represents URL validation error.
     #[error("URL Validation Error")]
     Validation(Url),
+
+    /// Failed to create a domain object.
+    #[error("Invalid Domain object error.")]
+    Domain,
+}
+
+#[cfg(feature = "reqwest")]
+impl Parent<types::Source, umls_http::reqwest::Client, Url> {
+    /// Fetches one page of source-asserted parent concepts using the wrapped endpoint URL.
+    ///
+    /// The URL is validated at runtime against the base URL in `umls_config` to ensure requests
+    /// are only dispatched to the authorized UMLS host and path prefix.
+    ///
+    /// # Errors
+    /// Returns [`Error`] if:
+    /// - [`Error::Validation`]: The target URL scheme, host, port or path prefix does not match
+    ///   [`umls_config.base_url()`](crate::config::Config::base_url).
+    /// - [`Error::Url`]: The URL with credential and query parameters could not be constructed.
+    /// - [`Error::Http`]: The HTTP request could not be constructed.
+    /// - [`Error::Client`]: The transport failed or the server returns the error status.
+    /// - [`Error::Domain`]: One or more response fields failed validation when converting into a
+    ///   [`SourceAtomCluster`].
+    ///
+    /// # Example
+    /// ```no_run
+    /// # #[cfg(feature = "reqwest")]
+    /// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
+    /// use umls_client::{config::Config, parent::{Parent, types::Source}};
+    /// use umls_http::reqwest::Client;
+    /// use url::Url;
+    ///
+    /// let config = Config::builder("your-api-key").build()?;
+    /// let url: Url = "https://uts-ws.nlm.nih.gov/rest/content/current/source/SNOMEDCT_US/82065001/parents".parse()?;
+    ///
+    /// let page = Parent::<Source, _, _>::new(url)
+    ///     .with_client(Client::default())
+    ///     .fetch(&config)
+    ///     .await?;
+    ///
+    /// for parent in page.content().list() {
+    ///     println!("{}: {}", parent.ui(), parent.name());
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn fetch(
+        self,
+        umls_config: &config::Config,
+    ) -> Result<Page<Content<SourceAtomCluster>>, Error<umls_http::reqwest::Error>> {
+        if self.value().scheme() != umls_config.base_url().scheme()
+            || self.value().host_str() != umls_config.base_url().host_str()
+            || self.value().port_or_known_default()
+                != umls_config.base_url().port_or_known_default()
+            || !self.value().username().is_empty()
+            || self.value().password().is_some()
+            || !(self.value().path() == umls_config.base_url().path().trim_end_matches('/')
+                || self.value().path().starts_with(&format!(
+                    "{}/",
+                    umls_config.base_url().path().trim_end_matches('/')
+                )))
+        {
+            return Err(Error::Validation(self.value().clone()));
+        }
+
+        let url = Url::parse_with_params(
+            self.value().as_str(),
+            &[("apiKey", umls_config.api_key().expose_secret().to_owned())],
+        )
+        .map_err(Error::Url)?;
+
+        let request = http::Request::builder()
+            .method("GET")
+            .uri(url.as_str())
+            .body(())
+            .map_err(Error::Http)?;
+
+        let response: Page<Content<SerializableSourceAtomCluster>> = self
+            .client()
+            .execute(request)
+            .await
+            .map_err(Error::Client)?
+            .into_body();
+
+        let value = response
+            .try_map::<_, EmptyString>(|x| {
+                let value = x
+                    .list
+                    .into_iter()
+                    .map(TryInto::<SourceAtomCluster>::try_into)
+                    .collect::<Result<Vec<SourceAtomCluster>, _>>()?;
+                Ok(Content::new(value))
+            })
+            .map_err(|_| Error::Domain)?;
+
+        Ok(value)
+    }
+}
+
+#[cfg(feature = "reqwest")]
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SerializableSourceAtomCluster {
+    ui: String,
+    suppressible: bool,
+    obsolete: bool,
+    root_source: String,
+    atom_count: u64,
+    /// Explicitly renamed because UTS capitalizes the 'V' ("cVMemberCount").
+    #[serde(rename = "cVMemberCount")]
+    cv_member_count: u64,
+    name: String,
+}
+
+/// A source-asserted concept or atom cluster defined by a source vocabulary (such as SNOMED CT or MeSH).
+#[cfg(feature = "reqwest")]
+#[derive(Debug, Clone)]
+pub struct SourceAtomCluster {
+    ui: DisplayName,
+    /// Human-readable name.
+    name: DisplayName,
+    root_source: DisplayName,
+    suppressible: bool,
+    obsolete: bool,
+    atom_count: u64,
+    cv_member_count: u64,
+}
+
+#[cfg(feature = "reqwest")]
+impl SourceAtomCluster {
+    /// Returns the unique identifier (e.g. SNOMED CT code) of this source concept.
+    pub fn ui(&self) -> &DisplayName {
+        &self.ui
+    }
+
+    /// Returns the human-readable preferred name of this source concept.
+    pub fn name(&self) -> &DisplayName {
+        &self.name
+    }
+
+    /// Returns a root source vocabulary abbreviation (e.g. SNOMEDCT_US).
+    pub fn root_source(&self) -> &DisplayName {
+        &self.root_source
+    }
+
+    /// Returns `true` if the source concept is marked as suppressible.
+    pub fn suppressible(&self) -> bool {
+        self.suppressible
+    }
+
+    /// Returns `true` if the source concept is obsolete.
+    pub fn obsolete(&self) -> bool {
+        self.obsolete
+    }
+
+    /// Returns number of atoms associated with this source concept.
+    pub fn atom_count(&self) -> u64 {
+        self.atom_count
+    }
+
+    /// Returns the number of Content View (CV) memberships for this source concept.
+    pub fn cv_member_count(&self) -> u64 {
+        self.cv_member_count
+    }
+}
+
+#[cfg(feature = "reqwest")]
+impl TryFrom<SerializableSourceAtomCluster> for SourceAtomCluster {
+    type Error = crate::search::core::EmptyString;
+
+    fn try_from(wire: SerializableSourceAtomCluster) -> Result<Self, Self::Error> {
+        Ok(Self {
+            ui: wire.ui.parse()?,
+            name: wire.name.parse()?,
+            root_source: wire.root_source.parse()?,
+            suppressible: wire.suppressible,
+            obsolete: wire.obsolete,
+            atom_count: wire.atom_count,
+            cv_member_count: wire.cv_member_count,
+        })
+    }
+}
+
+#[cfg(test)]
+#[cfg(feature = "reqwest")]
+mod tests {
+
+    use super::*;
+
+    #[test]
+    fn success_on_serializable_source_atom_cluster_to_source_atom_cluster() {
+        let object = SerializableSourceAtomCluster {
+            ui: "82065001".into(),
+            suppressible: false,
+            obsolete: false,
+            root_source: "SNOMEDCT_US".into(),
+            atom_count: 7,
+            cv_member_count: 0,
+            name: "Fracture of carpal bone".into(),
+        };
+
+        let result: Result<SourceAtomCluster, EmptyString> = object.try_into();
+        assert!(result.is_ok());
+
+        let object = result.unwrap();
+        assert_eq!(object.ui().as_str(), "82065001");
+        assert_eq!(object.name().as_str(), "Fracture of carpal bone");
+        assert!(!object.suppressible());
+        assert!(!object.obsolete());
+        assert_eq!(object.root_source().as_str(), "SNOMEDCT_US");
+    }
+
+    #[test]
+    fn failed_on_empty_ui() {
+        let object = SerializableSourceAtomCluster {
+            ui: "".into(),
+            suppressible: false,
+            obsolete: false,
+            root_source: "SNOMEDCT_US".into(),
+            atom_count: 7,
+            cv_member_count: 0,
+            name: "Fracture of carpal bone".into(),
+        };
+
+        let result: Result<SourceAtomCluster, EmptyString> = object.try_into();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn failed_on_empty_name() {
+        let object = SerializableSourceAtomCluster {
+            ui: "82065001".into(),
+            suppressible: false,
+            obsolete: false,
+            root_source: "SNOMEDCT_US".into(),
+            atom_count: 7,
+            cv_member_count: 0,
+            name: "".into(),
+        };
+
+        let result: Result<SourceAtomCluster, EmptyString> = object.try_into();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn failed_on_empty_root_source() {
+        let object = SerializableSourceAtomCluster {
+            ui: "82065001".into(),
+            suppressible: false,
+            obsolete: false,
+            root_source: "".into(),
+            atom_count: 7,
+            cv_member_count: 0,
+            name: "Fracture of carpal bone".into(),
+        };
+
+        let result: Result<SourceAtomCluster, EmptyString> = object.try_into();
+        assert!(result.is_err());
+    }
 }
