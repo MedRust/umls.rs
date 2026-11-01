@@ -45,6 +45,36 @@ impl Config {
     pub fn api_key(&self) -> &SecretString {
         &self.api_key
     }
+
+    /// Returns a info url builder.
+    pub fn info_url<'a, T, V>(&'a self, value: V) -> crate::core::url::Info<'a, T, V> {
+        crate::core::url::Info::new(self, value)
+    }
+
+    /// Returns atom url builder.
+    pub fn atom_url<'a, T, O, V>(&'a self, value: V) -> crate::core::url::Atom<'a, T, O, V> {
+        crate::core::url::Atom::new(self, value)
+    }
+
+    /// Returns definition url builder.
+    pub fn definition_url<'a, T, V>(&'a self, value: V) -> crate::core::url::Definition<'a, T, V> {
+        crate::core::url::Definition::new(self, value)
+    }
+
+    /// Returns relation url builder.
+    pub fn relation_url<'a, T, V>(&'a self, value: V) -> crate::core::url::Relation<'a, T, V> {
+        crate::core::url::Relation::new(self, value)
+    }
+
+    /// Returns parent url builder.
+    pub fn parent_url<'a, T, V>(&'a self, value: V) -> crate::core::url::Parent<'a, T, V> {
+        crate::core::url::Parent::new(self, value)
+    }
+
+    /// Returns search url builder.
+    pub fn search_url<'a, V>(&'a self, value: V) -> crate::core::url::Search<'a, V> {
+        crate::core::url::Search::new(self, value)
+    }
 }
 
 /// Builder for [`Config`].
