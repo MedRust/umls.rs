@@ -195,6 +195,7 @@ fn is_http_url(url: &url::Url) -> bool {
 }
 
 #[derive(Debug, Error)]
+#[non_exhaustive]
 /// An error produced while validating client configuration.
 pub enum Error {
     /// The configured UMLS API key was empty.
