@@ -7,9 +7,8 @@ use serde_json::Value;
 use umls_client::{
     atom::Batch,
     config,
-    relation::{Relation, config::Config},
+    relation::{self, Relation, config::Config},
 };
-use url::Url;
 
 #[tokio::test]
 async fn fetch_concept_relation_first_page() -> Result<(), Box<dyn std::error::Error>> {
@@ -116,15 +115,17 @@ async fn fetch_concept_relation_using_url() -> Result<(), Box<dyn std::error::Er
         })
         .await;
 
-    let base_url: Url = mock_server.base_url().parse()?;
-    let url = base_url.join("content/current/CUI/C0010200/relations")?;
+    let base_url = mock_server.base_url().parse()?;
     let umls_config = config::Config::builder("some_api_key")
         .base_url(base_url)
         .build()?;
 
-    let client = umls_http::reqwest::Client::default();
+    let cui = "C0010200".parse()?;
 
-    Relation::new(url)
+    let client = umls_http::reqwest::Client::default();
+    let config = relation::config::Config::builder(cui).build();
+
+    Relation::new(config)
         .with_client(client)
         .fetch(&umls_config)
         .await?;

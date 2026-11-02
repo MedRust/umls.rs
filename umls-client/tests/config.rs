@@ -3,16 +3,6 @@
 use umls_client::config::Config;
 
 #[test]
-fn default_base_url_preserves_rest_prefix() {
-    let config = Config::builder("test-key").build().unwrap();
-    let endpoint = config
-        .base_url()
-        .join("content/current/CUI/C0010200/atoms")
-        .unwrap();
-    assert_eq!(endpoint.path(), "/rest/content/current/CUI/C0010200/atoms");
-}
-
-#[test]
 fn accepts_directory_paths_and_preserves_custom_prefixes() {
     for url in [
         "https://example.com",

@@ -1,7 +1,5 @@
 #[cfg(feature = "reqwest")]
 use http::Response;
-#[cfg(feature = "reqwest")]
-use secrecy::ExposeSecret;
 
 use umls_http::WithoutClient;
 
@@ -34,15 +32,22 @@ pub enum Error<T> {
     #[error("Client error: {0}")]
     Client(#[source] T),
 
-    /// A concept endpoint URL could not be constructed.
-    #[error("Url error: {0}")]
-    Url(url::ParseError),
+    /// Represents uri construction error.
+    #[error("Uri construction Error: {0}")]
+    Uri(#[source] http::uri::InvalidUri),
+}
+
+#[cfg(feature = "reqwest")]
+impl<T> From<http::uri::InvalidUri> for Error<T> {
+    fn from(value: http::uri::InvalidUri) -> Self {
+        Error::Uri(value)
+    }
 }
 
 /// A typed reference to information that can identify a UMLS concept.
 ///
 /// The available `fetch` method depends on whether the value is a [`crate::core::cui::Cui`], a
-/// [`url::Url`], or a [`crate::search::ConceptSnapshot`]. Attach a `reqwest::Client` using
+/// [`http::Uri`], or a [`crate::search::ConceptSnapshot`]. Attach a `reqwest::Client` using
 /// [`Self::with_client`] before fetching; fetching consumes the request.
 pub struct Info<C, T> {
     client: C,
@@ -108,30 +113,28 @@ impl Info<reqwest::Client, Cui> {
     /// Returns [`Error`] if endpoint construction, transport, HTTP status
     /// validation, or response decoding fails.
     pub async fn fetch(self, config: &Config) -> Result<Concept, Error<reqwest::Error>> {
-        let path = format!("content/{}/CUI/{}", config.version(), self.value.as_str());
-        let url = config.base_url().join(&path).map_err(Error::Url)?;
+        let uri = config
+            .info_url::<crate::core::url::types::Concept, _>(self.value)
+            .uri()?;
 
-        Info::new(url).with_client(self.client).fetch(config).await
+        Info::new(uri).with_client(self.client).fetch(config).await
     }
 }
 
 #[cfg(feature = "reqwest")]
-impl Info<reqwest::Client, Url> {
+impl Info<reqwest::Client, http::Uri> {
     /// Retrieves a concept from the wrapped UMLS resource URL.
     ///
     /// # Errors
     ///
     /// Returns [`Error`] if URL construction, transport, HTTP status
     /// validation, or response decoding fails.
+    #[allow(unused)]
     pub async fn fetch(self, config: &Config) -> Result<Concept, Error<reqwest::Error>> {
-        let url = Url::parse_with_params(
-            self.value.as_str(),
-            &[("apiKey", config.api_key().expose_secret())],
-        )
-        .map_err(Error::Url)?;
+        // FIXME: Missing Uri validation logic against config.
 
         let request = http::Request::builder()
-            .uri(url.as_str())
+            .uri(self.value)
             .body(())
             .map_err(reqwest::Error::Http)
             .map_err(Error::Client)?;
@@ -328,17 +331,13 @@ pub struct SemanticType {
 impl Info<reqwest::Client, Aui> {
     /// Fetch atom information for given atom.
     pub async fn fetch(self, config: &Config) -> Result<AtomResponse, Error<reqwest::Error>> {
-        let path = format!("content/{}/AUI/{}", config.version(), self.value());
-        let url = config.base_url().join(&path).map_err(Error::Url)?;
-        let url = Url::parse_with_params(
-            url.as_str(),
-            &[("apiKey", config.api_key().expose_secret().to_owned())],
-        )
-        .map_err(Error::Url)?;
+        let url = config
+            .info_url::<crate::core::url::types::Atom, _>(&self.value)
+            .uri()?;
 
         let request = http::Request::builder()
             .method("GET")
-            .uri(url.as_str())
+            .uri(url)
             .body(())
             .map_err(reqwest::Error::Http)
             .map_err(Error::Client)?;

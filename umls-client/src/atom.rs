@@ -7,7 +7,7 @@
 //!
 //! CUI-based all-atoms and preferred-atom requests use the release selected by
 //! [`crate::config::Builder::version`], which defaults to `current`. Requests
-//! built from an explicit atom-list [`url::Url`] retain its endpoint path and
+//! built from an explicit atom-list [`http::Uri`] retain its endpoint path and
 //! release; the request adds authentication, filter, and pagination parameters.
 //!
 //! CUI-based requests resolve relative paths against the configured base URL.
@@ -58,12 +58,6 @@ use serde::Serialize;
 use crate::core::cui::Cui;
 
 #[cfg(feature = "reqwest")]
-use url::Url;
-
-#[cfg(feature = "reqwest")]
-use secrecy::ExposeSecret;
-
-#[cfg(feature = "reqwest")]
 use umls_http::reqwest;
 
 use crate::search::{
@@ -78,14 +72,20 @@ use crate::config;
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum Error<T> {
-    /// The atom endpoint or its query parameters could not be represented as a
-    /// valid URL.
-    #[error("URL error: {0}")]
-    Url(#[from] url::ParseError),
-
     /// A client error.
     #[error("Client error: {0}")]
     Client(#[source] T),
+
+    /// Represents uri construction error.
+    #[error("Uri construction failed: {0}")]
+    Uri(#[source] http::uri::InvalidUri),
+}
+
+#[cfg(feature = "reqwest")]
+impl<T> From<http::uri::InvalidUri> for Error<T> {
+    fn from(value: http::uri::InvalidUri) -> Self {
+        Error::Uri(value)
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -102,6 +102,7 @@ pub enum BatchError {
 }
 
 /// A value paired with non-zero pagination parameters.
+#[derive(Debug, Clone)]
 pub struct Batch<T> {
     size: NonZeroU64,
     number: NonZeroU64,
@@ -304,6 +305,7 @@ impl<T> Builder<T> {
 }
 
 /// Filters and target information for retrieving concept atoms.
+#[derive(Debug, Clone)]
 pub struct Config<T> {
     value: T,
     source_vocabularies: Vec<DisplayName>,
@@ -448,56 +450,6 @@ impl<S, T> Atom<WithoutClient, S, T> {
 }
 
 #[cfg(feature = "reqwest")]
-impl<S, T> Atom<reqwest::Client, S, Batch<Config<T>>> {
-    fn inject_query_params(
-        &self,
-        umls_config: &config::Config,
-        url_string: &str,
-    ) -> Result<Url, Error<reqwest::Error>> {
-        let source_vocabularies_params = self
-            .value
-            .value()
-            .source_vocabularies()
-            .iter()
-            .map(|x| x.as_ref())
-            .collect::<Vec<&str>>()
-            .join(",");
-
-        let tty_params = self
-            .value
-            .value()
-            .term_types()
-            .iter()
-            .map(|x| x.as_ref())
-            .collect::<Vec<&str>>()
-            .join(",");
-
-        let include_obsolete = self.value.value().is_include_obsolete().to_string();
-        let include_suppressible = self.value.value().is_include_suppressible().to_string();
-
-        let page_number = self.value.number().to_string();
-        let page_size = self.value.size().to_string();
-
-        let mut params = [
-            ("apiKey", umls_config.api_key().expose_secret()),
-            ("sabs", &source_vocabularies_params),
-            ("tty", &tty_params),
-            ("includeObsolete", &include_obsolete),
-            ("includeSuppressible", &include_suppressible),
-            ("pageNumber", &page_number),
-            ("pageSize", &page_size),
-        ]
-        .to_vec();
-
-        if let Some(language) = self.value.value().language().map(|x| x.as_ref()) {
-            params.push(("language", language));
-        }
-
-        Url::parse_with_params(url_string, &params).map_err(Error::Url)
-    }
-}
-
-#[cfg(feature = "reqwest")]
 impl Atom<reqwest::Client, All, Batch<Config<Cui>>> {
     /// Fetches one filtered page of atoms for a validated CUI.
     ///
@@ -514,45 +466,11 @@ impl Atom<reqwest::Client, All, Batch<Config<Cui>>> {
         Response<Page<Content<AtomResponse>>, Atom<reqwest::Client, All, Batch<Config<Cui>>>>,
         Error<reqwest::Error>,
     > {
-        let path = format!(
-            "content/{}/CUI/{}/atoms",
-            umls_config.version().as_str(),
-            self.value.value().value().as_ref()
-        );
-
-        let url_string = umls_config.base_url().join(&path)?.to_string();
-
-        let url = self.inject_query_params(umls_config, &url_string)?;
-
-        let body = Atom::<_, All, _>::new(url)
-            .with_client(self.client().clone())
-            .fetch(umls_config)
-            .await?;
-
-        Ok(Response::new(body, self))
-    }
-}
-
-#[cfg(feature = "reqwest")]
-impl Atom<reqwest::Client, All, Batch<Config<Url>>> {
-    /// Fetches one filtered page of atoms from an atom-list URL.
-    ///
-    /// Uses the supplied URL without replacing its release with the configured
-    /// version.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if URL construction, transport, HTTP status validation,
-    /// or response decoding fails.
-    pub async fn fetch(
-        self,
-        umls_config: &config::Config,
-    ) -> Result<
-        Response<Page<Content<AtomResponse>>, Atom<reqwest::Client, All, Batch<Config<Url>>>>,
-        Error<reqwest::Error>,
-    > {
-        let url_string = self.value.value().value().to_string();
-        let url = self.inject_query_params(umls_config, &url_string)?;
+        let url = umls_config
+            .atom_url::<crate::core::url::types::Concept, crate::core::url::types::atoms::All, _>(
+                &self.value,
+            )
+            .uri()?;
 
         let body = Atom::<_, All, _>::new(url)
             .with_client(self.client().clone())
@@ -577,12 +495,11 @@ impl Atom<reqwest::Client, All, Cui> {
         self,
         umls_config: &config::Config,
     ) -> Result<Content<AtomResponse>, Error<reqwest::Error>> {
-        let path = format!(
-            "content/{}/CUI/{}/atoms",
-            umls_config.version().as_str(),
-            self.value
-        );
-        let url = umls_config.base_url().join(&path)?;
+        let url = umls_config
+            .atom_url::<crate::core::url::types::Concept, crate::core::url::types::atoms::All, _>(
+                self.value,
+            )
+            .uri()?;
 
         Atom::<_, All, _>::new(url)
             .with_client(self.client)
@@ -593,24 +510,21 @@ impl Atom<reqwest::Client, All, Cui> {
 }
 
 #[cfg(feature = "reqwest")]
-impl Atom<reqwest::Client, All, Url> {
+impl Atom<reqwest::Client, All, http::Uri> {
     /// Fetches one page of concept atoms from an atom-list URL endpoint.
     ///
     /// # Errors
     ///
     /// Returns an error if URL parsing, transport, HTTP status validation,
     /// or response decoding fails.
+    #[allow(unused)]
     pub async fn fetch(
         self,
         umls_config: &config::Config,
     ) -> Result<Page<Content<AtomResponse>>, Error<reqwest::Error>> {
-        let url = Url::parse_with_params(
-            self.value().as_str(),
-            &[("apiKey", umls_config.api_key().expose_secret())],
-        )?;
-
+        // FIXME: Missing validation of Uri against umls_config.
         let request = http::Request::builder()
-            .uri(url.as_str())
+            .uri(self.value)
             .body(())
             .map_err(reqwest::Error::Http)
             .map_err(Error::Client)?;
@@ -637,12 +551,7 @@ impl Atom<reqwest::Client, Preferred, Cui> {
         self,
         umls_config: &config::Config,
     ) -> Result<AtomResponse, Error<reqwest::Error>> {
-        let path = format!(
-            "content/{}/CUI/{}/atoms/preferred",
-            umls_config.version().as_str(),
-            self.value
-        );
-        let url = umls_config.base_url().join(&path).map_err(Error::Url)?;
+        let url = umls_config.atom_url::<crate::core::url::types::Concept, crate::core::url::types::atoms::Preferred, _>(self.value).uri()?;
 
         Atom::<_, Preferred, _>::new(url)
             .with_client(self.client)
@@ -652,24 +561,21 @@ impl Atom<reqwest::Client, Preferred, Cui> {
 }
 
 #[cfg(feature = "reqwest")]
-impl Atom<reqwest::Client, Preferred, Url> {
+impl Atom<reqwest::Client, Preferred, http::Uri> {
     /// Fetches the preferred concept atom from a preferred-atom URL endpoint.
     ///
     /// # Errors
     ///
     /// Returns an error if URL parsing, transport, HTTP status validation,
     /// or response decoding fails.
+    #[allow(unused)]
     pub async fn fetch(
-        self,
+        mut self,
         umls_config: &config::Config,
     ) -> Result<AtomResponse, Error<reqwest::Error>> {
-        let url = Url::parse_with_params(
-            self.value().as_str(),
-            &[("apiKey", umls_config.api_key().expose_secret())],
-        )?;
-
+        // FIXME: Missing validation against umls_config.
         let request = http::Request::builder()
-            .uri(url.as_str())
+            .uri(self.value)
             .body(())
             .map_err(reqwest::Error::Http)
             .map_err(Error::Client)?;

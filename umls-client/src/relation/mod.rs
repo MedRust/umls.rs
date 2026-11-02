@@ -8,12 +8,7 @@ use umls_http::WithoutClient;
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "reqwest")]
-use secrecy::ExposeSecret;
-
-#[cfg(feature = "reqwest")]
 use umls_http::reqwest::Client;
-#[cfg(feature = "reqwest")]
-use url::Url;
 
 #[cfg(feature = "reqwest")]
 use crate::{
@@ -71,53 +66,9 @@ impl Relation<Client, config::Config> {
         self,
         umls_config: &crate::config::Config,
     ) -> Result<Content<RelationDto>, Box<dyn std::error::Error>> {
-        let path = format!(
-            "/content/{}/CUI/{}/relations",
-            umls_config.version(),
-            self.value().cui()
-        );
-        let url = umls_config.base_url().join(&path)?;
-
-        let labels = self
-            .value()
-            .labels()
-            .iter()
-            .map(|x| x.as_str())
-            .collect::<Vec<&str>>()
-            .join(",");
-
-        let additional_lables = self
-            .value()
-            .additional_labels()
-            .iter()
-            .map(|x| x.as_str())
-            .collect::<Vec<&str>>()
-            .join(",");
-
-        let source_vocabularies = self
-            .value()
-            .source_vocabularies()
-            .iter()
-            .map(|x| x.as_str())
-            .collect::<Vec<&str>>()
-            .join(",");
-
-        let url = Url::parse_with_params(
-            url.as_str(),
-            &[
-                ("includeRelationLabels", labels),
-                ("includeAdditionalRelationLabels", additional_lables),
-                ("sabs", source_vocabularies),
-                (
-                    "includeObsolete",
-                    self.value().include_obsolete().to_string(),
-                ),
-                (
-                    "includeSuppressible",
-                    self.value().include_suppressible().to_string(),
-                ),
-            ],
-        )?;
+        let url = umls_config
+            .relation_url::<crate::core::url::types::Concept, _>(self.value())
+            .uri()?;
 
         let response = Relation::new(url)
             .with_client(self.client)
@@ -137,58 +88,9 @@ impl Relation<Client, Batch<config::Config>> {
         self,
         umls_config: &crate::config::Config,
     ) -> Result<Response<Page<Content<RelationDto>>, Self>, Box<dyn std::error::Error>> {
-        let path = format!(
-            "/content/{}/CUI/{}/relations",
-            umls_config.version(),
-            self.value().value().cui()
-        );
-        let url = umls_config.base_url().join(&path)?;
-
-        let labels = self
-            .value()
-            .value()
-            .labels()
-            .iter()
-            .map(|x| x.as_str())
-            .collect::<Vec<&str>>()
-            .join(",");
-
-        let additional_lables = self
-            .value()
-            .value()
-            .additional_labels()
-            .iter()
-            .map(|x| x.as_str())
-            .collect::<Vec<&str>>()
-            .join(",");
-
-        let source_vocabularies = self
-            .value()
-            .value()
-            .source_vocabularies()
-            .iter()
-            .map(|x| x.as_str())
-            .collect::<Vec<&str>>()
-            .join(",");
-
-        let url = Url::parse_with_params(
-            url.as_str(),
-            &[
-                ("includeRelationLabels", labels),
-                ("includeAdditionalRelationLabels", additional_lables),
-                ("sabs", source_vocabularies),
-                (
-                    "includeObsolete",
-                    self.value().value().include_obsolete().to_string(),
-                ),
-                (
-                    "includeSuppressible",
-                    self.value().value().include_suppressible().to_string(),
-                ),
-                ("pageNumber", self.value().number().get().to_string()),
-                ("pageSize", self.value().size().get().to_string()),
-            ],
-        )?;
+        let url = umls_config
+            .relation_url::<crate::core::url::types::Concept, _>(&self.value)
+            .uri()?;
 
         let page = Relation::new(url)
             .with_client(self.client().clone())
@@ -200,21 +102,19 @@ impl Relation<Client, Batch<config::Config>> {
 }
 
 #[cfg(feature = "reqwest")]
-impl Relation<Client, Url> {
+impl Relation<Client, http::Uri> {
     /// Fetch concept relations for given url.
     ///
     /// The method doesn't validate the URL.
+    #[allow(unused)]
     pub async fn fetch(
         self,
         umls_config: &crate::config::Config,
     ) -> Result<Page<Content<RelationDto>>, Box<dyn std::error::Error>> {
-        let url = Url::parse_with_params(
-            self.value().as_str(),
-            &[("apiKey", umls_config.api_key().expose_secret().to_string())],
-        )?;
-
+        // FIXME: Validate Uri against umls_config
+        // FIXME: Handle missing "apiKey"
         let request = http::Request::builder()
-            .uri(url.as_str())
+            .uri(self.value.clone())
             .method("GET")
             .body(())?;
 
