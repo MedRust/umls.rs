@@ -12,7 +12,7 @@ use umls_client::{
     concept::Info,
     config::Config,
     core::{aui::Aui, cui::Cui},
-    parent::{Parent, SourceConcept},
+    parent::{self, Parent, SourceConcept},
     relation,
     search::{self, core::DisplayName},
 };
@@ -391,7 +391,7 @@ impl UmlsServer {
 
         let batch = Batch::new(size, number, aui);
 
-        let Ok(response) = Parent::new(batch)
+        let Ok(response) = Parent::<parent::types::Atom, _, _>::new(batch)
             .with_client(self.client.clone())
             .fetch(&self.config)
             .await
@@ -507,7 +507,7 @@ mod tests {
                 "rootSource": "SNOMEDCT_US", "semanticTypes": ["Sign or Symptom"], "uri": "https://example.com/concept"}]}}));
             })
             .await;
-        let result = server(&format!("{}/rest/", mock_server.base_url()))
+        let result = server(&format!("{}/rest", mock_server.base_url()))
             .search_concepts(Parameters(SearchArgs {
                 query: "cough".into(),
                 page: Some(2),
@@ -524,7 +524,7 @@ mod tests {
 
     #[tokio::test]
     async fn invalid_inputs_do_not_reach_upstream() {
-        let server = server("http://127.0.0.1:1/rest/");
+        let server = server("http://127.0.0.1:1/rest");
         for (page, page_size) in [(Some(0), None), (None, Some(0)), (None, Some(101))] {
             let result = server
                 .search_concepts(Parameters(SearchArgs {
@@ -548,7 +548,7 @@ mod tests {
         use rmcp::{ServiceExt, model::CallToolRequestParams};
         let (client_io, server_io) = tokio::io::duplex(8192);
         let task = tokio::spawn(async move {
-            server("http://127.0.0.1:1/rest/")
+            server("http://127.0.0.1:1/rest")
                 .serve(server_io)
                 .await
                 .unwrap()
@@ -582,7 +582,7 @@ mod tests {
                 "result": [{"ui": "A1234567", "name": "Cough", "rootSource": "MSH",
                     "termType": "MH", "language": "ENG", "obsolete": "false", "suppressible": "false"}]}));
         }).await;
-        let result = server(&format!("{}/rest/", mock_server.base_url()))
+        let result = server(&format!("{}/rest", mock_server.base_url()))
             .get_concept_atoms(Parameters(AtomArgs {
                 cui: "C0010200".into(),
                 page: None,
@@ -612,7 +612,7 @@ mod tests {
         let config = Config::builder("secret-test-key")
             .try_version("2024AB")
             .unwrap()
-            .base_url(format!("{}/rest/", mock_server.base_url()).parse().unwrap())
+            .base_url(format!("{}/rest", mock_server.base_url()).parse().unwrap())
             .build()
             .unwrap();
         let server = UmlsServer::new(config, Client::default());
@@ -638,7 +638,7 @@ mod tests {
                 then.status(401).body("secret-test-key");
             })
             .await;
-        let result = server(&format!("{}/rest/", mock_server.base_url()))
+        let result = server(&format!("{}/rest", mock_server.base_url()))
             .get_concept(Parameters(ConceptArgs {
                 cui: "C0010200".into(),
             }))

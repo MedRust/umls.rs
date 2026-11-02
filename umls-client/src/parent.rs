@@ -1,13 +1,7 @@
 use std::marker::PhantomData;
 
 #[cfg(feature = "reqwest")]
-use secrecy::ExposeSecret;
-
-#[cfg(feature = "reqwest")]
 use serde::{Deserialize, Serialize};
-
-#[cfg(feature = "reqwest")]
-use url::Url;
 
 #[cfg(feature = "reqwest")]
 use crate::core::aui::Aui;
@@ -82,48 +76,28 @@ impl<U, C, T> Parent<U, C, T> {
 }
 
 #[cfg(feature = "reqwest")]
-impl Parent<types::Atom, umls_http::reqwest::Client, Url> {
+impl Parent<types::Atom, umls_http::reqwest::Client, http::Uri> {
     /// Fetch parents of UMLS atom.
     ///
     /// The method only fullfill the requirements and call specified http client.
-    /// The function will raise [`Error::Validation`] if sepcified URL validation failed against the
-    /// base URL of specified UMLS configuration.
+    #[allow(unused)]
     pub async fn fetch(
-        self,
+        mut self,
         umls_config: &config::Config,
     ) -> Result<Page<Content<AtomResponse>>, Error<umls_http::reqwest::Error>> {
-        if self.value().scheme() != umls_config.base_url().scheme()
-            || self.value().host_str() != umls_config.base_url().host_str()
-            || self.value().port_or_known_default()
-                != umls_config.base_url().port_or_known_default()
-            || !self.value().username().is_empty()
-            || self.value().password().is_some()
-            || !(self.value().path() == umls_config.base_url().path().trim_end_matches('/')
-                || self.value().path().starts_with(&format!(
-                    "{}/",
-                    umls_config.base_url().path().trim_end_matches('/')
-                )))
-        {
-            return Err(Error::Validation(self.value().clone()));
-        }
+        // FIXME: Missing validation of Uri against umls_config
+        // FIXME: Handle missing "apiKey"
 
-        let url = Url::parse_with_params(
-            self.value().as_str(),
-            &[("apiKey", umls_config.api_key().expose_secret().to_owned())],
-        )
-        .map_err(Error::Url)?;
+        let client = self.client;
 
         let request = http::Request::builder()
             .method("GET")
-            .uri(url.as_str())
+            .uri(self.value)
             .body(())
             .map_err(Error::Http)?;
 
-        let response: http::Response<Page<Content<AtomResponse>>> = self
-            .client()
-            .execute(request)
-            .await
-            .map_err(Error::Client)?;
+        let response: http::Response<Page<Content<AtomResponse>>> =
+            client.execute(request).await.map_err(Error::Client)?;
 
         Ok(response.into_body())
     }
@@ -136,12 +110,9 @@ impl Parent<types::Atom, umls_http::reqwest::Client, Aui> {
         self,
         umls_config: &config::Config,
     ) -> Result<Page<Content<AtomResponse>>, Error<umls_http::reqwest::Error>> {
-        let path = format!(
-            "content/{}/AUI/{}/parents",
-            umls_config.version(),
-            self.value()
-        );
-        let url = umls_config.base_url().join(&path).map_err(Error::Url)?;
+        let url = umls_config
+            .parent_url::<crate::core::url::types::Atom, _>(self.value)
+            .uri()?;
 
         Parent::<types::Atom, _, _>::new(url)
             .with_client(self.client)
@@ -157,20 +128,9 @@ impl Parent<types::Atom, umls_http::reqwest::Client, Batch<Aui>> {
         self,
         umls_config: &config::Config,
     ) -> Result<Response<Page<Content<AtomResponse>>, Self>, Error<umls_http::reqwest::Error>> {
-        let path = format!(
-            "content/{}/AUI/{}/parents",
-            umls_config.version(),
-            self.value().value()
-        );
-        let url = umls_config.base_url().join(&path).map_err(Error::Url)?;
-        let url = Url::parse_with_params(
-            url.as_str(),
-            &[
-                ("pageSize", self.value().size().get().to_string()),
-                ("pageNumber", self.value().number().get().to_string()),
-            ],
-        )
-        .map_err(Error::Url)?;
+        let url = umls_config
+            .parent_url::<crate::core::url::types::Atom, _>(&self.value)
+            .uri()?;
 
         let page = Parent::<types::Atom, _, _>::new(url)
             .with_client(self.client().clone())
@@ -231,29 +191,28 @@ pub enum Error<T> {
     #[error("Client Error: {0}")]
     Client(T),
 
-    /// Url Error.
-    #[error("Url Error: {0}")]
-    Url(url::ParseError),
-
     /// Http error.
     #[error("Http Error: {0}")]
     Http(http::Error),
-
-    /// Represents URL validation error.
-    #[error("URL Validation Error")]
-    Validation(Url),
 
     /// Failed to create a domain object.
     #[error("Invalid Domain object error.")]
     Domain,
 
-    /// Represents invalid base URL.
-    #[error("Invalid base URL")]
-    InvalidBaseUrl,
+    /// Represents uri construction failure.
+    #[error("Uri construction failed: {0}")]
+    Uri(#[source] http::uri::InvalidUri),
 }
 
 #[cfg(feature = "reqwest")]
-impl Parent<types::Source, umls_http::reqwest::Client, Url> {
+impl<T> From<http::uri::InvalidUri> for Error<T> {
+    fn from(value: http::uri::InvalidUri) -> Self {
+        Error::Uri(value)
+    }
+}
+
+#[cfg(feature = "reqwest")]
+impl Parent<types::Source, umls_http::reqwest::Client, http::Uri> {
     /// Fetches one page of source-asserted parent concepts using the wrapped endpoint URL.
     ///
     /// The URL is validated at runtime against the base URL in `umls_config` to ensure requests
@@ -261,9 +220,6 @@ impl Parent<types::Source, umls_http::reqwest::Client, Url> {
     ///
     /// # Errors
     /// Returns [`Error`] if:
-    /// - [`Error::Validation`]: The target URL scheme, host, port or path prefix does not match
-    ///   [`umls_config.base_url()`](crate::config::Config::base_url).
-    /// - [`Error::Url`]: The URL with credential and query parameters could not be constructed.
     /// - [`Error::Http`]: The HTTP request could not be constructed.
     /// - [`Error::Client`]: The transport failed or the server returns the error status.
     /// - [`Error::Domain`]: One or more response fields failed validation when converting into a
@@ -275,10 +231,9 @@ impl Parent<types::Source, umls_http::reqwest::Client, Url> {
     /// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
     /// use umls_client::{config::Config, parent::{Parent, types::Source}};
     /// use umls_http::reqwest::Client;
-    /// use url::Url;
     ///
     /// let config = Config::builder("your-api-key").build()?;
-    /// let url: Url = "https://uts-ws.nlm.nih.gov/rest/content/current/source/SNOMEDCT_US/82065001/parents".parse()?;
+    /// let url: http::Uri = "https://uts-ws.nlm.nih.gov/rest/content/current/source/SNOMEDCT_US/82065001/parents".parse()?;
     ///
     /// let page = Parent::<Source, _, _>::new(url)
     ///     .with_client(Client::default())
@@ -291,34 +246,17 @@ impl Parent<types::Source, umls_http::reqwest::Client, Url> {
     /// # Ok(())
     /// # }
     /// ```
+    #[allow(unused)]
     pub async fn fetch(
         self,
         umls_config: &config::Config,
     ) -> Result<Page<Content<SourceAtomCluster>>, Error<umls_http::reqwest::Error>> {
-        if self.value().scheme() != umls_config.base_url().scheme()
-            || self.value().host_str() != umls_config.base_url().host_str()
-            || self.value().port_or_known_default()
-                != umls_config.base_url().port_or_known_default()
-            || !self.value().username().is_empty()
-            || self.value().password().is_some()
-            || !(self.value().path() == umls_config.base_url().path().trim_end_matches('/')
-                || self.value().path().starts_with(&format!(
-                    "{}/",
-                    umls_config.base_url().path().trim_end_matches('/')
-                )))
-        {
-            return Err(Error::Validation(self.value().clone()));
-        }
-
-        let url = Url::parse_with_params(
-            self.value().as_str(),
-            &[("apiKey", umls_config.api_key().expose_secret().to_owned())],
-        )
-        .map_err(Error::Url)?;
+        // FIXME: Missing validation of Uri against umls_config
+        // FIXME: Handle missing "apiKey" if any
 
         let request = http::Request::builder()
             .method("GET")
-            .uri(url.as_str())
+            .uri(self.value())
             .body(())
             .map_err(Error::Http)?;
 
@@ -460,9 +398,6 @@ impl Parent<types::Source, umls_http::reqwest::Client, SourceConcept> {
     ///
     /// # Errors
     /// Returns [`Error`] if:
-    /// - [`Error::Validation`]: The target URL scheme, host, port or path prefix does not match
-    ///   [`umls_config.base_url()`](crate::config::Config::base_url).
-    /// - [`Error::Url`]: The URL with credentials and query parameters could not be constructed.
     /// - [`Error::Http`]: The HTTP request could not be constructed.
     /// - [`Error::Client`]: The transport failed or the server returned an error status.
     /// - [`Error::Domain`]: One or more response fields failed validation when converting into a
@@ -474,7 +409,6 @@ impl Parent<types::Source, umls_http::reqwest::Client, SourceConcept> {
     /// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
     /// use umls_client::{config::Config, parent::{Parent, types::Source, SourceConcept}};
     /// use umls_http::reqwest::Client;
-    /// use url::Url;
     ///
     /// let config = Config::builder("your-api-key").build()?;
     /// let source_concept = SourceConcept::new("SNOMEDCT_US".try_into()?, "82065001".try_into()?);
@@ -494,19 +428,9 @@ impl Parent<types::Source, umls_http::reqwest::Client, SourceConcept> {
         self,
         umls_config: &config::Config,
     ) -> Result<Page<Content<SourceAtomCluster>>, Error<umls_http::reqwest::Error>> {
-        let version = umls_config.version().to_string();
-
-        let mut url = umls_config.base_url().clone();
-        url.path_segments_mut()
-            .map_err(|_| Error::InvalidBaseUrl)?
-            .extend(&[
-                "content",
-                &version,
-                "source",
-                self.value().source().as_ref(),
-                self.value().code().as_ref(),
-                "parents",
-            ]);
+        let url = umls_config
+            .parent_url::<crate::core::url::types::Source, _>(self.value)
+            .uri()?;
 
         Parent::<types::Source, _, _>::new(url)
             .with_client(self.client)
@@ -522,9 +446,6 @@ impl Parent<types::Source, umls_http::reqwest::Client, Batch<SourceConcept>> {
     /// # Errors
     ///
     /// Returns [`Error`] if:
-    /// - [`Error::Validation`]: The target URL scheme, host, port or path prefix does not match
-    ///   [`umls_config.base_url()`](crate::config::Config::base_url).
-    /// - [`Error::Url`]: The URL with credentials and query parameters could not be constructed.
     /// - [`Error::Http`]: The HTTP request could not be constructed.
     /// - [`Error::Client`]: The transport failed or the server returned an error status.
     /// - [`Error::Domain`]: One or more response fields failed validation when converting into a
@@ -534,21 +455,9 @@ impl Parent<types::Source, umls_http::reqwest::Client, Batch<SourceConcept>> {
         umls_config: &config::Config,
     ) -> Result<Response<Page<Content<SourceAtomCluster>>, Self>, Error<umls_http::reqwest::Error>>
     {
-        let path = format!(
-            "content/{}/source/{}/{}/parents",
-            umls_config.version(),
-            self.value().value().source(),
-            self.value().value().code()
-        );
-        let url = umls_config.base_url().join(&path).map_err(Error::Url)?;
-        let url = Url::parse_with_params(
-            url.as_str(),
-            &[
-                ("pageSize", self.value().size().get().to_string()),
-                ("pageNumber", self.value().number().get().to_string()),
-            ],
-        )
-        .map_err(Error::Url)?;
+        let url = umls_config
+            .parent_url::<crate::core::url::types::Source, _>(&self.value)
+            .uri()?;
 
         let page = Parent::<types::Source, _, _>::new(url)
             .with_client(self.client().clone())

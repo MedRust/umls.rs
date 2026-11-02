@@ -1,11 +1,7 @@
-#[cfg(feature = "reqwest")]
-use secrecy::ExposeSecret;
 use umls_http::WithoutClient;
 
 #[cfg(feature = "reqwest")]
 use umls_http::reqwest;
-#[cfg(feature = "reqwest")]
-use url::Url;
 
 use crate::{
     core::cui::Cui,
@@ -18,7 +14,7 @@ use crate::{atom::Batch, config};
 #[cfg(feature = "reqwest")]
 use crate::{
     atom::Page,
-    search::{self, Content, Response},
+    search::{Content, Response},
 };
 
 /// Filters and target information for retrieving concept definitions.
@@ -26,6 +22,7 @@ use crate::{
 /// The `Config` specifies the target concept by its [`Cui`] and an optional list of UMLS
 /// source vocabularies. When `source_vocabularies` is non-empty, only definitions from those
 /// vocabularies will be returned for the given [`Cui`].
+#[derive(Debug, Clone)]
 pub struct Config {
     cui: Cui,
     source_vocabularies: Vec<DisplayName>,
@@ -135,23 +132,22 @@ impl<V> Definition<WithoutClient, V> {
 }
 
 #[cfg(feature = "reqwest")]
-impl Definition<reqwest::Client, Url> {
+impl Definition<reqwest::Client, http::Uri> {
     /// Fetch concepts definitions for given URL.
     ///
     /// The method doesn't validate the URL.
+    #[allow(unused)]
     pub async fn fetch(
         self,
         umls_config: &config::Config,
     ) -> Result<Page<Content<dto::Definition>>, Box<dyn std::error::Error>> {
-        let url = Url::parse_with_params(
-            self.value().as_str(),
-            &[("apiKey", umls_config.api_key().expose_secret().to_string())],
-        )?;
-
-        let request = http::Request::builder().uri(url.as_str()).body(())?;
+        // FIXME: Missing validation of Uri against umls_config.
+        // FIXME: Handle missing "apiKey"
+        let client = self.client;
+        let request = http::Request::builder().uri(self.value).body(())?;
 
         let response: http::Response<Page<Content<dto::RawDefinition>>> =
-            self.client().execute(request).await?;
+            client.execute(request).await?;
 
         let page = response
             .into_body()
@@ -178,10 +174,6 @@ impl Definition<reqwest::Client, Batch<Config>> {
         Response<Page<Content<dto::Definition>>, Definition<reqwest::Client, Batch<Config>>>,
         Box<dyn std::error::Error>,
     > {
-        let cui = self.value().value().cui();
-        let path = format!("/content/{}/CUI/{}/definitions", umls_config.version(), cui);
-        let url_string = umls_config.base_url().join(&path)?.as_str().to_owned();
-
         let mut vector = [
             ("pageSize", self.value().size().get().to_string()),
             ("pageNumber", self.value().number().get().to_string()),
@@ -200,10 +192,12 @@ impl Definition<reqwest::Client, Batch<Config>> {
             vector.push(("sabs", values));
         }
 
-        let url = Url::parse_with_params(&url_string, &vector)?;
+        let url = umls_config
+            .definition_url::<crate::core::url::types::Concept, _>(&self.value)
+            .uri()?;
 
         let page = Definition::new(url)
-            .with_client(self.client().clone())
+            .with_client(self.client.clone())
             .fetch(umls_config)
             .await?;
 
@@ -220,31 +214,12 @@ impl Definition<reqwest::Client, Config> {
         self,
         umls_config: &config::Config,
     ) -> Result<Content<dto::Definition>, Box<dyn std::error::Error>> {
-        let cui = self.value().cui();
-        let path = format!("/content/{}/CUI/{}/definitions", umls_config.version(), cui);
-        let url_string = umls_config.base_url().join(&path)?.as_str().to_owned();
-
-        let mut vector = [
-            ("pageSize", search::core::DEFAULT_PAGE_SIZE.to_string()),
-            ("pageNumber", search::core::DEFAULT_PAGE_NUMBER.to_string()),
-        ]
-        .to_vec();
-
-        if !self.value().source_vocabularies().is_empty() {
-            let values: Vec<&str> = self
-                .value()
-                .source_vocabularies()
-                .iter()
-                .map(|x| x.as_str())
-                .collect();
-            let values = values.join(",");
-            vector.push(("sabs", values));
-        }
-
-        let url = Url::parse_with_params(&url_string, &vector)?;
+        let url = umls_config
+            .definition_url::<crate::core::url::types::Concept, _>(&self.value)
+            .uri()?;
 
         let page = Definition::new(url)
-            .with_client(self.client().clone())
+            .with_client(self.client)
             .fetch(umls_config)
             .await?;
 

@@ -414,10 +414,7 @@ async fn fetch_first_page_content_of_concept_atoms_using_url()
         .base_url(base_url.clone())
         .build()?;
 
-    let path = format!("/content/current/CUI/{}/atoms", cui);
-    let url = base_url.join(&path)?;
-
-    let content = atom::Config::builder(url)
+    let content = atom::Config::builder(cui)
         .atoms()
         .with_client(Default::default())
         .fetch(&umls_config)
@@ -531,10 +528,7 @@ async fn fetch_first_page_of_concept_atoms_using_url() -> Result<(), Box<dyn std
         .base_url(base_url.clone())
         .build()?;
 
-    let path = format!("/content/current/CUI/{}/atoms", cui);
-    let url = base_url.join(&path)?;
-
-    let first_page = atom::Config::builder(url)
+    let first_page = atom::Config::builder(cui)
         .atoms()
         .with_client(Default::default())
         .fetch(&umls_config)
@@ -766,7 +760,7 @@ async fn fetch_preferred_concept_atom_from_different_version()
         })
         .await;
 
-    let base_url: Url = mock_server.base_url().parse()?;
+    let base_url = mock_server.base_url().parse()?;
 
     let umls_config = config::Builder::new(api_key.to_string())
         .base_url(base_url)

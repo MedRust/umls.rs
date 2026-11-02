@@ -78,7 +78,7 @@ async fn successful_search_in_umls() -> Result<(), Box<dyn std::error::Error>> {
     assert!(search_object.root_source.is_some());
     assert_eq!(search_object.root_source, Some("MTH".parse()?));
     assert_eq!(
-        search_object.uri.as_ref(),
+        search_object.uri.as_str(),
         "https://uts-ws.nlm.nih.gov/rest/content/2026AA/CUI/C0010200"
     );
     assert_eq!(search_object.name.as_str(), "Coughing");

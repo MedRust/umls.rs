@@ -1,6 +1,5 @@
 use clap::Parser;
 use umls_client::config::Config;
-use url::Url;
 
 /// A command line arguments parser.
 ///
@@ -14,7 +13,7 @@ use url::Url;
 pub struct Args {
     /// UMLS REST API base URL, with a path ending in `/`.
     #[arg(long, env = "UMLS_BASE_URL", hide_env_values = false)]
-    pub base_url: Url,
+    pub base_url: url::Url,
 
     /// UMLS API key.
     #[arg(long, env = "UMLS_API_KEY", hide_env_values = true)]

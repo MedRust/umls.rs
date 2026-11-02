@@ -3,7 +3,7 @@
 
 use httpmock::{Method::GET, MockServer};
 use umls_client::atom::Batch;
-use umls_client::parent::{self, Error, SourceConcept};
+use umls_client::parent::{self, SourceConcept};
 use umls_client::{config, core::aui::Aui, parent::Parent, search::core::DisplayName};
 use url::Url;
 
@@ -25,14 +25,15 @@ async fn fetch_atom_parents_using_url() -> Result<(), Box<dyn std::error::Error>
     let client = umls_http::reqwest::Client::default();
 
     let base_url: Url = mock_server.base_url().parse()?;
-    let url = base_url.join("content/current/AUI/A10134087/parents")?;
 
     let umls_config = config::Config::builder("some_api_key")
         .base_url(base_url)
         .version(config::Version::Current)
         .build()?;
 
-    let pages = Parent::<parent::types::Atom, _, _>::new(url)
+    let aui = Aui::new("A10134087".try_into()?)?;
+
+    let pages = Parent::<parent::types::Atom, _, _>::new(aui)
         .with_client(client)
         .fetch(&umls_config)
         .await?;
@@ -52,35 +53,6 @@ async fn fetch_atom_parents_using_url() -> Result<(), Box<dyn std::error::Error>
 
     mock.assert_async().await;
 
-    Ok(())
-}
-
-#[tokio::test]
-async fn validation_url_object() -> Result<(), Box<dyn std::error::Error>> {
-    let client = umls_http::reqwest::Client::default();
-
-    let base_url: Url = "https://uts-ws.nlm.nih.gov/rest/".parse()?;
-    let umls_config = config::Config::builder("some_api_key")
-        .base_url(base_url)
-        .build()?;
-
-    let urls: Vec<Url> = vec![
-        "http://localhost:8080/rest/content/current/AUI/A10134087/parents".parse()?,
-        "https://localhost:8080/rest/content/current/AUI/A10134087/parents".parse()?,
-        "https://uts-ws.nlm.nih.gov:8080/rest/content/current/AUI/A10134087/parents".parse()?,
-    ];
-
-    for url in urls {
-        let result = Parent::<parent::types::Atom, _, _>::new(url)
-            .with_client(client.clone())
-            .fetch(&umls_config)
-            .await;
-
-        assert!(matches!(
-            result,
-            Err(Error::<umls_http::reqwest::Error>::Validation(_))
-        ));
-    }
     Ok(())
 }
 
@@ -149,13 +121,13 @@ async fn fetch_source_asserted_parents_using_url() -> Result<(), Box<dyn std::er
 
     let base_url: Url = mock_server.base_url().parse()?;
 
-    let url = base_url.join("content/current/source/SNOMEDCT_US/9468002/parents")?;
-
     let umls_config = config::Config::builder("some_api_key")
         .base_url(base_url)
         .build()?;
 
-    let page = Parent::<parent::types::Source, _, _>::new(url)
+    let source_concept = SourceConcept::new("SNOMEDCT_US".try_into()?, "9468002".try_into()?);
+
+    let page = Parent::<parent::types::Source, _, _>::new(source_concept)
         .with_client(Default::default())
         .fetch(&umls_config)
         .await?;
@@ -289,38 +261,6 @@ async fn fetch_source_asserted_concepts_using_batch_forward_pagination()
 }
 
 #[tokio::test]
-async fn source_asserted_parents_validation_failed() -> Result<(), Box<dyn std::error::Error>> {
-    let client = umls_http::reqwest::Client::default();
-
-    let base_url: Url = "https://uts-ws.nlm.nih.gov/rest/".parse()?;
-
-    let umls_config = config::Config::builder("some_api_key")
-        .base_url(base_url)
-        .build()?;
-
-    let urls: Vec<Url> = vec![
-        "http://localhost:8080/rest/content/current/source/SNOMEDCT_US/9468002/parents".parse()?,
-        "https://localhost:8080/rest/content/current/source/SNOMEDCT_US/9468002/parents".parse()?,
-        "https://uts-ws.nlm.nih.gov:8080/rest/content/current/source/SNOMEDCT_US/9468002/parents"
-            .parse()?,
-    ];
-
-    for url in urls {
-        let result = Parent::<parent::types::Atom, _, _>::new(url)
-            .with_client(client.clone())
-            .fetch(&umls_config)
-            .await;
-
-        assert!(matches!(
-            result,
-            Err(Error::<umls_http::reqwest::Error>::Validation(_))
-        ));
-    }
-
-    Ok(())
-}
-
-#[tokio::test]
 async fn fetch_source_asserted_concepts_using_batch_backward_pagination()
 -> Result<(), Box<dyn std::error::Error>> {
     let mock_server = MockServer::start_async().await;
@@ -448,7 +388,7 @@ async fn fetch_source_asserted_concepts_using_source_atom_cluster()
         })
         .await;
 
-    let base_url: Url = mock_server.base_url().parse()?;
+    let base_url = mock_server.base_url().parse()?;
 
     let umls_config = config::Config::builder("some_api_key")
         .base_url(base_url)

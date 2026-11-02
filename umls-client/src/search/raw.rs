@@ -9,15 +9,9 @@
 use std::num::NonZeroU64;
 
 #[cfg(feature = "reqwest")]
-use secrecy::ExposeSecret;
-
-#[cfg(feature = "reqwest")]
 use serde::Deserialize;
 
 use umls_http::WithoutClient;
-
-#[cfg(feature = "reqwest")]
-use url::Url;
 
 #[cfg(feature = "reqwest")]
 use crate::{
@@ -31,15 +25,24 @@ use umls_http::reqwest;
 #[derive(Debug, thiserror::Error)]
 /// An error produced while constructing, sending, or decoding a search.
 pub enum Error<T> {
-    /// The search endpoint or its query parameters could not be represented
-    /// as a valid URL.
-    #[error("URL parser error: {0}")]
-    Url(url::ParseError),
-
     /// The HTTP client failed to send the request, validate its status, or decode
     /// the response. The underlying client error is retained as the source.
     #[error("client error: {0}")]
     Client(#[source] T),
+
+    /// Represents the request construction error.
+    #[error("Request error: {0}")]
+    Request(http::Error),
+
+    /// Represents uri construction error.
+    #[error("Uri construction Error")]
+    Uri(#[source] http::uri::InvalidUri),
+}
+
+impl<T> From<http::uri::InvalidUri> for Error<T> {
+    fn from(value: http::uri::InvalidUri) -> Self {
+        Error::Uri(value)
+    }
 }
 
 /// A reusable raw-search executor with explicit HTTP client state.
@@ -102,7 +105,6 @@ impl Search<reqwest::Client> {
     ///
     /// # Errors
     ///
-    /// Returns [`Error::Url`] when the endpoint URL cannot be constructed.
     /// Returns [`Error::Client`] when the request fails, the server returns an
     /// unsuccessful status, or the response body cannot be deserialized.
     pub async fn search(
@@ -110,79 +112,12 @@ impl Search<reqwest::Client> {
         config: &Config,
         request: &Request,
     ) -> Result<SearchResponse, Error<reqwest::Error>> {
-        let path = format!("search/{}", config.version());
-        let url_string = config
-            .base_url()
-            .join(&path)
-            .map_err(Error::Url)?
-            .to_string();
+        let url = config.search_url(request).uri()?;
 
-        let source_vocabularies_params = request
-            .source_vocabularies()
-            .iter()
-            .map(|x| x.as_ref())
-            .collect::<Vec<&str>>()
-            .join(",");
-
-        let semantic_types_params = request
-            .semantic_types()
-            .iter()
-            .map(|x| x.as_ref())
-            .collect::<Vec<&str>>()
-            .join(",");
-
-        let semantic_groups_params = request
-            .semantic_groups()
-            .iter()
-            .map(|x| x.as_ref())
-            .collect::<Vec<&str>>()
-            .join(",");
-
-        let url = Url::parse_with_params(
-            &url_string,
-            &[
-                ("apiKey", config.api_key().expose_secret()),
-                ("string", request.term().as_ref()),
-                ("inputType", request.input_type().as_ref()),
-                (
-                    "includeObsolete",
-                    &request.obsolete().is_included().to_string(),
-                ),
-                (
-                    "includeSuppressible",
-                    &request.suppressible().is_included().to_string(),
-                ),
-                ("returnIdType", request.return_id_type.as_ref()),
-                ("sabs", &source_vocabularies_params),
-                ("searchType", request.search_type().as_ref()),
-                ("semanticTypes", &semantic_types_params),
-                ("semanticGroups", &semantic_groups_params),
-                (
-                    "partialSearch",
-                    &request.term_match().allows_partial().to_string(),
-                ),
-                ("pageSize", &request.page().size().to_string()),
-                ("pageNumber", &request.page().number().to_string()),
-            ],
-        )
-        .map_err(Error::Url)?;
-
-        tracing::debug!(
-            input_type = request.input_type().as_ref(),
-            return_id_type = request.return_id_type.as_ref(),
-            search_type = request.search_type().as_ref(),
-            include_obsolete = request.obsolete().is_included(),
-            include_suppressible = request.suppressible().is_included(),
-            allows_partial_match = request.term_match().allows_partial(),
-            source_vocabulary_count = request.source_vocabularies().len(),
-            semantic_type_count = request.semantic_types().len(),
-            semantic_group_count = request.semantic_groups().len(),
-            page_size = request.page().size(),
-            page_number = request.page().number(),
-            "sending UMLS search request"
-        );
-
-        let request = http::Request::builder().uri(url.as_str()).body(()).unwrap();
+        let request = http::Request::builder()
+            .uri(url)
+            .body(())
+            .map_err(Error::Request)?;
 
         let response: http::Response<SearchResponse> =
             self.client.execute(request).await.map_err(Error::Client)?;
@@ -238,7 +173,7 @@ pub struct RawSearchDto {
     /// Source vocabulary associated with the record, when supplied.
     pub root_source: Option<DisplayName>,
     /// UMLS API URI for retrieving the corresponding record.
-    pub uri: Url,
+    pub uri: String,
     /// Human-readable name of the matching record.
     pub name: DisplayName,
     /// Semantic types assigned to the record, when supplied.

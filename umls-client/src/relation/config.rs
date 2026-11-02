@@ -25,6 +25,7 @@ use crate::{
 /// # Ok(())
 /// # }
 /// ```
+#[derive(Debug, Clone)]
 pub struct Config {
     cui: Cui,
     labels: Vec<DisplayName>,
