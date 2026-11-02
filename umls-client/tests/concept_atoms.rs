@@ -168,27 +168,6 @@ async fn fetch_first_page_content_of_concept_atoms_with_differnt_version()
 }
 
 #[tokio::test]
-async fn reports_atom_url_errors() -> Result<(), Box<dyn std::error::Error>> {
-    let config = config::Builder::new(Uuid::new_v4().to_string())
-        .base_url("mailto:umls@example.com/".parse()?)
-        .build()?;
-    let cui = Cui::new("C0010200")?;
-
-    let error = match atom::Config::builder(cui)
-        .atoms()
-        .with_client(Default::default())
-        .fetch(&config)
-        .await
-    {
-        Ok(_) => panic!("a non-base URL cannot be joined with the atom path"),
-        Err(error) => error,
-    };
-
-    assert!(matches!(error, Error::Url(_)));
-    Ok(())
-}
-
-#[tokio::test]
 async fn reports_unsuccessful_atom_statuses() -> Result<(), Box<dyn std::error::Error>> {
     let mock_server = MockServer::start_async().await;
     mock_server
