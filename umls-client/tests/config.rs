@@ -1,6 +1,6 @@
 //! Base URL validation and endpoint resolution regression tests.
 
-use umls_client::config::{Config, Error};
+use umls_client::config::Config;
 
 #[test]
 fn default_base_url_preserves_rest_prefix() {
@@ -10,24 +10,6 @@ fn default_base_url_preserves_rest_prefix() {
         .join("content/current/CUI/C0010200/atoms")
         .unwrap();
     assert_eq!(endpoint.path(), "/rest/content/current/CUI/C0010200/atoms");
-}
-
-#[test]
-fn rejects_base_url_paths_without_trailing_slash() {
-    for url in [
-        "https://example.com/rest",
-        "https://example.com/proxy/rest",
-        "https://example.com/rest?redirect=/",
-        "https://example.com/rest#fragment/",
-    ] {
-        let result = Config::builder("test-key")
-            .base_url(url.parse().unwrap())
-            .build();
-        assert!(
-            matches!(result, Err(Error::MissingBaseUrlTrailingSlash)),
-            "{url}"
-        );
-    }
 }
 
 #[test]

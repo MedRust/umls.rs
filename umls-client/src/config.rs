@@ -159,8 +159,7 @@ impl Builder {
     /// # Errors
     ///
     /// Returns [`Error::EmptyApiKey`] when the API key is empty. Returns
-    /// [`Error::MissingBaseUrlTrailingSlash`] when the base URL path does not
-    /// end in `/`. Returns [`Error::UnsupportedYear`] for explicit release
+    /// [`Error::UnsupportedYear`] for explicit release
     /// years outside 2018 through the current UTC year, inclusive.
     ///
     /// Validation is local and does not make HTTP requests.
@@ -169,14 +168,18 @@ impl Builder {
             return Err(Error::EmptyApiKey);
         }
 
-        if !self.base_url.path().ends_with('/') {
-            return Err(Error::MissingBaseUrlTrailingSlash);
-        }
-
         if let Version::Release { year, .. } = self.version
             && !(2018..=Utc::now().year()).contains(&i32::from(year))
         {
             return Err(Error::UnsupportedYear(year));
+        }
+
+        if self.base_url.cannot_be_a_base() {
+            return Err(Error::InvalidBaseUrl);
+        }
+
+        if !is_http_url(&self.base_url) {
+            return Err(Error::NotHttpUrl);
         }
 
         Ok(Config {
@@ -187,7 +190,12 @@ impl Builder {
     }
 }
 
+fn is_http_url(url: &url::Url) -> bool {
+    matches!(url.scheme(), "http" | "https")
+}
+
 #[derive(Debug, Error)]
+#[non_exhaustive]
 /// An error produced while validating client configuration.
 pub enum Error {
     /// The configured UMLS API key was empty.
@@ -196,9 +204,14 @@ pub enum Error {
     /// The explicit release year was outside 2018 through the current UTC year.
     #[error("Unsupported year: {0}")]
     UnsupportedYear(u16),
-    /// The configured base URL path did not end in `/`.
-    #[error("Base URL path must end with a trailing '/'")]
-    MissingBaseUrlTrailingSlash,
+
+    /// Indicates the base url cannot be a base url.
+    #[error("Invalid base url")]
+    InvalidBaseUrl,
+
+    /// Indicate base url is not a http url.
+    #[error("Not a HTTP Url")]
+    NotHttpUrl,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -412,6 +425,8 @@ impl TryFrom<&str> for Version {
 #[cfg(test)]
 mod tests {
 
+    use clap::error::Result;
+
     use super::*;
 
     #[test]
@@ -517,5 +532,31 @@ mod tests {
 
         assert!(result.is_err());
         matches!(result, Err(Error::UnsupportedYear(..)));
+    }
+
+    #[test]
+    fn cannot_be_a_base_url() -> Result<(), Box<dyn std::error::Error>> {
+        let result = Config::builder("some_api_key")
+            .base_url("data:text/plain,Stuff".parse()?)
+            .build();
+
+        assert!(matches!(result, Err(Error::InvalidBaseUrl)));
+
+        Ok(())
+    }
+
+    #[test]
+    fn not_a_http_url() -> Result<(), Box<dyn std::error::Error>> {
+        let urls = ["ftp://rms@example.com", "unix:/run/foo.socket"];
+
+        for url in urls {
+            let result = Config::builder("some_api_key")
+                .base_url(url.parse()?)
+                .build();
+
+            assert!(matches!(result, Err(Error::NotHttpUrl)));
+        }
+
+        Ok(())
     }
 }
