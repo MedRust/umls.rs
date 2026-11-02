@@ -1,6 +1,5 @@
 use std::marker::PhantomData;
 
-use http::uri::PathAndQuery;
 use secrecy::ExposeSecret;
 
 use crate::{
@@ -16,53 +15,8 @@ use crate::relation;
 #[cfg(feature = "reqwest")]
 use crate::parent::SourceConcept;
 
-/// Represents URL construction error.
-#[derive(Debug, thiserror::Error)]
-pub enum Error {
-    /// Invalid HTTP scheme.
-    #[error("Invalid Scheme")]
-    InvalidScheme,
-
-    /// No athority found.
-    #[error("Athority not found")]
-    NoAthority,
-
-    /// Represents HTTP error.
-    #[error("Http Error: {0}")]
-    Http(#[source] http::Error),
-}
-
 /// A `Result` typedef to use with the [`Error`] type
-pub type Result<T> = std::result::Result<T, Error>;
-
-fn construct_uri<T>(
-    base_url: impl TryInto<http::Uri, Error = http::uri::InvalidUri>,
-    p_and_q: T,
-) -> Result<http::Uri>
-where
-    T: TryInto<PathAndQuery>,
-    T::Error: Into<http::Error>,
-{
-    let base_url = base_url
-        .try_into()
-        .map_err(|x| x.into())
-        .map_err(Error::Http)?;
-    let authority = base_url.authority().ok_or(Error::NoAthority)?.as_str();
-    let scheme = base_url.scheme_str().ok_or(Error::InvalidScheme)?;
-    let base_path = base_url.path().trim_end_matches("/");
-    let p_and_q = p_and_q
-        .try_into()
-        .map_err(|x| x.into())
-        .map_err(Error::Http)?;
-    let path = format!("{}{}", base_path, p_and_q);
-
-    http::Uri::builder()
-        .scheme(scheme)
-        .authority(authority)
-        .path_and_query(path)
-        .build()
-        .map_err(Error::Http)
-}
+pub type Result<T> = std::result::Result<T, http::uri::InvalidUri>;
 
 /// A umls type.
 pub mod types {
@@ -99,33 +53,62 @@ impl<'a, T, V> Info<'a, T, V> {
             value,
         }
     }
+
+    /// Returns UMLS configuration.
+    pub fn config(&self) -> &'a Config {
+        self.config
+    }
+
+    /// Returns value.
+    pub fn value(&self) -> &V {
+        &self.value
+    }
 }
 
 impl<'a> Info<'a, types::Concept, Cui> {
     /// Returns the concept info url.
     pub fn uri(&self) -> Result<http::Uri> {
-        let p_and_q = format!(
-            "/content/{}/CUI/{}?apiKey={}",
-            self.config.version().as_str(),
-            self.value.as_str(),
-            self.config.api_key().expose_secret()
-        );
+        let version = self.config().version().as_str().to_string();
+        let mut url = self.config().base_url().clone();
 
-        construct_uri(self.config.base_url().as_str(), p_and_q)
+        url.path_segments_mut()
+            .expect("The base url should be a base.")
+            .pop_if_empty()
+            .push("content")
+            .push(&version)
+            .push("CUI")
+            .push(self.value.as_str());
+
+        url.query_pairs_mut()
+            .clear()
+            .append_pair("apiKey", self.config.api_key().expose_secret())
+            .finish();
+
+        url.as_str().parse()
     }
 }
 
 impl<'a> Info<'a, types::Atom, Aui> {
     /// Returns atom info url.
     pub fn uri(&self) -> Result<http::Uri> {
-        let p_and_q = format!(
-            "/content/{}/AUI/{}?apiKey={}",
-            self.config.version(),
-            self.value,
-            self.config.api_key().expose_secret()
-        );
+        let version = self.config().version().as_str().to_string();
+        let aui = self.value.as_str();
+        let api_key = self.config().api_key().expose_secret();
 
-        construct_uri(self.config.base_url().as_str(), p_and_q)
+        let mut url = self.config().base_url().clone();
+        url.path_segments_mut()
+            .expect("The base url should be a base.")
+            .pop_if_empty()
+            .push("content")
+            .push(&version)
+            .push("AUI")
+            .push(aui);
+
+        url.query_pairs_mut()
+            .append_pair("apiKey", api_key)
+            .finish();
+
+        url.as_str().parse()
     }
 }
 
@@ -147,41 +130,72 @@ impl<'a, T, O, V> Atom<'a, T, O, V> {
             _option: PhantomData,
         }
     }
+
+    /// Returns UMLS configuration.
+    pub fn config(&self) -> &'a Config {
+        self.config
+    }
+
+    /// Returns value.
+    pub fn value(&self) -> &V {
+        &self.value
+    }
 }
 
 impl<'a> Atom<'a, types::Concept, types::atoms::All, Cui> {
     /// Returns concept atoms url.
     pub fn uri(&self) -> Result<http::Uri> {
-        let p_and_q = format!(
-            "/content/{}/CUI/{}/atoms?apiKey={}",
-            self.config.version(),
-            self.value,
-            self.config.api_key().expose_secret()
-        );
+        let version = self.config().version().as_str().to_string();
+        let cui = self.value().as_str();
+        let api_key = self.config().api_key().expose_secret();
 
-        construct_uri(self.config.base_url().as_str(), p_and_q)
+        let mut url = self.config().base_url().clone();
+        url.path_segments_mut()
+            .expect("The base url should be a base.")
+            .pop_if_empty()
+            .push("content")
+            .push(&version)
+            .push("CUI")
+            .push(cui)
+            .push("atoms");
+
+        url.query_pairs_mut()
+            .append_pair("apiKey", api_key)
+            .finish();
+
+        url.as_str().parse()
     }
 }
 
 impl<'a> Atom<'a, types::Concept, types::atoms::Preferred, Cui> {
     /// Returns preferred atom for concept url.
     pub fn uri(&self) -> Result<http::Uri> {
-        let p_and_q = format!(
-            "/content/{}/CUI/{}/atoms/preferred?apiKey={}",
-            self.config.version(),
-            self.value,
-            self.config.api_key().expose_secret()
-        );
+        let version = self.config().version().as_str().to_string();
+        let cui = self.value().as_str();
+        let api_key = self.config().api_key().expose_secret();
 
-        construct_uri(self.config.base_url().as_str(), p_and_q)
+        let mut url = self.config().base_url().clone();
+        url.path_segments_mut()
+            .expect("The base url should be a base.")
+            .pop_if_empty()
+            .push("content")
+            .push(&version)
+            .push("CUI")
+            .push(cui)
+            .push("atoms")
+            .push("preferred");
+
+        url.query_pairs_mut()
+            .append_pair("apiKey", api_key)
+            .finish();
+
+        url.as_str().parse()
     }
 }
 
 impl<'a> Atom<'a, types::Concept, types::atoms::All, atom::Batch<atom::Config<Cui>>> {
     /// Returns all atoms for concept url.
     pub fn uri(&self) -> Result<http::Uri> {
-        let cui = self.value.value().value();
-
         let source_vocabularies_params = self
             .value
             .value()
@@ -212,21 +226,33 @@ impl<'a> Atom<'a, types::Concept, types::atoms::All, atom::Batch<atom::Config<Cu
             .map(|x| x.as_str())
             .unwrap_or("");
 
-        let p_and_q = format!(
-            "/content/{}/CUI/{}/atoms?apiKey={}&sabs={}&ttys={}&language={}&includeObsolete={}&includeSuppressible={}&pageNumber={}&pageSize={}",
-            self.config.version(),
-            cui,
-            self.config.api_key().expose_secret(),
-            source_vocabularies_params,
-            tty_params,
-            language,
-            include_obsolete,
-            include_suppressible,
-            page_number,
-            page_size
-        );
+        let version = self.config().version().as_str().to_string();
+        let cui = self.value().value().value().as_str();
+        let api_key = self.config().api_key().expose_secret();
 
-        construct_uri(self.config.base_url().as_str(), p_and_q)
+        let mut url = self.config().base_url().clone();
+        url.path_segments_mut()
+            .expect("The base url should be a base.")
+            .pop_if_empty()
+            .push("content")
+            .push(&version)
+            .push("CUI")
+            .push(cui)
+            .push("atoms");
+
+        url.query_pairs_mut()
+            .clear()
+            .append_pair("apiKey", api_key)
+            .append_pair("sabs", &source_vocabularies_params)
+            .append_pair("ttys", &tty_params)
+            .append_pair("language", language)
+            .append_pair("includeObsolete", &include_obsolete.to_string())
+            .append_pair("includeSuppressible", &include_suppressible.to_string())
+            .append_pair("pageNumber", &page_number.to_string())
+            .append_pair("pageSize", &page_size.to_string())
+            .finish();
+
+        url.as_str().parse()
     }
 }
 
@@ -261,14 +287,25 @@ impl<'a, T, V> Definition<'a, T, V> {
 impl<'a> Definition<'a, types::Concept, Cui> {
     /// Returns concept definitions url.
     pub fn uri(&self) -> Result<http::Uri> {
-        let p_and_q = format!(
-            "/content/{}/CUI/{}/definitions?apiKey={}",
-            self.config.version().as_str(),
-            self.value,
-            self.config.api_key().expose_secret()
-        );
+        let version = self.config().version().to_string();
+        let cui = self.value().as_str();
+        let api_key = self.config().api_key().expose_secret();
 
-        construct_uri(self.config.base_url().as_str(), p_and_q)
+        let mut url = self.config().base_url().clone();
+        url.path_segments_mut()
+            .expect("The base url should be a base.")
+            .pop_if_empty()
+            .push("content")
+            .push(&version)
+            .push("CUI")
+            .push(cui)
+            .push("definitions");
+
+        url.query_pairs_mut()
+            .append_pair("apiKey", api_key)
+            .finish();
+
+        url.as_str().parse()
     }
 }
 
@@ -284,17 +321,30 @@ impl<'a> Definition<'a, types::Concept, atom::Batch<definition::Config>> {
             .collect::<Vec<&str>>()
             .join(",");
 
-        let p_and_q = format!(
-            "/content/{}/CUI/{}/definitions?apiKey={}&sabs={}&pageSize={}&pageNumber={}",
-            self.config.version().as_str(),
-            self.value.value().cui(),
-            self.config.api_key().expose_secret(),
-            sabs,
-            self.value.size(),
-            self.value.number()
-        );
+        let version = self.config().version().to_string();
+        let cui = self.value().value().cui().as_str();
+        let api_key = self.config().api_key().expose_secret();
+        let page_size = self.value().size().to_string();
+        let page_number = self.value().number().to_string();
 
-        construct_uri(self.config.base_url().as_str(), p_and_q)
+        let mut url = self.config().base_url().clone();
+        url.path_segments_mut()
+            .expect("The base url should be a base.")
+            .pop_if_empty()
+            .push("content")
+            .push(&version)
+            .push("CUI")
+            .push(cui)
+            .push("definitions");
+
+        url.query_pairs_mut()
+            .append_pair("apiKey", api_key)
+            .append_pair("sabs", &sabs)
+            .append_pair("pageSize", &page_size)
+            .append_pair("pageNumber", &page_number)
+            .finish();
+
+        url.as_str().parse()
     }
 }
 
@@ -309,17 +359,30 @@ impl<'a> Definition<'a, types::Concept, definition::Config> {
             .collect::<Vec<&str>>()
             .join(",");
 
-        let p_and_q = format!(
-            "/content/{}/CUI/{}/definitions?apiKey={}&sabs={}&pageSize={}&pageNumber={}",
-            self.config.version().as_str(),
-            self.value.cui(),
-            self.config.api_key().expose_secret(),
-            sabs,
-            crate::search::core::DEFAULT_PAGE_SIZE,
-            crate::search::core::DEFAULT_PAGE_NUMBER
-        );
+        let version = self.config().version().to_string();
+        let cui = self.value().cui().as_str();
+        let api_key = self.config().api_key().expose_secret();
+        let page_size = crate::search::core::DEFAULT_PAGE_SIZE.to_string();
+        let page_number = crate::search::core::DEFAULT_PAGE_NUMBER.to_string();
 
-        construct_uri(self.config.base_url().as_str(), p_and_q)
+        let mut url = self.config().base_url().clone();
+        url.path_segments_mut()
+            .expect("The base url should be a base.")
+            .pop_if_empty()
+            .push("content")
+            .push(&version)
+            .push("CUI")
+            .push(cui)
+            .push("definitions");
+
+        url.query_pairs_mut()
+            .append_pair("apiKey", api_key)
+            .append_pair("sabs", &sabs)
+            .append_pair("pageSize", &page_size)
+            .append_pair("pageNumber", &page_number)
+            .finish();
+
+        url.as_str().parse()
     }
 }
 
@@ -354,14 +417,25 @@ impl<'a, T, V> Relation<'a, T, V> {
 impl<'a> Relation<'a, types::Concept, Cui> {
     /// Returns relations definitions.
     pub fn uri(&self) -> Result<http::Uri> {
-        let p_and_q = format!(
-            "/content/{}/CUI/{}/relations?apiKey={}",
-            self.config.version().as_str(),
-            self.value,
-            self.config.api_key().expose_secret()
-        );
+        let version = self.config().version().to_string();
+        let cui = self.value().as_str();
+        let api_key = self.config().api_key().expose_secret();
 
-        construct_uri(self.config.base_url().as_str(), p_and_q)
+        let mut url = self.config().base_url().clone();
+        url.path_segments_mut()
+            .expect("The base url should be a base.")
+            .pop_if_empty()
+            .push("content")
+            .push(&version)
+            .push("CUI")
+            .push(cui)
+            .push("relations");
+
+        url.query_pairs_mut()
+            .append_pair("apiKey", api_key)
+            .finish();
+
+        url.as_str().parse()
     }
 }
 
@@ -393,21 +467,37 @@ impl<'a> Relation<'a, types::Concept, relation::config::Config> {
             .collect::<Vec<&str>>()
             .join(",");
 
-        let p_and_q = format!(
-            "/content/{}/CUI/{}/relations?apiKey={}&includeRelationLabels={}&includeAdditionalRelationLabels={}&sabs={}&includeObsolete={}&includeSuppressible={}&pageSize={}&pageNumber={}",
-            self.config.version().as_str(),
-            self.value().cui(),
-            self.config.api_key().expose_secret(),
-            labels,
-            additional_lables,
-            source_vocabularies,
-            self.value().include_obsolete(),
-            self.value().include_suppressible(),
-            crate::search::core::DEFAULT_PAGE_SIZE,
-            crate::search::core::DEFAULT_PAGE_NUMBER
-        );
+        let include_obsolete = self.value().include_obsolete().to_string();
+        let include_suppressible = self.value().include_suppressible().to_string();
+        let page_size = crate::search::core::DEFAULT_PAGE_SIZE.to_string();
+        let page_number = crate::search::core::DEFAULT_PAGE_NUMBER.to_string();
 
-        construct_uri(self.config.base_url().as_str(), p_and_q)
+        let version = self.config().version().to_string();
+        let cui = self.value().cui().as_str();
+        let api_key = self.config().api_key().expose_secret();
+
+        let mut url = self.config().base_url().clone();
+        url.path_segments_mut()
+            .expect("The base url should be a base.")
+            .pop_if_empty()
+            .push("content")
+            .push(&version)
+            .push("CUI")
+            .push(cui)
+            .push("relations");
+
+        url.query_pairs_mut()
+            .append_pair("apiKey", api_key)
+            .append_pair("includeRelationLabels", &labels)
+            .append_pair("includeAdditionalRelationLabels", &additional_lables)
+            .append_pair("sabs", &source_vocabularies)
+            .append_pair("includeObsolete", &include_obsolete)
+            .append_pair("includeSuppressible", &include_suppressible)
+            .append_pair("pageSize", &page_size)
+            .append_pair("pageNumber", &page_number)
+            .finish();
+
+        url.as_str().parse()
     }
 }
 
@@ -442,21 +532,37 @@ impl<'a> Relation<'a, types::Concept, atom::Batch<relation::config::Config>> {
             .collect::<Vec<&str>>()
             .join(",");
 
-        let p_and_q = format!(
-            "/content/{}/CUI/{}/relations?apiKey={}&includeRelationLabels={}&includeAdditionalRelationLabels={}&sabs={}&includeObsolete={}&includeSuppressible={}&pageSize={}&pageNumber={}",
-            self.config.version().as_str(),
-            self.value().value().cui(),
-            self.config.api_key().expose_secret(),
-            labels,
-            additional_lables,
-            source_vocabularies,
-            self.value().value().include_obsolete(),
-            self.value().value().include_suppressible(),
-            self.value().size(),
-            self.value().number()
-        );
+        let include_obsolete = self.value().value().include_obsolete().to_string();
+        let include_suppressible = self.value().value().include_suppressible().to_string();
+        let page_size = self.value().size().to_string();
+        let page_number = self.value().number().to_string();
 
-        construct_uri(self.config.base_url().as_str(), p_and_q)
+        let version = self.config().version().to_string();
+        let cui = self.value().value().cui().as_str();
+        let api_key = self.config().api_key().expose_secret();
+
+        let mut url = self.config().base_url().clone();
+        url.path_segments_mut()
+            .expect("The base url should be a base.")
+            .pop_if_empty()
+            .push("content")
+            .push(&version)
+            .push("CUI")
+            .push(cui)
+            .push("relations");
+
+        url.query_pairs_mut()
+            .append_pair("apiKey", api_key)
+            .append_pair("includeRelationLabels", &labels)
+            .append_pair("includeAdditionalRelationLabels", &additional_lables)
+            .append_pair("sabs", &source_vocabularies)
+            .append_pair("includeObsolete", &include_obsolete)
+            .append_pair("includeSuppressible", &include_suppressible)
+            .append_pair("pageSize", &page_size)
+            .append_pair("pageNumber", &page_number)
+            .finish();
+
+        url.as_str().parse()
     }
 }
 
@@ -491,32 +597,58 @@ impl<'a, T, V> Parent<'a, T, V> {
 impl<'a> Parent<'a, types::Atom, Aui> {
     /// Returns atom parents url.
     pub fn uri(&self) -> Result<http::Uri> {
-        let p_and_q = format!(
-            "/content/{}/AUI/{}/parents?apiKey={}&pageSize={}&pageNumber={}",
-            self.config.version().as_str(),
-            self.value,
-            self.config.api_key().expose_secret(),
-            crate::search::core::DEFAULT_PAGE_SIZE,
-            crate::search::core::DEFAULT_PAGE_NUMBER
-        );
+        let version = self.config().version().to_string();
+        let aui = self.value().as_str();
+        let api_key = self.config().api_key().expose_secret();
+        let page_size = crate::search::core::DEFAULT_PAGE_SIZE.to_string();
+        let page_number = crate::search::core::DEFAULT_PAGE_NUMBER.to_string();
 
-        construct_uri(self.config.base_url().as_str(), p_and_q)
+        let mut url = self.config().base_url().clone();
+        url.path_segments_mut()
+            .expect("The base url should be a base.")
+            .pop_if_empty()
+            .push("content")
+            .push(&version)
+            .push("AUI")
+            .push(aui)
+            .push("parents");
+
+        url.query_pairs_mut()
+            .append_pair("apiKey", api_key)
+            .append_pair("pageSize", &page_size)
+            .append_pair("pageNumber", &page_number)
+            .finish();
+
+        url.as_str().parse()
     }
 }
 
 impl<'a> Parent<'a, types::Atom, atom::Batch<Aui>> {
     /// Returns atom parents in batches url.
     pub fn uri(&self) -> Result<http::Uri> {
-        let p_and_q = format!(
-            "/content/{}/AUI/{}/parents?apiKey={}&pageSize={}&pageNumber={}",
-            self.config.version().as_str(),
-            self.value().value(),
-            self.config.api_key().expose_secret(),
-            self.value().size(),
-            self.value().number()
-        );
+        let version = self.config().version().to_string();
+        let aui = self.value().value().as_str();
+        let api_key = self.config().api_key().expose_secret();
+        let page_size = self.value().size().to_string();
+        let page_number = self.value().number().to_string();
 
-        construct_uri(self.config.base_url().as_str(), p_and_q)
+        let mut url = self.config().base_url().clone();
+        url.path_segments_mut()
+            .expect("The base url should be a base.")
+            .pop_if_empty()
+            .push("content")
+            .push(&version)
+            .push("AUI")
+            .push(aui)
+            .push("parents");
+
+        url.query_pairs_mut()
+            .append_pair("apiKey", api_key)
+            .append_pair("pageSize", &page_size)
+            .append_pair("pageNumber", &page_number)
+            .finish();
+
+        url.as_str().parse()
     }
 }
 
@@ -524,17 +656,31 @@ impl<'a> Parent<'a, types::Atom, atom::Batch<Aui>> {
 impl<'a> Parent<'a, types::Source, SourceConcept> {
     /// Returns a source-asserted parent url.
     pub fn uri(&self) -> Result<http::Uri> {
-        let p_and_q = format!(
-            "/content/{}/source/{}/{}/parents?apiKey={}&pageSize={}&pageNumber={}",
-            self.config.version().as_str(),
-            self.value().source(),
-            self.value.code(),
-            self.config.api_key().expose_secret(),
-            crate::search::core::DEFAULT_PAGE_SIZE,
-            crate::search::core::DEFAULT_PAGE_NUMBER
-        );
+        let version = self.config().version().to_string();
+        let source = self.value().source().as_str();
+        let code = self.value().code().as_str();
+        let api_key = self.config().api_key().expose_secret();
+        let page_number = crate::search::core::DEFAULT_PAGE_NUMBER.to_string();
+        let page_size = crate::search::core::DEFAULT_PAGE_SIZE.to_string();
 
-        construct_uri(self.config.base_url().as_str(), p_and_q)
+        let mut url = self.config().base_url().clone();
+        url.path_segments_mut()
+            .expect("The base url should be a base.")
+            .pop_if_empty()
+            .push("content")
+            .push(&version)
+            .push("source")
+            .push(source)
+            .push(code)
+            .push("parents");
+
+        url.query_pairs_mut()
+            .append_pair("apiKey", api_key)
+            .append_pair("pageSize", &page_size)
+            .append_pair("pageNumber", &page_number)
+            .finish();
+
+        url.as_str().parse()
     }
 }
 
@@ -542,17 +688,31 @@ impl<'a> Parent<'a, types::Source, SourceConcept> {
 impl<'a> Parent<'a, types::Source, atom::Batch<SourceConcept>> {
     /// Returns a source-asserted concept in batches url.
     pub fn uri(&self) -> Result<http::Uri> {
-        let p_and_q = format!(
-            "/content/{}/source/{}/{}/parents?apiKey={}&pageSize={}&pageNumber={}",
-            self.config.version().as_str(),
-            self.value().value().source(),
-            self.value().value().code(),
-            self.config.api_key().expose_secret(),
-            self.value().size(),
-            self.value().number()
-        );
+        let version = self.config().version().to_string();
+        let source = self.value().value().source().as_str();
+        let code = self.value().value().code().as_str();
+        let api_key = self.config().api_key().expose_secret();
+        let page_number = self.value().number().to_string();
+        let page_size = self.value().size().to_string();
 
-        construct_uri(self.config.base_url().as_str(), p_and_q)
+        let mut url = self.config().base_url().clone();
+        url.path_segments_mut()
+            .expect("The base url should be a base.")
+            .pop_if_empty()
+            .push("content")
+            .push(&version)
+            .push("source")
+            .push(source)
+            .push(code)
+            .push("parents");
+
+        url.query_pairs_mut()
+            .append_pair("apiKey", api_key)
+            .append_pair("pageSize", &page_size)
+            .append_pair("pageNumber", &page_number)
+            .finish();
+
+        url.as_str().parse()
     }
 }
 
@@ -606,25 +766,42 @@ impl<'a> Search<'a, crate::search::Request> {
             .collect::<Vec<&str>>()
             .join(",");
 
-        let p_and_q = format!(
-            "/search/{}?apiKey={}&string={}&inputType={}&includeObsolete={}&includeSuppressible={}&returnIdType={}&sabs={}&searchType={}&semanticTypes={}&semanticGroups={}&partialSearch={}&pageSize={}&pageNumber={}",
-            self.config().version(),
-            self.config().api_key().expose_secret(),
-            self.value().term(),
-            self.value().input_type().as_str(),
-            self.value().obsolete().is_included(),
-            self.value().suppressible().is_included(),
-            self.value().return_id_type().as_str(),
-            source_vocabularies_params,
-            self.value().search_type().as_str(),
-            semantic_types_params,
-            semantic_groups_params,
-            self.value().term_match().allows_partial(),
-            self.value().page().size(),
-            self.value().page().number(),
-        );
+        let version = self.config().version().to_string();
+        let api_key = self.config().api_key().expose_secret();
+        let term = self.value().term().as_str();
+        let input_type = self.value().input_type().as_str().to_string();
+        let include_obsolete = self.value().obsolete().is_included().to_string();
+        let include_suppressible = self.value().suppressible().is_included().to_string();
+        let return_id_type = self.value().return_id_type().as_str();
+        let search_type = self.value().search_type().as_str();
+        let partial_search = self.value().term_match().allows_partial().to_string();
+        let page_number = self.value().page().number().to_string();
+        let page_size = self.value().page().size().to_string();
 
-        construct_uri(self.config().base_url().as_str(), p_and_q)
+        let mut url = self.config().base_url().clone();
+        url.path_segments_mut()
+            .expect("The base url should be a base.")
+            .pop_if_empty()
+            .push("search")
+            .push(&version);
+
+        url.query_pairs_mut()
+            .append_pair("apiKey", api_key)
+            .append_pair("string", term)
+            .append_pair("inputType", &input_type)
+            .append_pair("includeObsolete", &include_obsolete)
+            .append_pair("includeSuppressible", &include_suppressible)
+            .append_pair("returnIdType", return_id_type)
+            .append_pair("sabs", &source_vocabularies_params)
+            .append_pair("searchType", search_type)
+            .append_pair("semanticTypes", &semantic_types_params)
+            .append_pair("semanticGroups", &semantic_groups_params)
+            .append_pair("partialSearch", &partial_search)
+            .append_pair("pageSize", &page_size)
+            .append_pair("pageNumber", &page_number)
+            .finish();
+
+        url.as_str().parse()
     }
 }
 
@@ -644,50 +821,7 @@ mod tests {
     #[cfg(feature = "reqwest")]
     use crate::{parent::SourceConcept, relation};
 
-    use super::{Atom, Error, Info, Parent, Relation, Search, construct_uri, types};
-
-    #[test]
-    fn construct_new_uri_from_base_uri() -> Result<(), Box<dyn std::error::Error>> {
-        let base_url = "http://localhost:8080/rest";
-        let object = construct_uri(base_url, "/new/url")?;
-        assert_eq!(object, "http://localhost:8080/rest/new/url");
-
-        let base_url = "http://localhost:8080";
-        let object = construct_uri(base_url, "/new/url")?;
-        assert_eq!(object, "http://localhost:8080/new/url");
-
-        let base_url = "http://localhost:8080/rest/";
-        let object = construct_uri(base_url, "/new/url")?;
-        assert_eq!(object, "http://localhost:8080/rest/new/url");
-
-        let base_url = "http://localhost:8080/";
-        let object = construct_uri(base_url, "/new/url")?;
-        assert_eq!(object, "http://localhost:8080/new/url");
-
-        Ok(())
-    }
-
-    #[test]
-    fn invalid_scheme_construction_uri() {
-        let uri = "http:";
-        let result = construct_uri(uri, "");
-        assert!(matches!(result, Err(Error::InvalidScheme)));
-    }
-
-    #[test]
-    fn authority_not_found() {
-        let uri = "/path/to/resource";
-        let result = construct_uri(uri, "");
-        assert!(matches!(result, Err(Error::NoAthority)));
-    }
-
-    #[test]
-    fn invalid_url() -> Result<(), Box<dyn std::error::Error>> {
-        let base_url = "http://localhost:8080";
-        let result = construct_uri(base_url, "http://localhost:8080");
-        assert!(matches!(result, Err(Error::Http(_))));
-        Ok(())
-    }
+    use super::{Atom, Info, Parent, Relation, Search, types};
 
     #[test]
     fn construct_concept_info_uri_for_cui() -> Result<(), Box<dyn std::error::Error>> {
@@ -836,7 +970,7 @@ mod tests {
         assert_eq!(
             uri.path_and_query().and_then(|x| x.query()),
             Some(
-                "apiKey=some_api_key&sabs=SNOMEDCT_US,MSH&ttys=&language=&includeObsolete=false&includeSuppressible=false&pageNumber=1&pageSize=25"
+                "apiKey=some_api_key&sabs=SNOMEDCT_US%2CMSH&ttys=&language=&includeObsolete=false&includeSuppressible=false&pageNumber=1&pageSize=25"
             )
         );
         Ok(())
@@ -884,7 +1018,7 @@ mod tests {
         assert_eq!(
             uri.path_and_query().and_then(|x| x.query()),
             Some(
-                "apiKey=some_api_key&sabs=&ttys=PT,FN,SY&language=&includeObsolete=false&includeSuppressible=false&pageNumber=1&pageSize=25"
+                "apiKey=some_api_key&sabs=&ttys=PT%2CFN%2CSY&language=&includeObsolete=false&includeSuppressible=false&pageNumber=1&pageSize=25"
             )
         );
         Ok(())
@@ -1075,7 +1209,7 @@ mod tests {
         assert_eq!(uri.path(), "/rest/content/current/CUI/C0010200/definitions");
         assert_eq!(
             uri.path_and_query().and_then(|x| x.query()),
-            Some("apiKey=some_api_key&sabs=SNOMEDCT_US,MSH&pageSize=25&pageNumber=1")
+            Some("apiKey=some_api_key&sabs=SNOMEDCT_US%2CMSH&pageSize=25&pageNumber=1")
         );
         Ok(())
     }
@@ -1185,7 +1319,7 @@ mod tests {
         assert_eq!(uri.path(), "/rest/content/current/CUI/C0010200/definitions");
         assert_eq!(
             uri.path_and_query().and_then(|x| x.query()),
-            Some("apiKey=some_api_key&sabs=SNOMEDCT_US,MSH,MTH&pageSize=25&pageNumber=1")
+            Some("apiKey=some_api_key&sabs=SNOMEDCT_US%2CMSH%2CMTH&pageSize=25&pageNumber=1")
         );
 
         Ok(())
@@ -1545,7 +1679,7 @@ mod tests {
                     .try_add_source_vocabulary("SNOMEDCT_US")?
                     .try_add_source_vocabulary("MSH")?
                     .build(),
-                "apiKey=some_api_key&string=Cough&inputType=atom&includeObsolete=false&includeSuppressible=false&returnIdType=concept&sabs=SNOMEDCT_US,MSH&searchType=words&semanticTypes=&semanticGroups=&partialSearch=false&pageSize=25&pageNumber=1",
+                "apiKey=some_api_key&string=Cough&inputType=atom&includeObsolete=false&includeSuppressible=false&returnIdType=concept&sabs=SNOMEDCT_US%2CMSH&searchType=words&semanticTypes=&semanticGroups=&partialSearch=false&pageSize=25&pageNumber=1",
             ),
             (
                 search::Request::builder("Cough".try_into()?)
