@@ -67,7 +67,7 @@ impl<'a, T, V> Info<'a, T, V> {
 
 impl<'a> Info<'a, types::Concept, Cui> {
     /// Returns the concept info url.
-    pub fn uri(&self) -> Result<http::Uri> {
+    pub fn uri(&self) -> url::Url {
         let version = self.config().version().as_str().to_string();
         let mut url = self.config().base_url().clone();
 
@@ -84,13 +84,13 @@ impl<'a> Info<'a, types::Concept, Cui> {
             .append_pair("apiKey", self.config.api_key().expose_secret())
             .finish();
 
-        url.as_str().parse()
+        url
     }
 }
 
 impl<'a> Info<'a, types::Atom, &Aui> {
     /// Returns atom info url.
-    pub fn uri(&self) -> Result<http::Uri> {
+    pub fn uri(&self) -> url::Url {
         let version = self.config().version().as_str().to_string();
         let aui = self.value.as_str();
         let api_key = self.config().api_key().expose_secret();
@@ -108,7 +108,7 @@ impl<'a> Info<'a, types::Atom, &Aui> {
             .append_pair("apiKey", api_key)
             .finish();
 
-        url.as_str().parse()
+        url
     }
 }
 
@@ -144,7 +144,7 @@ impl<'a, T, O, V> Atom<'a, T, O, V> {
 
 impl<'a> Atom<'a, types::Concept, types::atoms::All, Cui> {
     /// Returns concept atoms url.
-    pub fn uri(&self) -> Result<http::Uri> {
+    pub fn uri(&self) -> url::Url {
         let version = self.config().version().as_str().to_string();
         let cui = self.value().as_str();
         let api_key = self.config().api_key().expose_secret();
@@ -163,13 +163,13 @@ impl<'a> Atom<'a, types::Concept, types::atoms::All, Cui> {
             .append_pair("apiKey", api_key)
             .finish();
 
-        url.as_str().parse()
+        url
     }
 }
 
 impl<'a> Atom<'a, types::Concept, types::atoms::Preferred, Cui> {
     /// Returns preferred atom for concept url.
-    pub fn uri(&self) -> Result<http::Uri> {
+    pub fn uri(&self) -> url::Url {
         let version = self.config().version().as_str().to_string();
         let cui = self.value().as_str();
         let api_key = self.config().api_key().expose_secret();
@@ -189,13 +189,13 @@ impl<'a> Atom<'a, types::Concept, types::atoms::Preferred, Cui> {
             .append_pair("apiKey", api_key)
             .finish();
 
-        url.as_str().parse()
+        url
     }
 }
 
 impl<'a> Atom<'a, types::Concept, types::atoms::All, &atom::Batch<atom::Config<Cui>>> {
     /// Returns all atoms for concept url.
-    pub fn uri(&self) -> Result<http::Uri> {
+    pub fn uri(&self) -> url::Url {
         let source_vocabularies_params = self
             .value
             .value()
@@ -252,7 +252,7 @@ impl<'a> Atom<'a, types::Concept, types::atoms::All, &atom::Batch<atom::Config<C
             .append_pair("pageSize", &page_size.to_string())
             .finish();
 
-        url.as_str().parse()
+        url
     }
 }
 
@@ -286,7 +286,7 @@ impl<'a, T, V> Definition<'a, T, V> {
 
 impl<'a> Definition<'a, types::Concept, Cui> {
     /// Returns concept definitions url.
-    pub fn uri(&self) -> Result<http::Uri> {
+    pub fn uri(&self) -> url::Url {
         let version = self.config().version().to_string();
         let cui = self.value().as_str();
         let api_key = self.config().api_key().expose_secret();
@@ -305,13 +305,13 @@ impl<'a> Definition<'a, types::Concept, Cui> {
             .append_pair("apiKey", api_key)
             .finish();
 
-        url.as_str().parse()
+        url
     }
 }
 
 impl<'a> Definition<'a, types::Concept, &atom::Batch<definition::Config>> {
     /// Returns concept definitions url.
-    pub fn uri(&self) -> Result<http::Uri> {
+    pub fn uri(&self) -> url::Url {
         let sabs = self
             .value
             .value()
@@ -344,13 +344,13 @@ impl<'a> Definition<'a, types::Concept, &atom::Batch<definition::Config>> {
             .append_pair("pageNumber", &page_number)
             .finish();
 
-        url.as_str().parse()
+        url
     }
 }
 
 impl<'a> Definition<'a, types::Concept, &definition::Config> {
     /// Returns concept definitions url.
-    pub fn uri(&self) -> Result<http::Uri> {
+    pub fn uri(&self) -> url::Url {
         let sabs = self
             .value()
             .source_vocabularies()
@@ -382,7 +382,7 @@ impl<'a> Definition<'a, types::Concept, &definition::Config> {
             .append_pair("pageNumber", &page_number)
             .finish();
 
-        url.as_str().parse()
+        url
     }
 }
 
@@ -416,7 +416,7 @@ impl<'a, T, V> Relation<'a, T, V> {
 
 impl<'a> Relation<'a, types::Concept, Cui> {
     /// Returns relations definitions.
-    pub fn uri(&self) -> Result<http::Uri> {
+    pub fn uri(&self) -> url::Url {
         let version = self.config().version().to_string();
         let cui = self.value().as_str();
         let api_key = self.config().api_key().expose_secret();
@@ -435,14 +435,14 @@ impl<'a> Relation<'a, types::Concept, Cui> {
             .append_pair("apiKey", api_key)
             .finish();
 
-        url.as_str().parse()
+        url
     }
 }
 
 #[cfg(feature = "reqwest")]
 impl<'a> Relation<'a, types::Concept, &relation::config::Config> {
     /// Returns concept relations for relation configuration.
-    pub fn uri(&self) -> Result<http::Uri> {
+    pub fn uri(&self) -> url::Url {
         let labels = self
             .value()
             .labels()
@@ -497,14 +497,14 @@ impl<'a> Relation<'a, types::Concept, &relation::config::Config> {
             .append_pair("pageNumber", &page_number)
             .finish();
 
-        url.as_str().parse()
+        url
     }
 }
 
 #[cfg(feature = "reqwest")]
 impl<'a> Relation<'a, types::Concept, &atom::Batch<relation::config::Config>> {
     /// Returns concept relations for configuration with batches.
-    pub fn uri(&self) -> Result<http::Uri> {
+    pub fn uri(&self) -> url::Url {
         let labels = self
             .value()
             .value()
@@ -562,7 +562,7 @@ impl<'a> Relation<'a, types::Concept, &atom::Batch<relation::config::Config>> {
             .append_pair("pageNumber", &page_number)
             .finish();
 
-        url.as_str().parse()
+        url
     }
 }
 
@@ -596,7 +596,7 @@ impl<'a, T, V> Parent<'a, T, V> {
 
 impl<'a> Parent<'a, types::Atom, Aui> {
     /// Returns atom parents url.
-    pub fn uri(&self) -> Result<http::Uri> {
+    pub fn uri(&self) -> url::Url {
         let version = self.config().version().to_string();
         let aui = self.value().as_str();
         let api_key = self.config().api_key().expose_secret();
@@ -619,13 +619,13 @@ impl<'a> Parent<'a, types::Atom, Aui> {
             .append_pair("pageNumber", &page_number)
             .finish();
 
-        url.as_str().parse()
+        url
     }
 }
 
 impl<'a> Parent<'a, types::Atom, &atom::Batch<Aui>> {
     /// Returns atom parents in batches url.
-    pub fn uri(&self) -> Result<http::Uri> {
+    pub fn uri(&self) -> url::Url {
         let version = self.config().version().to_string();
         let aui = self.value().value().as_str();
         let api_key = self.config().api_key().expose_secret();
@@ -648,14 +648,14 @@ impl<'a> Parent<'a, types::Atom, &atom::Batch<Aui>> {
             .append_pair("pageNumber", &page_number)
             .finish();
 
-        url.as_str().parse()
+        url
     }
 }
 
 #[cfg(feature = "reqwest")]
 impl<'a> Parent<'a, types::Source, SourceConcept> {
     /// Returns a source-asserted parent url.
-    pub fn uri(&self) -> Result<http::Uri> {
+    pub fn uri(&self) -> url::Url {
         let version = self.config().version().to_string();
         let source = self.value().source().as_str();
         let code = self.value().code().as_str();
@@ -680,14 +680,14 @@ impl<'a> Parent<'a, types::Source, SourceConcept> {
             .append_pair("pageNumber", &page_number)
             .finish();
 
-        url.as_str().parse()
+        url
     }
 }
 
 #[cfg(feature = "reqwest")]
 impl<'a> Parent<'a, types::Source, &atom::Batch<SourceConcept>> {
     /// Returns a source-asserted concept in batches url.
-    pub fn uri(&self) -> Result<http::Uri> {
+    pub fn uri(&self) -> url::Url {
         let version = self.config().version().to_string();
         let source = self.value().value().source().as_str();
         let code = self.value().value().code().as_str();
@@ -712,7 +712,7 @@ impl<'a> Parent<'a, types::Source, &atom::Batch<SourceConcept>> {
             .append_pair("pageNumber", &page_number)
             .finish();
 
-        url.as_str().parse()
+        url
     }
 }
 
@@ -741,7 +741,7 @@ impl<'a, V> Search<'a, V> {
 
 impl<'a> Search<'a, &crate::search::Request> {
     /// Returns a search url.
-    pub fn uri(&self) -> Result<http::Uri> {
+    pub fn uri(&self) -> url::Url {
         let source_vocabularies_params = self
             .value()
             .source_vocabularies()
@@ -801,7 +801,7 @@ impl<'a> Search<'a, &crate::search::Request> {
             .append_pair("pageNumber", &page_number)
             .finish();
 
-        url.as_str().parse()
+        url
     }
 }
 
@@ -828,17 +828,11 @@ mod tests {
         let config = config::Config::builder("some_api_key").build()?;
         let cui: cui::Cui = "C0010200".parse()?;
 
-        let uri = Info::<types::Concept, _>::new(&config, cui).uri()?;
-        assert_eq!(uri.scheme_str(), Some("https"));
-        assert_eq!(
-            uri.authority().map(|x| x.as_str()),
-            Some("uts-ws.nlm.nih.gov")
-        );
+        let uri = Info::<types::Concept, _>::new(&config, cui).uri();
+        assert_eq!(uri.scheme(), "https");
+        assert_eq!(uri.host_str(), Some("uts-ws.nlm.nih.gov"));
         assert_eq!(uri.path(), "/rest/content/current/CUI/C0010200");
-        assert_eq!(
-            uri.path_and_query().and_then(|x| x.query()),
-            Some("apiKey=some_api_key")
-        );
+        assert_eq!(uri.query(), Some("apiKey=some_api_key"));
         Ok(())
     }
 
@@ -848,17 +842,11 @@ mod tests {
         let string: DisplayName = "A8345234".parse()?;
         let aui = aui::Aui::new(string)?;
 
-        let uri = Info::<types::Atom, _>::new(&config, &aui).uri()?;
-        assert_eq!(uri.scheme_str(), Some("https"));
-        assert_eq!(
-            uri.authority().map(|x| x.as_str()),
-            Some("uts-ws.nlm.nih.gov")
-        );
+        let uri = Info::<types::Atom, _>::new(&config, &aui).uri();
+        assert_eq!(uri.scheme(), "https");
+        assert_eq!(uri.host_str(), Some("uts-ws.nlm.nih.gov"));
         assert_eq!(uri.path(), "/rest/content/current/AUI/A8345234");
-        assert_eq!(
-            uri.path_and_query().and_then(|x| x.query()),
-            Some("apiKey=some_api_key")
-        );
+        assert_eq!(uri.query(), Some("apiKey=some_api_key"));
         Ok(())
     }
 
@@ -867,17 +855,11 @@ mod tests {
         let config = config::Config::builder("some_api_key").build()?;
         let cui: cui::Cui = "C0010200".parse()?;
 
-        let uri = Atom::<types::Concept, types::atoms::All, _>::new(&config, cui).uri()?;
-        assert_eq!(uri.scheme_str(), Some("https"));
-        assert_eq!(
-            uri.authority().map(|x| x.as_str()),
-            Some("uts-ws.nlm.nih.gov")
-        );
+        let uri = Atom::<types::Concept, types::atoms::All, _>::new(&config, cui).uri();
+        assert_eq!(uri.scheme(), "https");
+        assert_eq!(uri.host_str(), Some("uts-ws.nlm.nih.gov"));
         assert_eq!(uri.path(), "/rest/content/current/CUI/C0010200/atoms");
-        assert_eq!(
-            uri.path_and_query().and_then(|x| x.query()),
-            Some("apiKey=some_api_key")
-        );
+        assert_eq!(uri.query(), Some("apiKey=some_api_key"));
         Ok(())
     }
 
@@ -886,20 +868,14 @@ mod tests {
         let config = config::Config::builder("some_api_key").build()?;
         let cui: cui::Cui = "C0010200".parse()?;
 
-        let uri = Atom::<types::Concept, types::atoms::Preferred, _>::new(&config, cui).uri()?;
-        assert_eq!(uri.scheme_str(), Some("https"));
-        assert_eq!(
-            uri.authority().map(|x| x.as_str()),
-            Some("uts-ws.nlm.nih.gov")
-        );
+        let uri = Atom::<types::Concept, types::atoms::Preferred, _>::new(&config, cui).uri();
+        assert_eq!(uri.scheme(), "https");
+        assert_eq!(uri.host_str(), Some("uts-ws.nlm.nih.gov"));
         assert_eq!(
             uri.path(),
             "/rest/content/current/CUI/C0010200/atoms/preferred"
         );
-        assert_eq!(
-            uri.path_and_query().and_then(|x| x.query()),
-            Some("apiKey=some_api_key")
-        );
+        assert_eq!(uri.query(), Some("apiKey=some_api_key"));
         Ok(())
     }
 
@@ -910,15 +886,12 @@ mod tests {
         let cui: cui::Cui = "C0010200".parse()?;
         let batch = atom::Config::builder(cui).build();
 
-        let uri = Atom::<types::Concept, types::atoms::All, _>::new(&config, &batch).uri()?;
-        assert_eq!(uri.scheme_str(), Some("https"));
-        assert_eq!(
-            uri.authority().map(|x| x.as_str()),
-            Some("uts-ws.nlm.nih.gov")
-        );
+        let uri = Atom::<types::Concept, types::atoms::All, _>::new(&config, &batch).uri();
+        assert_eq!(uri.scheme(), "https");
+        assert_eq!(uri.host_str(), Some("uts-ws.nlm.nih.gov"));
         assert_eq!(uri.path(), "/rest/content/current/CUI/C0010200/atoms");
         assert_eq!(
-            uri.path_and_query().and_then(|x| x.query()),
+            uri.query(),
             Some(
                 "apiKey=some_api_key&sabs=&ttys=&language=&includeObsolete=false&includeSuppressible=false&pageNumber=1&pageSize=25"
             )
@@ -934,15 +907,12 @@ mod tests {
             .try_add_source_vocabulary("SNOMEDCT_US")?
             .build();
 
-        let uri = Atom::<types::Concept, types::atoms::All, _>::new(&config, &batch).uri()?;
-        assert_eq!(uri.scheme_str(), Some("https"));
-        assert_eq!(
-            uri.authority().map(|x| x.as_str()),
-            Some("uts-ws.nlm.nih.gov")
-        );
+        let uri = Atom::<types::Concept, types::atoms::All, _>::new(&config, &batch).uri();
+        assert_eq!(uri.scheme(), "https");
+        assert_eq!(uri.host_str(), Some("uts-ws.nlm.nih.gov"));
         assert_eq!(uri.path(), "/rest/content/current/CUI/C0010200/atoms");
         assert_eq!(
-            uri.path_and_query().and_then(|x| x.query()),
+            uri.query(),
             Some(
                 "apiKey=some_api_key&sabs=SNOMEDCT_US&ttys=&language=&includeObsolete=false&includeSuppressible=false&pageNumber=1&pageSize=25"
             )
@@ -960,15 +930,12 @@ mod tests {
             .try_add_source_vocabulary("MSH")?
             .build();
 
-        let uri = Atom::<types::Concept, types::atoms::All, _>::new(&config, &batch).uri()?;
-        assert_eq!(uri.scheme_str(), Some("https"));
-        assert_eq!(
-            uri.authority().map(|x| x.as_str()),
-            Some("uts-ws.nlm.nih.gov")
-        );
+        let uri = Atom::<types::Concept, types::atoms::All, _>::new(&config, &batch).uri();
+        assert_eq!(uri.scheme(), "https");
+        assert_eq!(uri.host_str(), Some("uts-ws.nlm.nih.gov"));
         assert_eq!(uri.path(), "/rest/content/current/CUI/C0010200/atoms");
         assert_eq!(
-            uri.path_and_query().and_then(|x| x.query()),
+            uri.query(),
             Some(
                 "apiKey=some_api_key&sabs=SNOMEDCT_US%2CMSH&ttys=&language=&includeObsolete=false&includeSuppressible=false&pageNumber=1&pageSize=25"
             )
@@ -982,15 +949,12 @@ mod tests {
         let cui: cui::Cui = "C0010200".parse()?;
         let batch = atom::Config::builder(cui).try_add_term_type("PT")?.build();
 
-        let uri = Atom::<types::Concept, types::atoms::All, _>::new(&config, &batch).uri()?;
-        assert_eq!(uri.scheme_str(), Some("https"));
-        assert_eq!(
-            uri.authority().map(|x| x.as_str()),
-            Some("uts-ws.nlm.nih.gov")
-        );
+        let uri = Atom::<types::Concept, types::atoms::All, _>::new(&config, &batch).uri();
+        assert_eq!(uri.scheme(), "https");
+        assert_eq!(uri.host_str(), Some("uts-ws.nlm.nih.gov"));
         assert_eq!(uri.path(), "/rest/content/current/CUI/C0010200/atoms");
         assert_eq!(
-            uri.path_and_query().and_then(|x| x.query()),
+            uri.query(),
             Some(
                 "apiKey=some_api_key&sabs=&ttys=PT&language=&includeObsolete=false&includeSuppressible=false&pageNumber=1&pageSize=25"
             )
@@ -1008,15 +972,12 @@ mod tests {
             .try_add_term_type("SY")?
             .build();
 
-        let uri = Atom::<types::Concept, types::atoms::All, _>::new(&config, &batch).uri()?;
-        assert_eq!(uri.scheme_str(), Some("https"));
-        assert_eq!(
-            uri.authority().map(|x| x.as_str()),
-            Some("uts-ws.nlm.nih.gov")
-        );
+        let uri = Atom::<types::Concept, types::atoms::All, _>::new(&config, &batch).uri();
+        assert_eq!(uri.scheme(), "https");
+        assert_eq!(uri.host_str(), Some("uts-ws.nlm.nih.gov"));
         assert_eq!(uri.path(), "/rest/content/current/CUI/C0010200/atoms");
         assert_eq!(
-            uri.path_and_query().and_then(|x| x.query()),
+            uri.query(),
             Some(
                 "apiKey=some_api_key&sabs=&ttys=PT%2CFN%2CSY&language=&includeObsolete=false&includeSuppressible=false&pageNumber=1&pageSize=25"
             )
@@ -1033,15 +994,12 @@ mod tests {
             .should_include_obsolete(true)
             .build();
 
-        let uri = Atom::<types::Concept, types::atoms::All, _>::new(&config, &batch).uri()?;
-        assert_eq!(uri.scheme_str(), Some("https"));
-        assert_eq!(
-            uri.authority().map(|x| x.as_str()),
-            Some("uts-ws.nlm.nih.gov")
-        );
+        let uri = Atom::<types::Concept, types::atoms::All, _>::new(&config, &batch).uri();
+        assert_eq!(uri.scheme(), "https");
+        assert_eq!(uri.host_str(), Some("uts-ws.nlm.nih.gov"));
         assert_eq!(uri.path(), "/rest/content/current/CUI/C0010200/atoms");
         assert_eq!(
-            uri.path_and_query().and_then(|x| x.query()),
+            uri.query(),
             Some(
                 "apiKey=some_api_key&sabs=&ttys=&language=&includeObsolete=true&includeSuppressible=false&pageNumber=1&pageSize=25"
             )
@@ -1058,15 +1016,12 @@ mod tests {
             .should_include_suppressible(true)
             .build();
 
-        let uri = Atom::<types::Concept, types::atoms::All, _>::new(&config, &batch).uri()?;
-        assert_eq!(uri.scheme_str(), Some("https"));
-        assert_eq!(
-            uri.authority().map(|x| x.as_str()),
-            Some("uts-ws.nlm.nih.gov")
-        );
+        let uri = Atom::<types::Concept, types::atoms::All, _>::new(&config, &batch).uri();
+        assert_eq!(uri.scheme(), "https");
+        assert_eq!(uri.host_str(), Some("uts-ws.nlm.nih.gov"));
         assert_eq!(uri.path(), "/rest/content/current/CUI/C0010200/atoms");
         assert_eq!(
-            uri.path_and_query().and_then(|x| x.query()),
+            uri.query(),
             Some(
                 "apiKey=some_api_key&sabs=&ttys=&language=&includeObsolete=false&includeSuppressible=true&pageNumber=1&pageSize=25"
             )
@@ -1083,15 +1038,12 @@ mod tests {
             .page_size(200.try_into()?)
             .build();
 
-        let uri = Atom::<types::Concept, types::atoms::All, _>::new(&config, &batch).uri()?;
-        assert_eq!(uri.scheme_str(), Some("https"));
-        assert_eq!(
-            uri.authority().map(|x| x.as_str()),
-            Some("uts-ws.nlm.nih.gov")
-        );
+        let uri = Atom::<types::Concept, types::atoms::All, _>::new(&config, &batch).uri();
+        assert_eq!(uri.scheme(), "https");
+        assert_eq!(uri.host_str(), Some("uts-ws.nlm.nih.gov"));
         assert_eq!(uri.path(), "/rest/content/current/CUI/C0010200/atoms");
         assert_eq!(
-            uri.path_and_query().and_then(|x| x.query()),
+            uri.query(),
             Some(
                 "apiKey=some_api_key&sabs=&ttys=&language=&includeObsolete=false&includeSuppressible=false&pageNumber=1&pageSize=200"
             )
@@ -1108,15 +1060,12 @@ mod tests {
             .page_number(30.try_into()?)
             .build();
 
-        let uri = Atom::<types::Concept, types::atoms::All, _>::new(&config, &batch).uri()?;
-        assert_eq!(uri.scheme_str(), Some("https"));
-        assert_eq!(
-            uri.authority().map(|x| x.as_str()),
-            Some("uts-ws.nlm.nih.gov")
-        );
+        let uri = Atom::<types::Concept, types::atoms::All, _>::new(&config, &batch).uri();
+        assert_eq!(uri.scheme(), "https");
+        assert_eq!(uri.host_str(), Some("uts-ws.nlm.nih.gov"));
         assert_eq!(uri.path(), "/rest/content/current/CUI/C0010200/atoms");
         assert_eq!(
-            uri.path_and_query().and_then(|x| x.query()),
+            uri.query(),
             Some(
                 "apiKey=some_api_key&sabs=&ttys=&language=&includeObsolete=false&includeSuppressible=false&pageNumber=30&pageSize=25"
             )
@@ -1129,17 +1078,11 @@ mod tests {
         let config = config::Config::builder("some_api_key").build()?;
         let cui: cui::Cui = "C0010200".parse()?;
 
-        let uri = Definition::<types::Concept, _>::new(&config, cui).uri()?;
-        assert_eq!(uri.scheme_str(), Some("https"));
-        assert_eq!(
-            uri.authority().map(|x| x.as_str()),
-            Some("uts-ws.nlm.nih.gov")
-        );
+        let uri = Definition::<types::Concept, _>::new(&config, cui).uri();
+        assert_eq!(uri.scheme(), "https");
+        assert_eq!(uri.host_str(), Some("uts-ws.nlm.nih.gov"));
         assert_eq!(uri.path(), "/rest/content/current/CUI/C0010200/definitions");
-        assert_eq!(
-            uri.path_and_query().and_then(|x| x.query()),
-            Some("apiKey=some_api_key")
-        );
+        assert_eq!(uri.query(), Some("apiKey=some_api_key"));
         Ok(())
     }
 
@@ -1151,15 +1094,12 @@ mod tests {
         let def_config = definition::Config::builder(cui).build();
         let batch = atom::Batch::new(25.try_into()?, 1.try_into()?, def_config);
 
-        let uri = Definition::<types::Concept, _>::new(&config, &batch).uri()?;
-        assert_eq!(uri.scheme_str(), Some("https"));
-        assert_eq!(
-            uri.authority().map(|x| x.as_str()),
-            Some("uts-ws.nlm.nih.gov")
-        );
+        let uri = Definition::<types::Concept, _>::new(&config, &batch).uri();
+        assert_eq!(uri.scheme(), "https");
+        assert_eq!(uri.host_str(), Some("uts-ws.nlm.nih.gov"));
         assert_eq!(uri.path(), "/rest/content/current/CUI/C0010200/definitions");
         assert_eq!(
-            uri.path_and_query().and_then(|x| x.query()),
+            uri.query(),
             Some("apiKey=some_api_key&sabs=&pageSize=25&pageNumber=1")
         );
         Ok(())
@@ -1175,15 +1115,12 @@ mod tests {
             .build();
         let batch = atom::Batch::new(25.try_into()?, 1.try_into()?, def_config);
 
-        let uri = Definition::<types::Concept, _>::new(&config, &batch).uri()?;
-        assert_eq!(uri.scheme_str(), Some("https"));
-        assert_eq!(
-            uri.authority().map(|x| x.as_str()),
-            Some("uts-ws.nlm.nih.gov")
-        );
+        let uri = Definition::<types::Concept, _>::new(&config, &batch).uri();
+        assert_eq!(uri.scheme(), "https");
+        assert_eq!(uri.host_str(), Some("uts-ws.nlm.nih.gov"));
         assert_eq!(uri.path(), "/rest/content/current/CUI/C0010200/definitions");
         assert_eq!(
-            uri.path_and_query().and_then(|x| x.query()),
+            uri.query(),
             Some("apiKey=some_api_key&sabs=SNOMEDCT_US&pageSize=25&pageNumber=1")
         );
         Ok(())
@@ -1200,15 +1137,12 @@ mod tests {
             .build();
         let batch = atom::Batch::new(25.try_into()?, 1.try_into()?, def_config);
 
-        let uri = Definition::<types::Concept, _>::new(&config, &batch).uri()?;
-        assert_eq!(uri.scheme_str(), Some("https"));
-        assert_eq!(
-            uri.authority().map(|x| x.as_str()),
-            Some("uts-ws.nlm.nih.gov")
-        );
+        let uri = Definition::<types::Concept, _>::new(&config, &batch).uri();
+        assert_eq!(uri.scheme(), "https");
+        assert_eq!(uri.host_str(), Some("uts-ws.nlm.nih.gov"));
         assert_eq!(uri.path(), "/rest/content/current/CUI/C0010200/definitions");
         assert_eq!(
-            uri.path_and_query().and_then(|x| x.query()),
+            uri.query(),
             Some("apiKey=some_api_key&sabs=SNOMEDCT_US%2CMSH&pageSize=25&pageNumber=1")
         );
         Ok(())
@@ -1221,15 +1155,12 @@ mod tests {
         let def_config = definition::Config::builder(cui).build();
         let batch = atom::Batch::new(200.try_into()?, 1.try_into()?, def_config);
 
-        let uri = Definition::<types::Concept, _>::new(&config, &batch).uri()?;
-        assert_eq!(uri.scheme_str(), Some("https"));
-        assert_eq!(
-            uri.authority().map(|x| x.as_str()),
-            Some("uts-ws.nlm.nih.gov")
-        );
+        let uri = Definition::<types::Concept, _>::new(&config, &batch).uri();
+        assert_eq!(uri.scheme(), "https");
+        assert_eq!(uri.host_str(), Some("uts-ws.nlm.nih.gov"));
         assert_eq!(uri.path(), "/rest/content/current/CUI/C0010200/definitions");
         assert_eq!(
-            uri.path_and_query().and_then(|x| x.query()),
+            uri.query(),
             Some("apiKey=some_api_key&sabs=&pageSize=200&pageNumber=1")
         );
         Ok(())
@@ -1242,15 +1173,12 @@ mod tests {
         let def_config = definition::Config::builder(cui).build();
         let batch = atom::Batch::new(25.try_into()?, 30.try_into()?, def_config);
 
-        let uri = Definition::<types::Concept, _>::new(&config, &batch).uri()?;
-        assert_eq!(uri.scheme_str(), Some("https"));
-        assert_eq!(
-            uri.authority().map(|x| x.as_str()),
-            Some("uts-ws.nlm.nih.gov")
-        );
+        let uri = Definition::<types::Concept, _>::new(&config, &batch).uri();
+        assert_eq!(uri.scheme(), "https");
+        assert_eq!(uri.host_str(), Some("uts-ws.nlm.nih.gov"));
         assert_eq!(uri.path(), "/rest/content/current/CUI/C0010200/definitions");
         assert_eq!(
-            uri.path_and_query().and_then(|x| x.query()),
+            uri.query(),
             Some("apiKey=some_api_key&sabs=&pageSize=25&pageNumber=30")
         );
         Ok(())
@@ -1263,15 +1191,12 @@ mod tests {
         let cui: cui::Cui = "C0010200".parse()?;
         let def_config = definition::Config::builder(cui).build();
 
-        let uri = Definition::<types::Concept, _>::new(&config, &def_config).uri()?;
-        assert_eq!(uri.scheme_str(), Some("https"));
-        assert_eq!(
-            uri.authority().map(|x| x.as_str()),
-            Some("uts-ws.nlm.nih.gov")
-        );
+        let uri = Definition::<types::Concept, _>::new(&config, &def_config).uri();
+        assert_eq!(uri.scheme(), "https");
+        assert_eq!(uri.host_str(), Some("uts-ws.nlm.nih.gov"));
         assert_eq!(uri.path(), "/rest/content/current/CUI/C0010200/definitions");
         assert_eq!(
-            uri.path_and_query().and_then(|x| x.query()),
+            uri.query(),
             Some("apiKey=some_api_key&sabs=&pageSize=25&pageNumber=1")
         );
         Ok(())
@@ -1285,15 +1210,12 @@ mod tests {
             .try_add_source_vocabulary("SNOMEDCT_US")?
             .build();
 
-        let uri = Definition::<types::Concept, _>::new(&config, &def_config).uri()?;
-        assert_eq!(uri.scheme_str(), Some("https"));
-        assert_eq!(
-            uri.authority().map(|x| x.as_str()),
-            Some("uts-ws.nlm.nih.gov")
-        );
+        let uri = Definition::<types::Concept, _>::new(&config, &def_config).uri();
+        assert_eq!(uri.scheme(), "https");
+        assert_eq!(uri.host_str(), Some("uts-ws.nlm.nih.gov"));
         assert_eq!(uri.path(), "/rest/content/current/CUI/C0010200/definitions");
         assert_eq!(
-            uri.path_and_query().and_then(|x| x.query()),
+            uri.query(),
             Some("apiKey=some_api_key&sabs=SNOMEDCT_US&pageSize=25&pageNumber=1")
         );
 
@@ -1310,15 +1232,12 @@ mod tests {
             .try_add_source_vocabulary("MTH")?
             .build();
 
-        let uri = Definition::<types::Concept, _>::new(&config, &def_config).uri()?;
-        assert_eq!(uri.scheme_str(), Some("https"));
-        assert_eq!(
-            uri.authority().map(|x| x.as_str()),
-            Some("uts-ws.nlm.nih.gov")
-        );
+        let uri = Definition::<types::Concept, _>::new(&config, &def_config).uri();
+        assert_eq!(uri.scheme(), "https");
+        assert_eq!(uri.host_str(), Some("uts-ws.nlm.nih.gov"));
         assert_eq!(uri.path(), "/rest/content/current/CUI/C0010200/definitions");
         assert_eq!(
-            uri.path_and_query().and_then(|x| x.query()),
+            uri.query(),
             Some("apiKey=some_api_key&sabs=SNOMEDCT_US%2CMSH%2CMTH&pageSize=25&pageNumber=1")
         );
 
@@ -1330,17 +1249,11 @@ mod tests {
         let config = config::Config::builder("some_api_key").build()?;
         let cui: cui::Cui = "C0010200".parse()?;
 
-        let uri = Relation::<types::Concept, _>::new(&config, cui).uri()?;
-        assert_eq!(uri.scheme_str(), Some("https"));
-        assert_eq!(
-            uri.authority().map(|x| x.as_str()),
-            Some("uts-ws.nlm.nih.gov")
-        );
+        let uri = Relation::<types::Concept, _>::new(&config, cui).uri();
+        assert_eq!(uri.scheme(), "https");
+        assert_eq!(uri.host_str(), Some("uts-ws.nlm.nih.gov"));
         assert_eq!(uri.path(), "/rest/content/current/CUI/C0010200/relations");
-        assert_eq!(
-            uri.path_and_query().and_then(|x| x.query()),
-            Some("apiKey=some_api_key")
-        );
+        assert_eq!(uri.query(), Some("apiKey=some_api_key"));
         Ok(())
     }
 
@@ -1352,15 +1265,12 @@ mod tests {
         let cui: cui::Cui = "C0010200".parse()?;
         let relation_config = relation::config::Config::builder(cui).build();
 
-        let uri = Relation::<types::Concept, _>::new(&config, &relation_config).uri()?;
-        assert_eq!(uri.scheme_str(), Some("https"));
-        assert_eq!(
-            uri.authority().map(|x| x.as_str()),
-            Some("uts-ws.nlm.nih.gov")
-        );
+        let uri = Relation::<types::Concept, _>::new(&config, &relation_config).uri();
+        assert_eq!(uri.scheme(), "https");
+        assert_eq!(uri.host_str(), Some("uts-ws.nlm.nih.gov"));
         assert_eq!(uri.path(), "/rest/content/current/CUI/C0010200/relations");
         assert_eq!(
-            uri.path_and_query().and_then(|x| x.query()),
+            uri.query(),
             Some(
                 "apiKey=some_api_key&includeRelationLabels=&includeAdditionalRelationLabels=&sabs=&includeObsolete=false&includeSuppressible=false&pageSize=25&pageNumber=1"
             )
@@ -1411,17 +1321,11 @@ mod tests {
         for (config, query_params) in relation_config {
             let umls_config = config::Config::builder("some_api_key").build()?;
 
-            let uri = Relation::<types::Concept, _>::new(&umls_config, &config).uri()?;
-            assert_eq!(uri.scheme_str(), Some("https"));
-            assert_eq!(
-                uri.authority().map(|x| x.as_str()),
-                Some("uts-ws.nlm.nih.gov")
-            );
+            let uri = Relation::<types::Concept, _>::new(&umls_config, &config).uri();
+            assert_eq!(uri.scheme(), "https");
+            assert_eq!(uri.host_str(), Some("uts-ws.nlm.nih.gov"));
             assert_eq!(uri.path(), "/rest/content/current/CUI/C0010200/relations");
-            assert_eq!(
-                uri.path_and_query().and_then(|x| x.query()),
-                Some(query_params)
-            );
+            assert_eq!(uri.query(), Some(query_params));
         }
 
         let batch_relation_config = [
@@ -1504,17 +1408,11 @@ mod tests {
         for (config, query_params) in batch_relation_config {
             let umls_config = config::Config::builder("some_api_key").build()?;
 
-            let uri = Relation::<types::Concept, _>::new(&umls_config, &config).uri()?;
-            assert_eq!(uri.scheme_str(), Some("https"));
-            assert_eq!(
-                uri.authority().map(|x| x.as_str()),
-                Some("uts-ws.nlm.nih.gov")
-            );
+            let uri = Relation::<types::Concept, _>::new(&umls_config, &config).uri();
+            assert_eq!(uri.scheme(), "https");
+            assert_eq!(uri.host_str(), Some("uts-ws.nlm.nih.gov"));
             assert_eq!(uri.path(), "/rest/content/current/CUI/C0010200/relations");
-            assert_eq!(
-                uri.path_and_query().and_then(|x| x.query()),
-                Some(query_params)
-            );
+            assert_eq!(uri.query(), Some(query_params));
         }
 
         Ok(())
@@ -1526,15 +1424,12 @@ mod tests {
         let string: DisplayName = "A8345234".parse()?;
         let aui = aui::Aui::new(string)?;
 
-        let uri = Parent::<types::Atom, _>::new(&umls_config, aui).uri()?;
-        assert_eq!(uri.scheme_str(), Some("https"));
-        assert_eq!(
-            uri.authority().map(|x| x.as_str()),
-            Some("uts-ws.nlm.nih.gov")
-        );
+        let uri = Parent::<types::Atom, _>::new(&umls_config, aui).uri();
+        assert_eq!(uri.scheme(), "https");
+        assert_eq!(uri.host_str(), Some("uts-ws.nlm.nih.gov"));
         assert_eq!(uri.path(), "/rest/content/current/AUI/A8345234/parents");
         assert_eq!(
-            uri.path_and_query().and_then(|x| x.query()),
+            uri.query(),
             Some("apiKey=some_api_key&pageSize=25&pageNumber=1")
         );
 
@@ -1556,17 +1451,11 @@ mod tests {
         ];
 
         for (config, query_params) in batch_parents {
-            let uri = Parent::<types::Atom, _>::new(&umls_config, &config).uri()?;
-            assert_eq!(uri.scheme_str(), Some("https"));
-            assert_eq!(
-                uri.authority().map(|x| x.as_str()),
-                Some("uts-ws.nlm.nih.gov")
-            );
+            let uri = Parent::<types::Atom, _>::new(&umls_config, &config).uri();
+            assert_eq!(uri.scheme(), "https");
+            assert_eq!(uri.host_str(), Some("uts-ws.nlm.nih.gov"));
             assert_eq!(uri.path(), "/rest/content/current/AUI/A8345234/parents");
-            assert_eq!(
-                uri.path_and_query().and_then(|x| x.query()),
-                Some(query_params)
-            );
+            assert_eq!(uri.query(), Some(query_params));
         }
 
         Ok(())
@@ -1578,18 +1467,15 @@ mod tests {
         let umls_config = config::Config::builder("some_api_key").build()?;
         let source_concept = SourceConcept::new("SNOMEDCT_US".try_into()?, "9468002".try_into()?);
 
-        let uri = Parent::<types::Source, _>::new(&umls_config, source_concept).uri()?;
-        assert_eq!(uri.scheme_str(), Some("https"));
-        assert_eq!(
-            uri.authority().map(|x| x.as_str()),
-            Some("uts-ws.nlm.nih.gov")
-        );
+        let uri = Parent::<types::Source, _>::new(&umls_config, source_concept).uri();
+        assert_eq!(uri.scheme(), "https");
+        assert_eq!(uri.host_str(), Some("uts-ws.nlm.nih.gov"));
         assert_eq!(
             uri.path(),
             "/rest/content/current/source/SNOMEDCT_US/9468002/parents"
         );
         assert_eq!(
-            uri.path_and_query().and_then(|x| x.query()),
+            uri.query(),
             Some("apiKey=some_api_key&pageSize=25&pageNumber=1")
         );
 
@@ -1621,17 +1507,14 @@ mod tests {
         ];
 
         for (batch, query) in sets {
-            let uri = Parent::<types::Source, _>::new(&umls_config, &batch).uri()?;
-            assert_eq!(uri.scheme_str(), Some("https"));
-            assert_eq!(
-                uri.authority().map(|x| x.as_str()),
-                Some("uts-ws.nlm.nih.gov")
-            );
+            let uri = Parent::<types::Source, _>::new(&umls_config, &batch).uri();
+            assert_eq!(uri.scheme(), "https");
+            assert_eq!(uri.host_str(), Some("uts-ws.nlm.nih.gov"));
             assert_eq!(
                 uri.path(),
                 "/rest/content/current/source/SNOMEDCT_US/9468002/parents"
             );
-            assert_eq!(uri.path_and_query().and_then(|x| x.query()), Some(query));
+            assert_eq!(uri.query(), Some(query));
         }
 
         Ok(())
@@ -1698,14 +1581,11 @@ mod tests {
         for (request, query) in sets {
             let umls_config = config::Config::builder("some_api_key").build()?;
 
-            let uri = Search::new(&umls_config, &request).uri()?;
-            assert_eq!(uri.scheme_str(), Some("https"));
-            assert_eq!(
-                uri.authority().map(|x| x.as_str()),
-                Some("uts-ws.nlm.nih.gov")
-            );
+            let uri = Search::new(&umls_config, &request).uri();
+            assert_eq!(uri.scheme(), "https");
+            assert_eq!(uri.host_str(), Some("uts-ws.nlm.nih.gov"));
             assert_eq!(uri.path(), "/rest/search/current");
-            assert_eq!(uri.path_and_query().and_then(|x| x.query()), Some(query));
+            assert_eq!(uri.query(), Some(query));
         }
 
         Ok(())

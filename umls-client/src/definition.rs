@@ -132,7 +132,7 @@ impl<V> Definition<WithoutClient, V> {
 }
 
 #[cfg(feature = "reqwest")]
-impl Definition<reqwest::Client, http::Uri> {
+impl Definition<reqwest::Client, url::Url> {
     /// Fetch concepts definitions for given URL.
     ///
     /// The method doesn't validate the URL.
@@ -144,19 +144,23 @@ impl Definition<reqwest::Client, http::Uri> {
         // FIXME: Missing validation of Uri against umls_config.
         // FIXME: Handle missing "apiKey"
 
-        let response: http::Response<Page<Content<dto::RawDefinition>>> =
-            self.client.get(self.value).await?;
+        let body = self
+            .client
+            .get(self.value)
+            .send()
+            .await?
+            .error_for_status()?
+            .json::<Page<Content<dto::RawDefinition>>>()
+            .await?;
 
-        let page = response
-            .into_body()
-            .try_map::<_, Box<dyn std::error::Error>>(|x| {
-                let pages = x
-                    .list
-                    .into_iter()
-                    .map(|x| x.try_into())
-                    .collect::<Result<Vec<dto::Definition>, _>>()?;
-                Ok(Content::new(pages))
-            })?;
+        let page = body.try_map::<_, Box<dyn std::error::Error>>(|x| {
+            let pages = x
+                .list
+                .into_iter()
+                .map(|x| x.try_into())
+                .collect::<Result<Vec<dto::Definition>, _>>()?;
+            Ok(Content::new(pages))
+        })?;
 
         Ok(page)
     }
@@ -192,7 +196,7 @@ impl Definition<reqwest::Client, Batch<Config>> {
 
         let url = umls_config
             .definition_url::<crate::core::url::types::Concept, _>(&self.value)
-            .uri()?;
+            .uri();
 
         let page = Definition::new(url)
             .with_client(self.client.clone())
@@ -214,7 +218,7 @@ impl Definition<reqwest::Client, Config> {
     ) -> Result<Content<dto::Definition>, Box<dyn std::error::Error>> {
         let url = umls_config
             .definition_url::<crate::core::url::types::Concept, _>(&self.value)
-            .uri()?;
+            .uri();
 
         let page = Definition::new(url)
             .with_client(self.client)

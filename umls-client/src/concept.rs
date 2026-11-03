@@ -1,6 +1,3 @@
-#[cfg(feature = "reqwest")]
-use http::Response;
-
 use umls_http::WithoutClient;
 
 #[cfg(feature = "reqwest")]
@@ -35,6 +32,13 @@ pub enum Error<T> {
     /// Represents uri construction error.
     #[error("Uri construction Error: {0}")]
     Uri(#[source] http::uri::InvalidUri),
+}
+
+#[cfg(feature = "reqwest")]
+impl From<reqwest::Error> for Error<reqwest::Error> {
+    fn from(value: reqwest::Error) -> Self {
+        Error::Client(value)
+    }
 }
 
 #[cfg(feature = "reqwest")]
@@ -115,14 +119,14 @@ impl Info<reqwest::Client, Cui> {
     pub async fn fetch(self, config: &Config) -> Result<Concept, Error<reqwest::Error>> {
         let uri = config
             .info_url::<crate::core::url::types::Concept, _>(self.value)
-            .uri()?;
+            .uri();
 
         Info::new(uri).with_client(self.client).fetch(config).await
     }
 }
 
 #[cfg(feature = "reqwest")]
-impl Info<reqwest::Client, http::Uri> {
+impl Info<reqwest::Client, url::Url> {
     /// Retrieves a concept from the wrapped UMLS resource URL.
     ///
     /// # Errors
@@ -133,10 +137,15 @@ impl Info<reqwest::Client, http::Uri> {
     pub async fn fetch(self, config: &Config) -> Result<Concept, Error<reqwest::Error>> {
         // FIXME: Missing Uri validation logic against config.
 
-        let response: Response<ConceptResponse> =
-            self.client.get(self.value).await.map_err(Error::Client)?;
-
-        Ok(response.into_body().result.into())
+        self.client
+            .get(self.value)
+            .send()
+            .await?
+            .error_for_status()?
+            .json::<ConceptResponse>()
+            .await
+            .map(|x| x.result.into())
+            .map_err(Error::Client)
     }
 }
 
@@ -327,12 +336,16 @@ impl Info<reqwest::Client, Aui> {
     pub async fn fetch(self, config: &Config) -> Result<AtomResponse, Error<reqwest::Error>> {
         let url = config
             .info_url::<crate::core::url::types::Atom, _>(&self.value)
-            .uri()?;
+            .uri();
 
-        let response: http::Response<Page<AtomResponse>> =
-            self.client().get(url).await.map_err(Error::Client)?;
-        let response = response.into_body();
-
-        Ok(response.content)
+        self.client()
+            .get(url)
+            .send()
+            .await?
+            .error_for_status()?
+            .json::<Page<AtomResponse>>()
+            .await
+            .map(|x| x.content)
+            .map_err(Error::Client)
     }
 }

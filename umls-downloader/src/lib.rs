@@ -206,19 +206,16 @@ impl ReleaseFetcher<reqwest::Client, http::Uri, Current> {
     /// status validation, or release metadata decoding fails. Failures preserve typed client errors in [`Error::Client`]
     /// or report invalid URIs through [`Error::Uri`].
     pub async fn send(self) -> Result<Option<Release>, Error<reqwest::Error>> {
-        let uri = self.uri();
-
-        let request = http::Request::builder()
-            .uri(uri.clone())
-            .method(http::Method::GET)
-            .body(())
-            .map_err(reqwest::Error::Http)
-            .map_err(Error::Client)?;
+        let uri = self.uri().to_string();
 
         self.client
-            .execute::<(), Vec<Release>>(request)
+            .get(uri)
+            .send()
+            .await?
+            .error_for_status()?
+            .json::<Vec<Release>>()
             .await
-            .map(|x| x.into_body().first().cloned())
+            .map(|x| x.first().cloned())
             .map_err(Error::Client)
     }
 }
@@ -272,19 +269,15 @@ impl ReleaseFetcher<reqwest::Client, http::Uri, kind::All> {
     /// status validation, or release metadata decoding fails. Failures preserve typed client errors in [`Error::Client`]
     /// or report invalid URIs through [`Error::Uri`].
     pub async fn send(self) -> Result<Vec<Release>, Error<reqwest::Error>> {
-        let uri = self.uri();
-
-        let request = http::Request::builder()
-            .uri(uri.clone())
-            .method(http::Method::GET)
-            .body(())
-            .map_err(reqwest::Error::Http)
-            .map_err(Error::Client)?;
+        let uri = self.uri().to_string();
 
         self.client
-            .execute::<(), Vec<Release>>(request)
+            .get(uri)
+            .send()
+            .await?
+            .error_for_status()?
+            .json::<Vec<Release>>()
             .await
-            .map(|x| x.into_body())
             .map_err(Error::Client)
     }
 }
@@ -617,6 +610,13 @@ pub enum Error<T: std::error::Error> {
     Io(#[source] std::io::Error),
 }
 
+#[cfg(feature = "reqwest")]
+impl From<reqwest::Error> for Error<reqwest::Error> {
+    fn from(value: reqwest::Error) -> Self {
+        Error::Client(value)
+    }
+}
+
 impl<T: std::error::Error> From<url::ParseError> for Error<T> {
     fn from(value: url::ParseError) -> Self {
         Self::Url(value)
@@ -764,17 +764,12 @@ impl ReleaseDownloader<reqwest::Client, http::Uri> {
         impl Stream<Item = Result<Bytes, reqwest::Error>> + Send + 'static + use<>,
         Error<reqwest::Error>,
     > {
-        let request = http::Request::builder()
-            .method(http::Method::GET)
-            .uri(uri)
-            .body(())
-            .map_err(reqwest::Error::Http)
-            .map_err(Error::Client)?;
-
         self.client
-            .execute_stream(request)
-            .await
-            .map(|x| x.into_body())
+            .get(uri.to_string())
+            .send()
+            .await?
+            .error_for_status()
+            .map(|x| x.bytes_stream())
             .map_err(Error::Client)
     }
 }
@@ -912,7 +907,6 @@ mod tests {
     use bytes::Bytes;
     use httpmock::prelude::*;
     use std::{error::Error as _, time::Duration};
-    use umls_http::reqwest;
 
     #[test]
     fn category_names_select_current_or_all() {
@@ -927,43 +921,6 @@ mod tests {
             );
         }
         assert!(release_uri("invalid category", false).is_err());
-    }
-
-    #[test]
-    fn outer_errors_preserve_original_sources() {
-        let uri = "invalid uri".parse::<http::Uri>().unwrap_err();
-        let error: Error<reqwest::Error> = Error::Uri(uri);
-        assert!(error.source().unwrap().is::<http::uri::InvalidUri>());
-        let error: Error<reqwest::Error> = url::Url::parse(":invalid").unwrap_err().into();
-        assert!(error.source().unwrap().is::<url::ParseError>());
-        let error: Error<reqwest::Error> =
-            std::io::Error::new(std::io::ErrorKind::PermissionDenied, "denied").into();
-        assert_eq!(
-            error
-                .source()
-                .unwrap()
-                .downcast_ref::<std::io::Error>()
-                .unwrap()
-                .kind(),
-            std::io::ErrorKind::PermissionDenied
-        );
-        let original = http::Request::builder()
-            .header("bad\nname", "value")
-            .body(())
-            .unwrap_err();
-        let error = Error::Client(reqwest::Error::from(original));
-        assert!(error.source().unwrap().is::<reqwest::Error>());
-        assert!(
-            error
-                .source()
-                .unwrap()
-                .source()
-                .unwrap()
-                .is::<http::Error>()
-        );
-        let original = serde_json::from_str::<serde_json::Value>("invalid").unwrap_err();
-        let error = reqwest::Error::from(original);
-        assert!(error.source().unwrap().is::<serde_json::Error>());
     }
 
     #[tokio::test]
@@ -991,30 +948,6 @@ mod tests {
             .unwrap_err();
         assert!(matches!(error, Error::Io(_)));
         assert!(error.source().unwrap().is::<std::io::Error>());
-    }
-
-    #[tokio::test]
-    async fn stream_error_is_preserved_by_file_output() {
-        let original = http::Request::builder()
-            .header("bad\nname", "value")
-            .body(())
-            .unwrap_err();
-        let dir = tempfile::tempdir().unwrap();
-        let error = write_download(
-            futures_util::stream::iter([Err(reqwest::Error::Http(original))]),
-            dir.path().join("partial.zip"),
-        )
-        .await
-        .unwrap_err();
-        assert!(matches!(error, Error::Client(reqwest::Error::Http(_))));
-        assert!(
-            error
-                .source()
-                .unwrap()
-                .source()
-                .unwrap()
-                .is::<http::Error>()
-        );
     }
 
     #[tokio::test]

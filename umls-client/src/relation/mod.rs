@@ -68,7 +68,7 @@ impl Relation<Client, config::Config> {
     ) -> Result<Content<RelationDto>, Box<dyn std::error::Error>> {
         let url = umls_config
             .relation_url::<crate::core::url::types::Concept, _>(self.value())
-            .uri()?;
+            .uri();
 
         let response = Relation::new(url)
             .with_client(self.client)
@@ -90,7 +90,7 @@ impl Relation<Client, Batch<config::Config>> {
     ) -> Result<Response<Page<Content<RelationDto>>, Self>, Box<dyn std::error::Error>> {
         let url = umls_config
             .relation_url::<crate::core::url::types::Concept, _>(&self.value)
-            .uri()?;
+            .uri();
 
         let page = Relation::new(url)
             .with_client(self.client().clone())
@@ -102,7 +102,7 @@ impl Relation<Client, Batch<config::Config>> {
 }
 
 #[cfg(feature = "reqwest")]
-impl Relation<Client, http::Uri> {
+impl Relation<Client, url::Url> {
     /// Fetch concept relations for given url.
     ///
     /// The method doesn't validate the URL.
@@ -114,12 +114,16 @@ impl Relation<Client, http::Uri> {
         // FIXME: Validate Uri against umls_config
         // FIXME: Handle missing "apiKey"
 
-        let response: http::Response<Page<Content<RelationDto>>> =
-            self.client().get(self.value.clone()).await?;
+        let response = self
+            .client()
+            .get(self.value.clone())
+            .send()
+            .await?
+            .error_for_status()?
+            .json::<Page<Content<RelationDto>>>()
+            .await?;
 
-        let content = response.into_body();
-
-        Ok(content)
+        Ok(response)
     }
 }
 

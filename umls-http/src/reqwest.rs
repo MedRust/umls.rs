@@ -2,13 +2,10 @@
 //!
 //! The `reqwest` feature enables [`Client`].
 
-use bytes::Bytes;
-use futures_core::Stream;
-use futures_util::TryStreamExt;
-use serde::Serialize;
-use serde::de::DeserializeOwned;
+use reqwest::IntoUrl;
 
-#[cfg(feature = "reqwest")]
+pub use reqwest::Error;
+
 #[derive(Clone, Default)]
 /// Sends HTTP requests using reqwest.
 ///
@@ -24,45 +21,6 @@ use serde::de::DeserializeOwned;
 /// ```
 pub struct Client(reqwest::Client);
 
-#[cfg(feature = "reqwest")]
-#[derive(Debug, thiserror::Error)]
-/// Reports failures from the reqwest-backed client.
-pub enum Error {
-    /// Reports a JSON serialization or deserialization failure.
-    #[error("JSON error: {0}")]
-    Json(#[source] serde_json::Error),
-
-    /// Reports a transport, HTTP-status, response decoding, or body stream failure from reqwest.
-    #[error("Reqwest error: {0}")]
-    Reqwest(#[source] reqwest::Error),
-
-    /// Reports failure while constructing an HTTP response.
-    #[error("Http error: {0}")]
-    Http(#[source] http::Error),
-}
-
-#[cfg(feature = "reqwest")]
-impl From<reqwest::Error> for Error {
-    fn from(value: reqwest::Error) -> Self {
-        Error::Reqwest(value)
-    }
-}
-
-#[cfg(feature = "reqwest")]
-impl From<serde_json::Error> for Error {
-    fn from(value: serde_json::Error) -> Self {
-        Error::Json(value)
-    }
-}
-
-#[cfg(feature = "reqwest")]
-impl From<http::Error> for Error {
-    fn from(value: http::Error) -> Self {
-        Error::Http(value)
-    }
-}
-
-#[cfg(feature = "reqwest")]
 impl Client {
     /// Wraps a configured reqwest client for JSON and streaming requests.
     ///
@@ -83,139 +41,11 @@ impl Client {
     pub fn new(client: reqwest::Client) -> Self {
         Self(client)
     }
-
-    async fn send<T: Serialize + Send>(
-        &self,
-        request: http::Request<T>,
-    ) -> Result<reqwest::Response, Error> {
-        let (parts, body) = request.into_parts();
-        let body = serde_json::to_vec(&body).map_err(Error::Json)?;
-        let mut builder = self.0.request(parts.method, parts.uri.to_string());
-        for (name, value) in &parts.headers {
-            builder = builder.header(name, value);
-        }
-        if !body.is_empty() && body != b"null" {
-            builder = builder.body(body);
-        }
-        let response = builder.send().await.map_err(Error::Reqwest)?;
-        response.error_for_status().map_err(Error::Reqwest)
-    }
 }
 
-#[cfg(feature = "reqwest")]
 impl Client {
-    /// Sends a request and deserializes its JSON response.
-    ///
-    /// The response retains the HTTP status and headers. The entire response body is decoded as
-    /// `U`.
-    /// The request body is serialized as JSON; a JSON `null` body is omitted. The caller supplies
-    /// any required content-type header.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// use umls_http::reqwest;
-    /// async fn example() -> Result<(), Box<dyn std::error::Error>> {
-    /// let client: reqwest::Client = Default::default();
-    /// let request = http::Request::get("https://uts-ws.nlm.nih.gov/releases").body(())?;
-    /// let response = client.execute::<(), serde_json::Value>(request).await?;
-    /// let body = response.into_body();
-    /// Ok(())
-    /// }
-    /// ```
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if request serialization, transport, HTTP 4xx or 5xx status validation,
-    /// JSON decoding, or response construction fails. The returned error preserves the original
-    /// error as its source where the underlying library provides one.
-    pub async fn execute<T: Serialize + Send, U: DeserializeOwned>(
-        &self,
-        request: http::Request<T>,
-    ) -> Result<http::Response<U>, Error> {
-        let response = self.send(request).await?;
-        let status = response.status();
-        let headers = response.headers().clone();
-        let body = response.json::<U>().await?;
-        let mut output = http::Response::builder().status(status);
-        *output.headers_mut().expect("response builder has headers") = headers;
-        output.body(body).map_err(Error::Http)
-    }
-
-    /// Sends a GET request and deserializes it's JSON response.
-    ///
-    /// The response retains the HTTP status and heaers. The entire response body is decoded as
-    /// `U`.
-    ///
-    /// # Examples
-    /// ```no_run
-    /// use umls_http::reqwest;
-    /// async fn example() -> Result<(), Box<dyn std::error::Error>> {
-    /// let client: reqwest::Client = Default::default();
-    /// let uri = "https://uts-ws.nlm.nih.gov/releases";
-    /// let response: http::Response<serde_json::Value> = client.get(uri).await?;
-    /// let body = response.into_body();
-    /// Ok(())
-    /// }
-    /// ```
-    pub async fn get<T, U: DeserializeOwned>(&self, url: T) -> Result<http::Response<U>, Error>
-    where
-        T: TryInto<http::Uri>,
-        T::Error: Into<http::Error>,
-    {
-        let request = http::Request::builder()
-            .method("GET")
-            .uri(url)
-            .body(())
-            .map_err(Error::Http)?;
-
-        self.execute(request).await
-    }
-
-    /// Sends a request and returns its response body as a byte stream.
-    ///
-    /// The response retains the HTTP status and headers. The returned stream owns the response
-    /// body and reads chunks as it is polled. Read failures are yielded as [`Error::Reqwest`].
-    /// Pin the stream before consuming it with [`next`](futures_util::StreamExt::next).
-    /// The request body is serialized as JSON; a JSON `null` body is omitted. The caller supplies
-    /// any required content-type header.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// use umls_http::reqwest;
-    /// async fn example() -> Result<(), Box<dyn std::error::Error>> {
-    /// let client: reqwest::Client = Default::default();
-    /// let request = http::Request::get("https://uts-ws.nlm.nih.gov/releases").body(())?;
-    /// let response = client.execute_stream(request).await?;
-    /// use futures_util::StreamExt;
-    /// let mut stream = std::pin::pin!(response.into_body());
-    /// while let Some(chunk) = stream.next().await {
-    ///     println!("Received {} bytes", chunk?.len());
-    /// }
-    /// Ok(())
-    /// }
-    /// ```
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if request serialization, transport, HTTP 4xx or 5xx status validation,
-    /// or response construction fails. Errors while reading body chunks are returned by the
-    /// stream. The returned error preserves the original error as its source where the underlying
-    /// library provides one.
-    pub async fn execute_stream<T: Serialize + Send>(
-        &self,
-        request: http::Request<T>,
-    ) -> Result<
-        http::Response<impl Stream<Item = Result<Bytes, Error>> + Send + 'static + use<T>>,
-        Error,
-    > {
-        let response = self.send(request).await?;
-        let status = response.status();
-        let headers = response.headers().clone();
-        let body = response.bytes_stream().map_err(Error::Reqwest);
-        let mut output = http::Response::builder().status(status);
-        *output.headers_mut().expect("response builder has headers") = headers;
-        output.body(body).map_err(Error::Http)
+    /// Returns a [`reqwest::RequestBuilder`] object for given url.
+    pub fn get<T: IntoUrl>(&self, url: T) -> reqwest::RequestBuilder {
+        self.0.get(url)
     }
 }

@@ -82,6 +82,13 @@ pub enum Error<T> {
 }
 
 #[cfg(feature = "reqwest")]
+impl From<reqwest::Error> for Error<reqwest::Error> {
+    fn from(value: reqwest::Error) -> Self {
+        Error::Client(value)
+    }
+}
+
+#[cfg(feature = "reqwest")]
 impl<T> From<http::uri::InvalidUri> for Error<T> {
     fn from(value: http::uri::InvalidUri) -> Self {
         Error::Uri(value)
@@ -470,7 +477,7 @@ impl Atom<reqwest::Client, All, Batch<Config<Cui>>> {
             .atom_url::<crate::core::url::types::Concept, crate::core::url::types::atoms::All, _>(
                 &self.value,
             )
-            .uri()?;
+            .uri();
 
         let body = Atom::<_, All, _>::new(url)
             .with_client(self.client().clone())
@@ -499,7 +506,7 @@ impl Atom<reqwest::Client, All, Cui> {
             .atom_url::<crate::core::url::types::Concept, crate::core::url::types::atoms::All, _>(
                 self.value,
             )
-            .uri()?;
+            .uri();
 
         Atom::<_, All, _>::new(url)
             .with_client(self.client)
@@ -510,7 +517,7 @@ impl Atom<reqwest::Client, All, Cui> {
 }
 
 #[cfg(feature = "reqwest")]
-impl Atom<reqwest::Client, All, http::Uri> {
+impl Atom<reqwest::Client, All, url::Url> {
     /// Fetches one page of concept atoms from an atom-list URL endpoint.
     ///
     /// # Errors
@@ -524,12 +531,14 @@ impl Atom<reqwest::Client, All, http::Uri> {
     ) -> Result<Page<Content<AtomResponse>>, Error<reqwest::Error>> {
         // FIXME: Missing validation of Uri against umls_config.
 
-        let response: http::Response<Page<Content<AtomResponse>>> =
-            self.client.get(self.value).await.map_err(Error::Client)?;
-
-        let body = response.into_body();
-
-        Ok(body)
+        self.client
+            .get(self.value)
+            .send()
+            .await?
+            .error_for_status()?
+            .json()
+            .await
+            .map_err(Error::Client)
     }
 }
 
@@ -546,7 +555,7 @@ impl Atom<reqwest::Client, Preferred, Cui> {
         self,
         umls_config: &config::Config,
     ) -> Result<AtomResponse, Error<reqwest::Error>> {
-        let url = umls_config.atom_url::<crate::core::url::types::Concept, crate::core::url::types::atoms::Preferred, _>(self.value).uri()?;
+        let url = umls_config.atom_url::<crate::core::url::types::Concept, crate::core::url::types::atoms::Preferred, _>(self.value).uri();
 
         Atom::<_, Preferred, _>::new(url)
             .with_client(self.client)
@@ -556,7 +565,7 @@ impl Atom<reqwest::Client, Preferred, Cui> {
 }
 
 #[cfg(feature = "reqwest")]
-impl Atom<reqwest::Client, Preferred, http::Uri> {
+impl Atom<reqwest::Client, Preferred, url::Url> {
     /// Fetches the preferred concept atom from a preferred-atom URL endpoint.
     ///
     /// # Errors
@@ -570,12 +579,15 @@ impl Atom<reqwest::Client, Preferred, http::Uri> {
     ) -> Result<AtomResponse, Error<reqwest::Error>> {
         // FIXME: Missing validation against umls_config.
 
-        let response: http::Response<Page<AtomResponse>> =
-            self.client.get(self.value).await.map_err(Error::Client)?;
-
-        let body = response.into_body();
-
-        Ok(body.content)
+        self.client
+            .get(self.value)
+            .send()
+            .await?
+            .error_for_status()?
+            .json::<Page<AtomResponse>>()
+            .await
+            .map(|x| x.content)
+            .map_err(Error::Client)
     }
 }
 
