@@ -114,13 +114,8 @@ impl Search<reqwest::Client> {
     ) -> Result<SearchResponse, Error<reqwest::Error>> {
         let url = config.search_url(request).uri()?;
 
-        let request = http::Request::builder()
-            .uri(url)
-            .body(())
-            .map_err(Error::Request)?;
-
         let response: http::Response<SearchResponse> =
-            self.client.execute(request).await.map_err(Error::Client)?;
+            self.client.get(url).await.map_err(Error::Client)?;
 
         let response = response.into_body();
 

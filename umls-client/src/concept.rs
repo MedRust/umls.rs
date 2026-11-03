@@ -133,14 +133,8 @@ impl Info<reqwest::Client, http::Uri> {
     pub async fn fetch(self, config: &Config) -> Result<Concept, Error<reqwest::Error>> {
         // FIXME: Missing Uri validation logic against config.
 
-        let request = http::Request::builder()
-            .uri(self.value)
-            .body(())
-            .map_err(reqwest::Error::Http)
-            .map_err(Error::Client)?;
-
         let response: Response<ConceptResponse> =
-            self.client.execute(request).await.map_err(Error::Client)?;
+            self.client.get(self.value).await.map_err(Error::Client)?;
 
         Ok(response.into_body().result.into())
     }
@@ -335,18 +329,8 @@ impl Info<reqwest::Client, Aui> {
             .info_url::<crate::core::url::types::Atom, _>(&self.value)
             .uri()?;
 
-        let request = http::Request::builder()
-            .method("GET")
-            .uri(url)
-            .body(())
-            .map_err(reqwest::Error::Http)
-            .map_err(Error::Client)?;
-
-        let response: http::Response<Page<AtomResponse>> = self
-            .client()
-            .execute(request)
-            .await
-            .map_err(Error::Client)?;
+        let response: http::Response<Page<AtomResponse>> =
+            self.client().get(url).await.map_err(Error::Client)?;
         let response = response.into_body();
 
         Ok(response.content)

@@ -113,13 +113,9 @@ impl Relation<Client, http::Uri> {
     ) -> Result<Page<Content<RelationDto>>, Box<dyn std::error::Error>> {
         // FIXME: Validate Uri against umls_config
         // FIXME: Handle missing "apiKey"
-        let request = http::Request::builder()
-            .uri(self.value.clone())
-            .method("GET")
-            .body(())?;
 
         let response: http::Response<Page<Content<RelationDto>>> =
-            self.client().execute(request).await?;
+            self.client().get(self.value.clone()).await?;
 
         let content = response.into_body();
 

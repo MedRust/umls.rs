@@ -142,6 +142,36 @@ impl Client {
         output.body(body).map_err(Error::Http)
     }
 
+    /// Sends a GET request and deserializes it's JSON response.
+    ///
+    /// The response retains the HTTP status and heaers. The entire response body is decoded as
+    /// `U`.
+    ///
+    /// # Examples
+    /// ```no_run
+    /// use umls_http::reqwest;
+    /// async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client: reqwest::Client = Default::default();
+    /// let uri = "https://uts-ws.nlm.nih.gov/releases";
+    /// let response: http::Response<serde_json::Value> = client.get(uri).await?;
+    /// let body = response.into_body();
+    /// Ok(())
+    /// }
+    /// ```
+    pub async fn get<T, U: DeserializeOwned>(&self, url: T) -> Result<http::Response<U>, Error>
+    where
+        T: TryInto<http::Uri>,
+        T::Error: Into<http::Error>,
+    {
+        let request = http::Request::builder()
+            .method("GET")
+            .uri(url)
+            .body(())
+            .map_err(Error::Http)?;
+
+        self.execute(request).await
+    }
+
     /// Sends a request and returns its response body as a byte stream.
     ///
     /// The response retains the HTTP status and headers. The returned stream owns the response

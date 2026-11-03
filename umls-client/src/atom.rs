@@ -523,14 +523,9 @@ impl Atom<reqwest::Client, All, http::Uri> {
         umls_config: &config::Config,
     ) -> Result<Page<Content<AtomResponse>>, Error<reqwest::Error>> {
         // FIXME: Missing validation of Uri against umls_config.
-        let request = http::Request::builder()
-            .uri(self.value)
-            .body(())
-            .map_err(reqwest::Error::Http)
-            .map_err(Error::Client)?;
 
         let response: http::Response<Page<Content<AtomResponse>>> =
-            self.client.execute(request).await.map_err(Error::Client)?;
+            self.client.get(self.value).await.map_err(Error::Client)?;
 
         let body = response.into_body();
 
@@ -574,14 +569,9 @@ impl Atom<reqwest::Client, Preferred, http::Uri> {
         umls_config: &config::Config,
     ) -> Result<AtomResponse, Error<reqwest::Error>> {
         // FIXME: Missing validation against umls_config.
-        let request = http::Request::builder()
-            .uri(self.value)
-            .body(())
-            .map_err(reqwest::Error::Http)
-            .map_err(Error::Client)?;
 
         let response: http::Response<Page<AtomResponse>> =
-            self.client.execute(request).await.map_err(Error::Client)?;
+            self.client.get(self.value).await.map_err(Error::Client)?;
 
         let body = response.into_body();
 

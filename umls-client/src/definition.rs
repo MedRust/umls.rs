@@ -143,11 +143,9 @@ impl Definition<reqwest::Client, http::Uri> {
     ) -> Result<Page<Content<dto::Definition>>, Box<dyn std::error::Error>> {
         // FIXME: Missing validation of Uri against umls_config.
         // FIXME: Handle missing "apiKey"
-        let client = self.client;
-        let request = http::Request::builder().uri(self.value).body(())?;
 
         let response: http::Response<Page<Content<dto::RawDefinition>>> =
-            client.execute(request).await?;
+            self.client.get(self.value).await?;
 
         let page = response
             .into_body()

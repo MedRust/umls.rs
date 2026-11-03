@@ -88,16 +88,8 @@ impl Parent<types::Atom, umls_http::reqwest::Client, http::Uri> {
         // FIXME: Missing validation of Uri against umls_config
         // FIXME: Handle missing "apiKey"
 
-        let client = self.client;
-
-        let request = http::Request::builder()
-            .method("GET")
-            .uri(self.value)
-            .body(())
-            .map_err(Error::Http)?;
-
         let response: http::Response<Page<Content<AtomResponse>>> =
-            client.execute(request).await.map_err(Error::Client)?;
+            self.client.get(self.value).await.map_err(Error::Client)?;
 
         Ok(response.into_body())
     }
@@ -254,15 +246,9 @@ impl Parent<types::Source, umls_http::reqwest::Client, http::Uri> {
         // FIXME: Missing validation of Uri against umls_config
         // FIXME: Handle missing "apiKey" if any
 
-        let request = http::Request::builder()
-            .method("GET")
-            .uri(self.value())
-            .body(())
-            .map_err(Error::Http)?;
-
         let response: Page<Content<SerializableSourceAtomCluster>> = self
             .client()
-            .execute(request)
+            .get(self.value.clone())
             .await
             .map_err(Error::Client)?
             .into_body();
