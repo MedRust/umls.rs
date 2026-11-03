@@ -2,6 +2,8 @@ use std::marker::PhantomData;
 
 #[cfg(feature = "reqwest")]
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "reqwest")]
+use umls_http::reqwest;
 
 #[cfg(feature = "reqwest")]
 use crate::core::aui::Aui;
@@ -76,7 +78,7 @@ impl<U, C, T> Parent<U, C, T> {
 }
 
 #[cfg(feature = "reqwest")]
-impl Parent<types::Atom, umls_http::reqwest::Client, http::Uri> {
+impl Parent<types::Atom, umls_http::reqwest::Client, url::Url> {
     /// Fetch parents of UMLS atom.
     ///
     /// The method only fullfill the requirements and call specified http client.
@@ -88,10 +90,14 @@ impl Parent<types::Atom, umls_http::reqwest::Client, http::Uri> {
         // FIXME: Missing validation of Uri against umls_config
         // FIXME: Handle missing "apiKey"
 
-        let response: http::Response<Page<Content<AtomResponse>>> =
-            self.client.get(self.value).await.map_err(Error::Client)?;
-
-        Ok(response.into_body())
+        self.client
+            .get(self.value)
+            .send()
+            .await?
+            .error_for_status()?
+            .json::<Page<Content<AtomResponse>>>()
+            .await
+            .map_err(Error::Client)
     }
 }
 
@@ -104,7 +110,7 @@ impl Parent<types::Atom, umls_http::reqwest::Client, Aui> {
     ) -> Result<Page<Content<AtomResponse>>, Error<umls_http::reqwest::Error>> {
         let url = umls_config
             .parent_url::<crate::core::url::types::Atom, _>(self.value)
-            .uri()?;
+            .uri();
 
         Parent::<types::Atom, _, _>::new(url)
             .with_client(self.client)
@@ -122,7 +128,7 @@ impl Parent<types::Atom, umls_http::reqwest::Client, Batch<Aui>> {
     ) -> Result<Response<Page<Content<AtomResponse>>, Self>, Error<umls_http::reqwest::Error>> {
         let url = umls_config
             .parent_url::<crate::core::url::types::Atom, _>(&self.value)
-            .uri()?;
+            .uri();
 
         let page = Parent::<types::Atom, _, _>::new(url)
             .with_client(self.client().clone())
@@ -197,6 +203,13 @@ pub enum Error<T> {
 }
 
 #[cfg(feature = "reqwest")]
+impl From<reqwest::Error> for Error<reqwest::Error> {
+    fn from(value: reqwest::Error) -> Self {
+        Error::Client(value)
+    }
+}
+
+#[cfg(feature = "reqwest")]
 impl<T> From<http::uri::InvalidUri> for Error<T> {
     fn from(value: http::uri::InvalidUri) -> Self {
         Error::Uri(value)
@@ -204,7 +217,7 @@ impl<T> From<http::uri::InvalidUri> for Error<T> {
 }
 
 #[cfg(feature = "reqwest")]
-impl Parent<types::Source, umls_http::reqwest::Client, http::Uri> {
+impl Parent<types::Source, umls_http::reqwest::Client, url::Url> {
     /// Fetches one page of source-asserted parent concepts using the wrapped endpoint URL.
     ///
     /// The URL is validated at runtime against the base URL in `umls_config` to ensure requests
@@ -225,7 +238,7 @@ impl Parent<types::Source, umls_http::reqwest::Client, http::Uri> {
     /// use umls_http::reqwest::Client;
     ///
     /// let config = Config::builder("your-api-key").build()?;
-    /// let url: http::Uri = "https://uts-ws.nlm.nih.gov/rest/content/current/source/SNOMEDCT_US/82065001/parents".parse()?;
+    /// let url: url:: Url = "https://uts-ws.nlm.nih.gov/rest/content/current/source/SNOMEDCT_US/82065001/parents".parse()?;
     ///
     /// let page = Parent::<Source, _, _>::new(url)
     ///     .with_client(Client::default())
@@ -249,9 +262,11 @@ impl Parent<types::Source, umls_http::reqwest::Client, http::Uri> {
         let response: Page<Content<SerializableSourceAtomCluster>> = self
             .client()
             .get(self.value.clone())
-            .await
-            .map_err(Error::Client)?
-            .into_body();
+            .send()
+            .await?
+            .error_for_status()?
+            .json()
+            .await?;
 
         let value = response
             .try_map::<_, EmptyString>(|x| {
@@ -416,7 +431,7 @@ impl Parent<types::Source, umls_http::reqwest::Client, SourceConcept> {
     ) -> Result<Page<Content<SourceAtomCluster>>, Error<umls_http::reqwest::Error>> {
         let url = umls_config
             .parent_url::<crate::core::url::types::Source, _>(self.value)
-            .uri()?;
+            .uri();
 
         Parent::<types::Source, _, _>::new(url)
             .with_client(self.client)
@@ -443,7 +458,7 @@ impl Parent<types::Source, umls_http::reqwest::Client, Batch<SourceConcept>> {
     {
         let url = umls_config
             .parent_url::<crate::core::url::types::Source, _>(&self.value)
-            .uri()?;
+            .uri();
 
         let page = Parent::<types::Source, _, _>::new(url)
             .with_client(self.client().clone())

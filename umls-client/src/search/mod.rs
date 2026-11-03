@@ -714,7 +714,7 @@ pub enum PageError<E: std::error::Error> {
 pub struct ConceptSnapshot {
     cui: crate::core::cui::Cui,
     root_source: DisplayName,
-    pub(crate) info: concept::Info<umls_http::WithoutClient, http::Uri>,
+    pub(crate) info: concept::Info<umls_http::WithoutClient, url::Url>,
     name: DisplayName,
     semantic_types: Vec<DisplayName>,
 }
@@ -725,7 +725,7 @@ impl ConceptSnapshot {
     pub(crate) fn new(
         cui: crate::core::cui::Cui,
         root_source: DisplayName,
-        info: concept::Info<umls_http::WithoutClient, http::Uri>,
+        info: concept::Info<umls_http::WithoutClient, url::Url>,
         name: DisplayName,
         semantic_types: Vec<DisplayName>,
     ) -> Self {
@@ -749,7 +749,7 @@ impl ConceptSnapshot {
     }
 
     /// Returns the resource reference used to retrieve the full concept.
-    pub fn info(&self) -> &concept::Info<umls_http::WithoutClient, http::Uri> {
+    pub fn info(&self) -> &concept::Info<umls_http::WithoutClient, url::Url> {
         &self.info
     }
 
@@ -786,9 +786,7 @@ impl TryFrom<RawSearchDto> for ConceptSnapshot {
         let semantic_types = value
             .semantic_types
             .ok_or(ConceptSnapshotError::MissingSemanticTypes)?;
-        // FIXME: Panic on not able to parse to `http::Uri`.
-        let uri: http::Uri = value.uri.parse().unwrap();
-        let info = concept::Info::new(uri);
+        let info = concept::Info::new(value.uri);
         let name = value.name;
 
         Ok(ConceptSnapshot::new(

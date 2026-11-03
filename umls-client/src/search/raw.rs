@@ -39,6 +39,13 @@ pub enum Error<T> {
     Uri(#[source] http::uri::InvalidUri),
 }
 
+#[cfg(feature = "reqwest")]
+impl From<reqwest::Error> for Error<reqwest::Error> {
+    fn from(value: reqwest::Error) -> Self {
+        Error::Client(value)
+    }
+}
+
 impl<T> From<http::uri::InvalidUri> for Error<T> {
     fn from(value: http::uri::InvalidUri) -> Self {
         Error::Uri(value)
@@ -112,12 +119,16 @@ impl Search<reqwest::Client> {
         config: &Config,
         request: &Request,
     ) -> Result<SearchResponse, Error<reqwest::Error>> {
-        let url = config.search_url(request).uri()?;
+        let url = config.search_url(request).uri();
 
-        let response: http::Response<SearchResponse> =
-            self.client.get(url).await.map_err(Error::Client)?;
-
-        let response = response.into_body();
+        let response = self
+            .client
+            .get(url)
+            .send()
+            .await?
+            .error_for_status()?
+            .json::<SearchResponse>()
+            .await?;
 
         tracing::debug!(
             page_size = response.page_size,
@@ -168,7 +179,7 @@ pub struct RawSearchDto {
     /// Source vocabulary associated with the record, when supplied.
     pub root_source: Option<DisplayName>,
     /// UMLS API URI for retrieving the corresponding record.
-    pub uri: String,
+    pub uri: url::Url,
     /// Human-readable name of the matching record.
     pub name: DisplayName,
     /// Semantic types assigned to the record, when supplied.

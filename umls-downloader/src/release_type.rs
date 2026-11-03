@@ -197,17 +197,13 @@ impl Client<reqwest::Client> {
         &self,
         uri: http::Uri,
     ) -> Result<Vec<ReleaseType>, crate::Error<reqwest::Error>> {
-        let request = http::Request::builder()
-            .uri(uri)
-            .method(http::Method::GET)
-            .body(())
-            .map_err(reqwest::Error::Http)
-            .map_err(crate::Error::Client)?;
-
-        self.client
-            .execute::<(), ReleaseTypes>(request)
+        self.client()
+            .get(uri.to_string())
+            .send()
+            .await?
+            .error_for_status()?
+            .json::<ReleaseTypes>()
             .await
-            .map(|x| x.into_body())
             .map(|x| x.types)
             .map_err(crate::Error::Client)
     }
