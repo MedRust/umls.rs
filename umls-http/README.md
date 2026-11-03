@@ -23,10 +23,10 @@ use umls_http::reqwest::Client;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let client = Client::default();
-    let request = http::Request::get("https://uts-ws.nlm.nih.gov/releases").body(())?;
-    let response = client.execute::<(), serde_json::Value>(request).await?;
+    let url = "https://uts-ws.nlm.nih.gov/releases";
+    let response = client.get(url).send().await?;
     println!("Status: {}", response.status());
-    println!("{}", response.into_body());
+    println!("{}", response.json::<serde_json::Value>());
     Ok(())
 }
 ```
@@ -36,27 +36,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 headers and reject HTTP 4xx and 5xx responses. Request bodies are serialized as
 JSON; `()` serializes to `null` and is omitted. Set `Content-Type` explicitly
 when sending JSON that requires it.
-
-## Streaming responses
-
-```rust,no_run
-use futures_util::StreamExt;
-use umls_http::reqwest::Client;
-
-async fn read_chunks(client: &Client, uri: http::Uri) -> Result<(), Box<dyn std::error::Error>> {
-    let request = http::Request::get(uri).body(())?;
-    let response = client.execute_stream(request).await?;
-    let mut stream = std::pin::pin!(response.into_body());
-    while let Some(chunk) = stream.next().await {
-        println!("Received {} bytes", chunk?.len());
-    }
-    Ok(())
-}
-```
-
-The stream owns the response and reads chunks as it is polled. Body read errors
-are yielded by the stream. For authenticated UTS release downloads, use
-`umls_downloader::ReleaseDownloader`, which constructs the Download API request.
 
 ## Configuration and errors
 
