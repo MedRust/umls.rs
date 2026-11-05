@@ -68,7 +68,7 @@ impl Relation<Client, config::Config> {
     ) -> Result<Content<RelationDto>, Box<dyn std::error::Error>> {
         let url = umls_config
             .relation_url::<crate::core::url::types::Concept, _>(self.value())
-            .uri();
+            .url();
 
         let response = Relation::new(url)
             .with_client(self.client)
@@ -90,7 +90,7 @@ impl Relation<Client, Batch<config::Config>> {
     ) -> Result<Response<Page<Content<RelationDto>>, Self>, Box<dyn std::error::Error>> {
         let url = umls_config
             .relation_url::<crate::core::url::types::Concept, _>(&self.value)
-            .uri();
+            .url();
 
         let page = Relation::new(url)
             .with_client(self.client().clone())

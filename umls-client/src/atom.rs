@@ -477,7 +477,7 @@ impl Atom<reqwest::Client, All, Batch<Config<Cui>>> {
             .atom_url::<crate::core::url::types::Concept, crate::core::url::types::atoms::All, _>(
                 &self.value,
             )
-            .uri();
+            .url();
 
         let body = Atom::<_, All, _>::new(url)
             .with_client(self.client().clone())
@@ -506,7 +506,7 @@ impl Atom<reqwest::Client, All, Cui> {
             .atom_url::<crate::core::url::types::Concept, crate::core::url::types::atoms::All, _>(
                 self.value,
             )
-            .uri();
+            .url();
 
         Atom::<_, All, _>::new(url)
             .with_client(self.client)
@@ -557,7 +557,7 @@ impl Atom<reqwest::Client, Preferred, Cui> {
         self,
         umls_config: &config::Config,
     ) -> Result<AtomResponse, Error<reqwest::Error>> {
-        let url = umls_config.atom_url::<crate::core::url::types::Concept, crate::core::url::types::atoms::Preferred, _>(self.value).uri();
+        let url = umls_config.atom_url::<crate::core::url::types::Concept, crate::core::url::types::atoms::Preferred, _>(self.value).url();
 
         Atom::<_, Preferred, _>::new(url)
             .with_client(self.client)

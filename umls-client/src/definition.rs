@@ -197,7 +197,7 @@ impl Definition<reqwest::Client, Batch<Config>> {
 
         let url = umls_config
             .definition_url::<crate::core::url::types::Concept, _>(&self.value)
-            .uri();
+            .url();
 
         let page = Definition::new(url)
             .with_client(self.client.clone())
@@ -219,7 +219,7 @@ impl Definition<reqwest::Client, Config> {
     ) -> Result<Content<dto::Definition>, Box<dyn std::error::Error>> {
         let url = umls_config
             .definition_url::<crate::core::url::types::Concept, _>(&self.value)
-            .uri();
+            .url();
 
         let page = Definition::new(url)
             .with_client(self.client)

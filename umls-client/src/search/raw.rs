@@ -119,7 +119,7 @@ impl Search<reqwest::Client> {
         config: &Config,
         request: &Request,
     ) -> Result<SearchResponse, Error<reqwest::Error>> {
-        let url = config.search_url(request).uri();
+        let url = config.search_url(request).url();
 
         let response = self
             .client

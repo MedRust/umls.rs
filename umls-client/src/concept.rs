@@ -119,7 +119,7 @@ impl Info<reqwest::Client, Cui> {
     pub async fn fetch(self, config: &Config) -> Result<Concept, Error<reqwest::Error>> {
         let uri = config
             .info_url::<crate::core::url::types::Concept, _>(self.value)
-            .uri();
+            .url();
 
         Info::new(uri).with_client(self.client).fetch(config).await
     }
@@ -338,7 +338,7 @@ impl Info<reqwest::Client, Aui> {
     pub async fn fetch(self, config: &Config) -> Result<AtomResponse, Error<reqwest::Error>> {
         let url = config
             .info_url::<crate::core::url::types::Atom, _>(&self.value)
-            .uri();
+            .url();
 
         self.client()
             .get(url)

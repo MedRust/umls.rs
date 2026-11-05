@@ -111,7 +111,7 @@ impl Parent<types::Atom, umls_http::reqwest::Client, Aui> {
     ) -> Result<Page<Content<AtomResponse>>, Error<umls_http::reqwest::Error>> {
         let url = umls_config
             .parent_url::<crate::core::url::types::Atom, _>(self.value)
-            .uri();
+            .url();
 
         Parent::<types::Atom, _, _>::new(url)
             .with_client(self.client)
@@ -129,7 +129,7 @@ impl Parent<types::Atom, umls_http::reqwest::Client, Batch<Aui>> {
     ) -> Result<Response<Page<Content<AtomResponse>>, Self>, Error<umls_http::reqwest::Error>> {
         let url = umls_config
             .parent_url::<crate::core::url::types::Atom, _>(&self.value)
-            .uri();
+            .url();
 
         let page = Parent::<types::Atom, _, _>::new(url)
             .with_client(self.client().clone())
@@ -435,7 +435,7 @@ impl Parent<types::Source, umls_http::reqwest::Client, SourceConcept> {
     ) -> Result<Page<Content<SourceAtomCluster>>, Error<umls_http::reqwest::Error>> {
         let url = umls_config
             .parent_url::<crate::core::url::types::Source, _>(self.value)
-            .uri();
+            .url();
 
         Parent::<types::Source, _, _>::new(url)
             .with_client(self.client)
@@ -462,7 +462,7 @@ impl Parent<types::Source, umls_http::reqwest::Client, Batch<SourceConcept>> {
     {
         let url = umls_config
             .parent_url::<crate::core::url::types::Source, _>(&self.value)
-            .uri();
+            .url();
 
         let page = Parent::<types::Source, _, _>::new(url)
             .with_client(self.client().clone())
