@@ -531,8 +531,10 @@ impl Atom<reqwest::Client, All, url::Url> {
     ) -> Result<Page<Content<AtomResponse>>, Error<reqwest::Error>> {
         // FIXME: Missing validation of Uri against umls_config.
 
+        let url = umls_config.authenticated_url(self.value);
+
         self.client
-            .get(self.value)
+            .get(url)
             .send()
             .await?
             .error_for_status()?
@@ -579,8 +581,10 @@ impl Atom<reqwest::Client, Preferred, url::Url> {
     ) -> Result<AtomResponse, Error<reqwest::Error>> {
         // FIXME: Missing validation against umls_config.
 
+        let url = umls_config.authenticated_url(self.value);
+
         self.client
-            .get(self.value)
+            .get(url)
             .send()
             .await?
             .error_for_status()?

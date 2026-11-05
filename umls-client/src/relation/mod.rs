@@ -112,11 +112,12 @@ impl Relation<Client, url::Url> {
         umls_config: &crate::config::Config,
     ) -> Result<Page<Content<RelationDto>>, Box<dyn std::error::Error>> {
         // FIXME: Validate Uri against umls_config
-        // FIXME: Handle missing "apiKey"
 
-        let response = self
-            .client()
-            .get(self.value.clone())
+        let client = self.client;
+        let url = umls_config.authenticated_url(self.value);
+
+        let response = client
+            .get(url)
             .send()
             .await?
             .error_for_status()?

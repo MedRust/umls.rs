@@ -4,6 +4,8 @@ use chrono::{Datelike, Utc};
 use secrecy::{ExposeSecret, SecretString};
 use thiserror::Error;
 
+const API_KEY_PARAM: &str = "apiKey";
+
 #[derive(Debug)]
 /// Configuration data used for UMLS HTTP requests.
 ///
@@ -73,6 +75,31 @@ impl Config {
     /// Returns search url builder.
     pub fn search_url<'a, V>(&'a self, value: V) -> crate::core::url::Search<'a, V> {
         crate::core::url::Search::new(self, value)
+    }
+
+    /// Injects the API key query parameter into an existing endpoint URL if not already present.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use umls_client::config::Config;
+    /// use url::Url;
+    ///
+    /// let config = Config::builder("my-api-key").build()?;
+    /// let url: Url = "https://uts-ws.nlm.nih.gov/rest/content/current/CUI/C0010200".parse()?;
+    ///
+    /// let authed_url = config.authenticated_url(url);
+    /// assert!(authed_url.query().unwrap().contains("apiKey=my-api-key"));
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    pub fn authenticated_url(&self, mut url: url::Url) -> url::Url {
+        if !url.query_pairs().any(|(key, _)| key == API_KEY_PARAM) {
+            url.query_pairs_mut()
+                .append_pair(API_KEY_PARAM, self.api_key().expose_secret())
+                .finish();
+        }
+
+        url
     }
 }
 
@@ -583,6 +610,38 @@ mod tests {
 
             assert!(matches!(result, Err(Error::NotHttpUrl)));
         }
+
+        Ok(())
+    }
+
+    #[test]
+    fn authenticate_url_when_not_exists() -> Result<(), Box<dyn std::error::Error>> {
+        let config = Config::builder("some_api_key")
+            .base_url("http://localhost:8080/rest".parse()?)
+            .build()?;
+
+        let url = "http://localhost:8080/rest/api".parse()?;
+        let url = config.authenticated_url(url);
+        assert_eq!(
+            url.as_str(),
+            "http://localhost:8080/rest/api?apiKey=some_api_key"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn skip_authentication_when_exists() -> Result<(), Box<dyn std::error::Error>> {
+        let config = Config::builder("some_api_key")
+            .base_url("http://localhost:8080/rest".parse()?)
+            .build()?;
+
+        let url = "http://localhost:8080/rest/api?apiKey=existing_apiKey".parse()?;
+        let url = config.authenticated_url(url);
+        assert_eq!(
+            url.as_str(),
+            "http://localhost:8080/rest/api?apiKey=existing_apiKey"
+        );
 
         Ok(())
     }

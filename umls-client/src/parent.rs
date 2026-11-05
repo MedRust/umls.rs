@@ -88,10 +88,11 @@ impl Parent<types::Atom, umls_http::reqwest::Client, url::Url> {
         umls_config: &config::Config,
     ) -> Result<Page<Content<AtomResponse>>, Error<umls_http::reqwest::Error>> {
         // FIXME: Missing validation of Uri against umls_config
-        // FIXME: Handle missing "apiKey"
+
+        let url = umls_config.authenticated_url(self.value);
 
         self.client
-            .get(self.value)
+            .get(url)
             .send()
             .await?
             .error_for_status()?
@@ -257,11 +258,14 @@ impl Parent<types::Source, umls_http::reqwest::Client, url::Url> {
         umls_config: &config::Config,
     ) -> Result<Page<Content<SourceAtomCluster>>, Error<umls_http::reqwest::Error>> {
         // FIXME: Missing validation of Uri against umls_config
-        // FIXME: Handle missing "apiKey" if any
 
-        let response: Page<Content<SerializableSourceAtomCluster>> = self
-            .client()
-            .get(self.value.clone())
+        // Move client locally becase the value is moved from the self. Alternative for clone.
+        let client = self.client;
+
+        let url = umls_config.authenticated_url(self.value);
+
+        let response: Page<Content<SerializableSourceAtomCluster>> = client
+            .get(url)
             .send()
             .await?
             .error_for_status()?

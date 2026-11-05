@@ -137,8 +137,10 @@ impl Info<reqwest::Client, url::Url> {
     pub async fn fetch(self, config: &Config) -> Result<Concept, Error<reqwest::Error>> {
         // FIXME: Missing Uri validation logic against config.
 
+        let url = config.authenticated_url(self.value);
+
         self.client
-            .get(self.value)
+            .get(url)
             .send()
             .await?
             .error_for_status()?

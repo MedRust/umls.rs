@@ -142,11 +142,12 @@ impl Definition<reqwest::Client, url::Url> {
         umls_config: &config::Config,
     ) -> Result<Page<Content<dto::Definition>>, Box<dyn std::error::Error>> {
         // FIXME: Missing validation of Uri against umls_config.
-        // FIXME: Handle missing "apiKey"
+
+        let url = umls_config.authenticated_url(self.value);
 
         let body = self
             .client
-            .get(self.value)
+            .get(url)
             .send()
             .await?
             .error_for_status()?
