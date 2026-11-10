@@ -79,6 +79,10 @@ pub enum Error<T> {
     /// Represents uri construction error.
     #[error("Uri construction failed: {0}")]
     Uri(#[source] http::uri::InvalidUri),
+
+    /// Represents URL validation error.
+    #[error("Url validation Error: {0}")]
+    Validator(#[source] crate::core::url::validator::Error),
 }
 
 #[cfg(feature = "reqwest")]
@@ -524,12 +528,14 @@ impl Atom<reqwest::Client, All, url::Url> {
     ///
     /// Returns an error if URL parsing, transport, HTTP status validation,
     /// or response decoding fails.
-    #[allow(unused)]
     pub async fn fetch(
         self,
         umls_config: &config::Config,
     ) -> Result<Page<Content<AtomResponse>>, Error<reqwest::Error>> {
-        // FIXME: Missing validation of Uri against umls_config.
+        umls_config
+            .atom_url_validator::<crate::core::url::types::Concept, crate::core::url::types::atoms::All>(self.value())
+            .validate()
+            .map_err(Error::Validator)?;
 
         let url = umls_config.authenticated_url(self.value);
 
@@ -574,12 +580,14 @@ impl Atom<reqwest::Client, Preferred, url::Url> {
     ///
     /// Returns an error if URL parsing, transport, HTTP status validation,
     /// or response decoding fails.
-    #[allow(unused)]
     pub async fn fetch(
-        mut self,
+        self,
         umls_config: &config::Config,
     ) -> Result<AtomResponse, Error<reqwest::Error>> {
-        // FIXME: Missing validation against umls_config.
+        umls_config
+            .atom_url_validator::<crate::core::url::types::Concept, crate::core::url::types::atoms::Preferred>(self.value())
+            .validate()
+            .map_err(Error::Validator)?;
 
         let url = umls_config.authenticated_url(self.value);
 

@@ -32,6 +32,10 @@ pub enum Error<T> {
     /// Represents uri construction error.
     #[error("Uri construction Error: {0}")]
     Uri(#[source] http::uri::InvalidUri),
+
+    /// Represents URL validation error.
+    #[error("Url validation Error: {0}")]
+    Validator(#[source] crate::core::url::validator::Error),
 }
 
 #[cfg(feature = "reqwest")]
@@ -133,9 +137,11 @@ impl Info<reqwest::Client, url::Url> {
     ///
     /// Returns [`Error`] if URL construction, transport, HTTP status
     /// validation, or response decoding fails.
-    #[allow(unused)]
     pub async fn fetch(self, config: &Config) -> Result<Concept, Error<reqwest::Error>> {
-        // FIXME: Missing Uri validation logic against config.
+        config
+            .info_url_validator(self.value())
+            .validate()
+            .map_err(Error::Validator)?;
 
         let url = config.authenticated_url(self.value);
 
@@ -315,7 +321,7 @@ impl<'de> Deserialize<'de> for OptionalResource {
 }
 
 #[cfg(feature = "reqwest")]
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, PartialEq, Eq)]
 /// The UMLS class discriminator for a concept response.
 pub enum ConceptClass {
     /// A UMLS concept resource.

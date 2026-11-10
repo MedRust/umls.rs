@@ -135,13 +135,15 @@ impl<V> Definition<WithoutClient, V> {
 impl Definition<reqwest::Client, url::Url> {
     /// Fetch concepts definitions for given URL.
     ///
-    /// The method doesn't validate the URL.
-    #[allow(unused)]
+    /// The method is responsible to validate, authenticate url, send request and processing of
+    /// response.
     pub async fn fetch(
         self,
         umls_config: &config::Config,
     ) -> Result<Page<Content<dto::Definition>>, Box<dyn std::error::Error>> {
-        // FIXME: Missing validation of Uri against umls_config.
+        umls_config
+            .definition_url_validator::<crate::core::url::types::Concept>(self.value())
+            .validate()?;
 
         let url = umls_config.authenticated_url(self.value);
 

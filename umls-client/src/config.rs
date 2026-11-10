@@ -3,6 +3,7 @@ use std::{borrow::Cow, num::ParseIntError, str::FromStr};
 use chrono::{Datelike, Utc};
 use secrecy::{ExposeSecret, SecretString};
 use thiserror::Error;
+use url::Url;
 
 const API_KEY_PARAM: &str = "apiKey";
 
@@ -100,6 +101,46 @@ impl Config {
         }
 
         url
+    }
+
+    /// Returns info url validator object.
+    pub fn info_url_validator<'a, T>(
+        &'a self,
+        url: &'a Url,
+    ) -> crate::core::url::validator::Info<'a, T> {
+        crate::core::url::validator::Info::new(self, url)
+    }
+
+    /// Returns atom url validator object.
+    pub fn atom_url_validator<'a, M, T>(
+        &'a self,
+        url: &'a Url,
+    ) -> crate::core::url::validator::Atom<'a, M, T> {
+        crate::core::url::validator::Atom::new(self, url)
+    }
+
+    /// Returns definition url validator object.
+    pub fn definition_url_validator<'a, T>(
+        &'a self,
+        url: &'a Url,
+    ) -> crate::core::url::validator::Definition<'a, T> {
+        crate::core::url::validator::Definition::new(self, url)
+    }
+
+    /// Returns relation url validator object.
+    pub fn relation_url_validator<'a, T>(
+        &'a self,
+        url: &'a Url,
+    ) -> crate::core::url::validator::Relation<'a, T> {
+        crate::core::url::validator::Relation::new(self, url)
+    }
+
+    /// Returns parent url validator object.
+    pub fn parent_url_validator<'a, T>(
+        &'a self,
+        url: &'a Url,
+    ) -> crate::core::url::validator::Parent<'a, T> {
+        crate::core::url::validator::Parent::new(self, url)
     }
 }
 

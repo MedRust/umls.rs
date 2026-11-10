@@ -434,11 +434,12 @@ impl UmlsServer {
         let source_concept = SourceConcept::new(source, code);
         let batch = Batch::new(size, number, source_concept);
 
-        let Ok(response) = Parent::new(batch)
+        let result = Parent::<umls_client::parent::types::Source, _, _>::new(batch)
             .with_client(self.client.clone())
             .fetch(&self.config)
-            .await
-        else {
+            .await;
+
+        let Ok(response) = result else {
             return failure("Failed to fetch source-asserted parents for identifier");
         };
 

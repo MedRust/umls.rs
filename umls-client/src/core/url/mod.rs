@@ -1,4 +1,30 @@
+//! UMLS endpoint URL construction and validation.
+//!
+//! This module provides typed URL builders and validators for UMLS REST resources,
+//! including concept information, atoms, definitions, relations, and parents.
+//! Builders and validators are typically constructed via helper methods on
+//! [`Config`](crate::config::Config).
+//!
+//! Submodules:
+//! - [`validator`]: URL validation logic ensuring safety before HTTP transport.
+//! - [`types`]: Resource marker types used to parameterize URL builders and validators.
+//!
+//! # Example
+//!
+//! ```
+//! use umls_client::{config::Config, core::cui::Cui};
+//!
+//! let config = Config::builder("test-api-key").build()?;
+//! let cui = Cui::new("C0010200")?;
+//! let url = config.info_url::<umls_client::core::url::types::Concept, _>(cui).url();
+//! assert!(url.as_str().contains("C0010200"));
+//! # Ok::<(), Box<dyn std::error::Error>>(())
+//! ```
+
 use std::marker::PhantomData;
+
+/// URL validator objects.
+pub mod validator;
 
 use crate::{
     atom,

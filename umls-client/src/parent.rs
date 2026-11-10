@@ -82,12 +82,14 @@ impl Parent<types::Atom, umls_http::reqwest::Client, url::Url> {
     /// Fetch parents of UMLS atom.
     ///
     /// The method only fullfill the requirements and call specified http client.
-    #[allow(unused)]
     pub async fn fetch(
-        mut self,
+        self,
         umls_config: &config::Config,
     ) -> Result<Page<Content<AtomResponse>>, Error<umls_http::reqwest::Error>> {
-        // FIXME: Missing validation of Uri against umls_config
+        umls_config
+            .parent_url_validator::<crate::core::url::types::Atom>(self.value())
+            .validate()
+            .map_err(Error::Validator)?;
 
         let url = umls_config.authenticated_url(self.value);
 
@@ -201,6 +203,10 @@ pub enum Error<T> {
     /// Represents uri construction failure.
     #[error("Uri construction failed: {0}")]
     Uri(#[source] http::uri::InvalidUri),
+
+    /// Represents URL validation failure.
+    #[error("URL Validation error: {0}")]
+    Validator(#[source] crate::core::url::validator::Error),
 }
 
 #[cfg(feature = "reqwest")]
@@ -252,12 +258,14 @@ impl Parent<types::Source, umls_http::reqwest::Client, url::Url> {
     /// # Ok(())
     /// # }
     /// ```
-    #[allow(unused)]
     pub async fn fetch(
         self,
         umls_config: &config::Config,
     ) -> Result<Page<Content<SourceAtomCluster>>, Error<umls_http::reqwest::Error>> {
-        // FIXME: Missing validation of Uri against umls_config
+        umls_config
+            .parent_url_validator::<crate::core::url::types::Source>(self.value())
+            .validate()
+            .map_err(Error::Validator)?;
 
         // Move client locally becase the value is moved from the self. Alternative for clone.
         let client = self.client;

@@ -3,7 +3,13 @@
 
 use httpmock::{Method::GET, MockServer};
 use serde_json::json;
-use umls_client::{concept::Info, config, core::aui::Aui, search::core::DisplayName};
+use umls_client::{
+    concept::{Concept, ConceptClass, Info},
+    config,
+    core::{aui::Aui, cui::Cui},
+    search::core::DisplayName,
+};
+use url::Url;
 
 #[tokio::test]
 async fn successfully_get_atom_info() -> Result<(), Box<dyn std::error::Error>> {
@@ -69,5 +75,123 @@ async fn successfully_get_atom_info() -> Result<(), Box<dyn std::error::Error>> 
     assert!(!response.obsolete);
 
     mock.assert_async().await;
+    Ok(())
+}
+
+fn assert_concept(concept: &Concept) {
+    assert_eq!(concept.ui, "C0010200");
+    assert_eq!(concept.name, "Coughing");
+    assert_eq!(concept.date_added, "09-30-1990");
+    assert_eq!(concept.major_revision_date, "09-03-2024");
+    assert_eq!(concept.class_type, ConceptClass::Concept);
+    assert!(!concept.suppressible);
+    assert_eq!(concept.status, "R");
+    assert!(!concept.semantic_types.is_empty());
+    assert_eq!(concept.semantic_types.len(), 1);
+    let semantic_type = concept.semantic_types.first().map(|x| x.name.as_str());
+    assert_eq!(semantic_type, Some("Sign or Symptom"));
+    assert_eq!(concept.atom_count, 242);
+    assert_eq!(concept.cv_member_count, 0);
+    assert_eq!(concept.attribute_count, 0);
+    assert_eq!(concept.relation_count, 29);
+    assert_eq!(
+        concept.atoms.value().as_str(),
+        "https://uts-ws.nlm.nih.gov/rest/content/2026AB/CUI/C0010200/atoms"
+    );
+    assert_eq!(
+        concept.definitions.as_ref().map(|x| x.value().as_str()),
+        Some("https://uts-ws.nlm.nih.gov/rest/content/2026AB/CUI/C0010200/definitions")
+    );
+    assert_eq!(
+        concept.relations.as_ref().map(|x| x.value().as_str()),
+        Some("https://uts-ws.nlm.nih.gov/rest/content/2026AB/CUI/C0010200/relations")
+    );
+    assert_eq!(
+        concept.default_preferred_atom.value().as_str(),
+        "https://uts-ws.nlm.nih.gov/rest/content/2026AB/CUI/C0010200/atoms/preferred"
+    );
+}
+
+async fn mock_concept_info<'a>(server: &'a MockServer, api_key: &'a str) -> httpmock::Mock<'a> {
+    server
+        .mock_async(|when, then| {
+            when.method(GET)
+                .path("/content/current/CUI/C0010200")
+                .query_param("apiKey", api_key);
+
+            let str = include_str!("fixtures/concept_info.json");
+            let json: serde_json::Value = serde_json::from_str(str).unwrap();
+
+            then.status(200)
+                .header("CONTENT-TYPE", "application/json")
+                .json_body(json);
+        })
+        .await
+}
+
+#[tokio::test]
+async fn fetch_concept_info_using_url() -> Result<(), Box<dyn std::error::Error>> {
+    _ = env_logger::builder().is_test(true).try_init();
+    let api_key = "some_api_key";
+
+    let mock_server = MockServer::start_async().await;
+    let mock = mock_concept_info(&mock_server, api_key).await;
+    let base_url: Url = mock_server.base_url().parse()?;
+
+    let url = base_url.join("/content/current/CUI/C0010200")?;
+
+    let config = config::Config::builder(api_key)
+        .base_url(base_url)
+        .build()?;
+
+    let info = Info::new(url)
+        .with_client(Default::default())
+        .fetch(&config)
+        .await?;
+
+    assert_concept(&info);
+
+    mock.assert_async().await;
+    Ok(())
+}
+
+#[tokio::test]
+async fn fetch_concept_info_using_cui() -> Result<(), Box<dyn std::error::Error>> {
+    _ = env_logger::builder().is_test(true).try_init();
+    let api_key = "some_api_key";
+
+    let mock_server = MockServer::start_async().await;
+    let mock = mock_concept_info(&mock_server, api_key).await;
+
+    let base_url: Url = mock_server.base_url().parse()?;
+    let config = config::Config::builder(api_key)
+        .base_url(base_url)
+        .build()?;
+
+    let cui: Cui = "C0010200".parse()?;
+    let info = Info::new(cui)
+        .with_client(Default::default())
+        .fetch(&config)
+        .await?;
+    assert_concept(&info);
+
+    mock.assert_async().await;
+    Ok(())
+}
+
+#[tokio::test]
+async fn rejects_invalid_url() -> Result<(), Box<dyn std::error::Error>> {
+    _ = env_logger::builder().is_test(true).try_init();
+
+    let config = config::Config::builder("some_api_key").build()?;
+
+    let client = umls_http::reqwest::Client::default();
+    let url = "https://uts-ws.nlm.nih.gov/rest/content/current/CUI/".parse::<url::Url>()?;
+
+    let result = Info::new(url).with_client(client).fetch(&config).await;
+    assert!(matches!(
+        result,
+        Err(umls_client::concept::Error::Validator(_))
+    ));
     Ok(())
 }

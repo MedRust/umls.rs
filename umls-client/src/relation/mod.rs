@@ -105,13 +105,15 @@ impl Relation<Client, Batch<config::Config>> {
 impl Relation<Client, url::Url> {
     /// Fetch concept relations for given url.
     ///
-    /// The method doesn't validate the URL.
-    #[allow(unused)]
+    /// The method is responsible for url validation, authentication and sending request and
+    /// processing the response.
     pub async fn fetch(
         self,
         umls_config: &crate::config::Config,
     ) -> Result<Page<Content<RelationDto>>, Box<dyn std::error::Error>> {
-        // FIXME: Validate Uri against umls_config
+        umls_config
+            .relation_url_validator(self.value())
+            .validate()?;
 
         let client = self.client;
         let url = umls_config.authenticated_url(self.value);
