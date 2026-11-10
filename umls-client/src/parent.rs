@@ -1,3 +1,9 @@
+#[cfg(feature = "reqwest")]
+use crate::core::url::validator;
+
+#[cfg(feature = "reqwest")]
+use crate::types;
+
 use std::marker::PhantomData;
 
 #[cfg(feature = "reqwest")]
@@ -22,19 +28,6 @@ use crate::{
     config,
     search::Content,
 };
-
-/// The parent types.
-pub mod types {
-    /// Represents the Atom parent types.
-    ///
-    /// It used as state for [`super::Parent`] to fetch immediate parents of UMLS atom.
-    pub struct Atom;
-
-    /// Represents the source parent types.
-    ///
-    /// It used as state for [`super::Parent`] to fetch source-asserted parents.
-    pub struct Source;
-}
 
 /// UMLS parent client.
 pub struct Parent<U, C, T> {
@@ -87,7 +80,7 @@ impl Parent<types::Atom, umls_http::reqwest::Client, url::Url> {
         umls_config: &config::Config,
     ) -> Result<Page<Content<AtomResponse>>, Error<umls_http::reqwest::Error>> {
         umls_config
-            .parent_url_validator::<crate::core::url::types::Atom>(self.value())
+            .parent_url_validator::<types::Atom>(self.value())
             .validate()
             .map_err(Error::Validator)?;
 
@@ -111,9 +104,7 @@ impl Parent<types::Atom, umls_http::reqwest::Client, Aui> {
         self,
         umls_config: &config::Config,
     ) -> Result<Page<Content<AtomResponse>>, Error<umls_http::reqwest::Error>> {
-        let url = umls_config
-            .parent_url::<crate::core::url::types::Atom, _>(self.value)
-            .url();
+        let url = umls_config.parent_url::<types::Atom, _>(self.value).url();
 
         Parent::<types::Atom, _, _>::new(url)
             .with_client(self.client)
@@ -129,9 +120,7 @@ impl Parent<types::Atom, umls_http::reqwest::Client, Batch<Aui>> {
         self,
         umls_config: &config::Config,
     ) -> Result<Response<Page<Content<AtomResponse>>, Self>, Error<umls_http::reqwest::Error>> {
-        let url = umls_config
-            .parent_url::<crate::core::url::types::Atom, _>(&self.value)
-            .url();
+        let url = umls_config.parent_url::<types::Atom, _>(&self.value).url();
 
         let page = Parent::<types::Atom, _, _>::new(url)
             .with_client(self.client().clone())
@@ -206,7 +195,7 @@ pub enum Error<T> {
 
     /// Represents URL validation failure.
     #[error("URL Validation error: {0}")]
-    Validator(#[source] crate::core::url::validator::Error),
+    Validator(#[source] validator::Error),
 }
 
 #[cfg(feature = "reqwest")]
@@ -241,8 +230,9 @@ impl Parent<types::Source, umls_http::reqwest::Client, url::Url> {
     /// ```no_run
     /// # #[cfg(feature = "reqwest")]
     /// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
-    /// use umls_client::{config::Config, parent::{Parent, types::Source}};
+    /// use umls_client::{config::Config, parent::Parent};
     /// use umls_http::reqwest::Client;
+    /// use umls_client::types::Source;
     ///
     /// let config = Config::builder("your-api-key").build()?;
     /// let url: url:: Url = "https://uts-ws.nlm.nih.gov/rest/content/current/source/SNOMEDCT_US/82065001/parents".parse()?;
@@ -263,7 +253,7 @@ impl Parent<types::Source, umls_http::reqwest::Client, url::Url> {
         umls_config: &config::Config,
     ) -> Result<Page<Content<SourceAtomCluster>>, Error<umls_http::reqwest::Error>> {
         umls_config
-            .parent_url_validator::<crate::core::url::types::Source>(self.value())
+            .parent_url_validator::<types::Source>(self.value())
             .validate()
             .map_err(Error::Validator)?;
 
@@ -420,8 +410,9 @@ impl Parent<types::Source, umls_http::reqwest::Client, SourceConcept> {
     /// ```no_run
     /// # #[cfg(feature = "reqwest")]
     /// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
-    /// use umls_client::{config::Config, parent::{Parent, types::Source, SourceConcept}};
+    /// use umls_client::{config::Config, parent::{Parent, SourceConcept}};
     /// use umls_http::reqwest::Client;
+    /// use umls_client::types::Source;
     ///
     /// let config = Config::builder("your-api-key").build()?;
     /// let source_concept = SourceConcept::new("SNOMEDCT_US".try_into()?, "82065001".try_into()?);
@@ -441,9 +432,7 @@ impl Parent<types::Source, umls_http::reqwest::Client, SourceConcept> {
         self,
         umls_config: &config::Config,
     ) -> Result<Page<Content<SourceAtomCluster>>, Error<umls_http::reqwest::Error>> {
-        let url = umls_config
-            .parent_url::<crate::core::url::types::Source, _>(self.value)
-            .url();
+        let url = umls_config.parent_url::<types::Source, _>(self.value).url();
 
         Parent::<types::Source, _, _>::new(url)
             .with_client(self.client)
@@ -469,7 +458,7 @@ impl Parent<types::Source, umls_http::reqwest::Client, Batch<SourceConcept>> {
     ) -> Result<Response<Page<Content<SourceAtomCluster>>, Self>, Error<umls_http::reqwest::Error>>
     {
         let url = umls_config
-            .parent_url::<crate::core::url::types::Source, _>(&self.value)
+            .parent_url::<types::Source, _>(&self.value)
             .url();
 
         let page = Parent::<types::Source, _, _>::new(url)

@@ -4,6 +4,11 @@ pub mod config;
 
 use umls_http::WithoutClient;
 
+use crate::core::url::validator;
+
+#[cfg(feature = "reqwest")]
+use crate::types;
+
 #[cfg(feature = "reqwest")]
 use serde::{Deserialize, Serialize};
 
@@ -25,7 +30,7 @@ pub enum Error<T> {
 
     /// Represents url validation failure.
     #[error("URL validation error: {0}")]
-    Validator(crate::core::url::validator::Error),
+    Validator(validator::Error),
 }
 
 #[cfg(feature = "reqwest")]
@@ -35,8 +40,8 @@ impl From<umls_http::reqwest::Error> for Error<umls_http::reqwest::Error> {
     }
 }
 
-impl<T> From<crate::core::url::validator::Error> for Error<T> {
-    fn from(value: crate::core::url::validator::Error) -> Self {
+impl<T> From<validator::Error> for Error<T> {
+    fn from(value: validator::Error) -> Self {
         Error::Validator(value)
     }
 }
@@ -96,7 +101,7 @@ impl Relation<Client, config::Config> {
         umls_config: &crate::config::Config,
     ) -> RelationResult<Content<RelationDto>> {
         let url = umls_config
-            .relation_url::<crate::core::url::types::Concept, _>(self.value())
+            .relation_url::<types::Concept, _>(self.value())
             .url();
 
         let response = Relation::new(url)
@@ -118,7 +123,7 @@ impl Relation<Client, Batch<config::Config>> {
         umls_config: &crate::config::Config,
     ) -> RelationResult<Response<Page<Content<RelationDto>>, Self>> {
         let url = umls_config
-            .relation_url::<crate::core::url::types::Concept, _>(&self.value)
+            .relation_url::<types::Concept, _>(&self.value)
             .url();
 
         let page = Relation::new(url)

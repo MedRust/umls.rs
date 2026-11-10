@@ -21,16 +21,16 @@
 //! let config = Config::builder("test-api-key").build()?;
 //! let url: Url = "https://uts-ws.nlm.nih.gov/rest/content/current/CUI/C0010200".parse()?;
 //!
-//! let validator = config.info_url_validator::<umls_client::core::url::types::Concept>(&url);
+//! let validator = config.info_url_validator::<umls_client::types::Concept>(&url);
 //! assert!(validator.validate().is_ok());
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 
+use crate::types;
 use std::marker::PhantomData;
 
 use url::Url;
 
-use super::types::Concept;
 use crate::{config::Config, core::aui::Aui, search::core::DisplayName};
 
 /// Validate url against with the base url.
@@ -226,7 +226,7 @@ pub enum Error {
     MismatchPort,
 }
 
-impl<'a> Info<'a, Concept> {
+impl<'a> Info<'a, types::Concept> {
     /// Validate concept info url.
     ///
     /// The method validate against the base url.
@@ -274,7 +274,7 @@ impl<'a, M, T> Atom<'a, M, T> {
     }
 }
 
-impl<'a> Atom<'a, crate::core::url::types::Concept, crate::core::url::types::atoms::All> {
+impl<'a> Atom<'a, types::Concept, types::atom::All> {
     /// Validate concept atoms url.
     ///
     /// The method validate against the base url.
@@ -294,7 +294,7 @@ impl<'a> Atom<'a, crate::core::url::types::Concept, crate::core::url::types::ato
     }
 }
 
-impl<'a> Atom<'a, super::types::Concept, super::types::atoms::Preferred> {
+impl<'a> Atom<'a, super::types::Concept, super::types::atom::Preferred> {
     /// Validate concept preferred atom url.
     ///
     /// The method validate against the base url.
@@ -343,7 +343,7 @@ impl<'a, T> Definition<'a, T> {
     }
 }
 
-impl<'a> Definition<'a, crate::core::url::types::Concept> {
+impl<'a> Definition<'a, types::Concept> {
     /// Validate concept definitions url.
     ///
     /// The method validate against the base url.
@@ -439,7 +439,7 @@ impl<'a, T> Parent<'a, T> {
     }
 }
 
-impl<'a> Parent<'a, crate::core::url::types::Source> {
+impl<'a> Parent<'a, types::Source> {
     /// Validate concept source-asserted parent url.
     ///
     /// The method validate against the base url.
@@ -463,7 +463,7 @@ impl<'a> Parent<'a, crate::core::url::types::Source> {
     }
 }
 
-impl<'a> Parent<'a, crate::core::url::types::Atom> {
+impl<'a> Parent<'a, types::Atom> {
     /// Validate atom parent url.
     ///
     /// The method validate against the base url.
@@ -628,11 +628,9 @@ mod tests {
     fn validates_concept_atom_url() {
         let config = umls_config("http://localhost:8080/rest");
         let url = url_from_str("http://localhost:8080/rest/content/current/CUI/C0009044/atoms");
-        Atom::<crate::core::url::types::Concept, crate::core::url::types::atoms::All>::new(
-            &config, &url,
-        )
-        .validate()
-        .expect("Validation should be successful for valid url.");
+        Atom::<types::Concept, types::atom::All>::new(&config, &url)
+            .validate()
+            .expect("Validation should be successful for valid url.");
     }
 
     #[test]
@@ -647,11 +645,7 @@ mod tests {
 
         for url in urls {
             let url = url_from_str(url);
-            let result = Atom::<
-                crate::core::url::types::Concept,
-                crate::core::url::types::atoms::All,
-            >::new(&config, &url)
-            .validate();
+            let result = Atom::<types::Concept, types::atom::All>::new(&config, &url).validate();
             assert!(matches!(result, Err(Error::InvalidPath)));
         }
     }
@@ -660,11 +654,7 @@ mod tests {
     fn rejects_invalid_concept_atom_url_version_format() {
         let config = umls_config("http://localhost:8080/rest");
         let url = url_from_str("http://localhost:8080/rest/content/A2024A/CUI/C0009044/atoms");
-        let result =
-            Atom::<crate::core::url::types::Concept, crate::core::url::types::atoms::All>::new(
-                &config, &url,
-            )
-            .validate();
+        let result = Atom::<types::Concept, types::atom::All>::new(&config, &url).validate();
         assert!(matches!(result, Err(Error::Version(_))));
     }
 
@@ -672,11 +662,7 @@ mod tests {
     fn rejects_invalid_concept_atom_url_cui_format() {
         let config = umls_config("http://localhost:8080/rest");
         let url = url_from_str("http://localhost:8080/rest/content/current/CUI/00090C44/atoms");
-        let result =
-            Atom::<crate::core::url::types::Concept, crate::core::url::types::atoms::All>::new(
-                &config, &url,
-            )
-            .validate();
+        let result = Atom::<types::Concept, types::atom::All>::new(&config, &url).validate();
         assert!(matches!(result, Err(Error::Cui(_))));
     }
 
@@ -685,11 +671,9 @@ mod tests {
         let config = umls_config("http://localhost:8080/rest");
         let url =
             url_from_str("http://localhost:8080/rest/content/current/CUI/C0155502/atoms/preferred");
-        Atom::<crate::core::url::types::Concept, crate::core::url::types::atoms::Preferred>::new(
-            &config, &url,
-        )
-        .validate()
-        .expect("Validation of preferred concept atom url should be successful.");
+        Atom::<types::Concept, types::atom::Preferred>::new(&config, &url)
+            .validate()
+            .expect("Validation of preferred concept atom url should be successful.");
     }
 
     #[test]
@@ -707,11 +691,8 @@ mod tests {
 
         for url in urls {
             let url = url_from_str(url);
-            let result = Atom::<
-                crate::core::url::types::Concept,
-                crate::core::url::types::atoms::Preferred,
-            >::new(&config, &url)
-            .validate();
+            let result =
+                Atom::<types::Concept, types::atom::Preferred>::new(&config, &url).validate();
             assert!(matches!(result, Err(Error::InvalidPath)));
         }
     }
@@ -721,11 +702,7 @@ mod tests {
         let config = umls_config("http://localhost:8080/rest");
         let url =
             url_from_str("http://localhost:8080/rest/content/2024/CUI/C0155502/atoms/preferred");
-        let result = Atom::<
-            crate::core::url::types::Concept,
-            crate::core::url::types::atoms::Preferred,
-        >::new(&config, &url)
-        .validate();
+        let result = Atom::<types::Concept, types::atom::Preferred>::new(&config, &url).validate();
         assert!(matches!(result, Err(Error::Version(_))));
     }
 
@@ -734,11 +711,7 @@ mod tests {
         let config = umls_config("http://localhost:8080/rest");
         let url =
             url_from_str("http://localhost:8080/rest/content/current/CUI/0155502/atoms/preferred");
-        let result = Atom::<
-            crate::core::url::types::Concept,
-            crate::core::url::types::atoms::Preferred,
-        >::new(&config, &url)
-        .validate();
+        let result = Atom::<types::Concept, types::atom::Preferred>::new(&config, &url).validate();
         assert!(matches!(result, Err(Error::Cui(_))));
     }
 
@@ -747,7 +720,7 @@ mod tests {
         let config = umls_config("http://localhost:8080/rest");
         let url =
             url_from_str("http://localhost:8080/rest/content/current/CUI/C0155502/definitions");
-        let is_success = Definition::<crate::core::url::types::Concept>::new(&config, &url)
+        let is_success = Definition::<types::Concept>::new(&config, &url)
             .validate()
             .is_ok();
         assert!(is_success);
@@ -763,8 +736,7 @@ mod tests {
         ];
         for url in urls {
             let url = url_from_str(url);
-            let result =
-                Definition::<crate::core::url::types::Concept>::new(&config, &url).validate();
+            let result = Definition::<types::Concept>::new(&config, &url).validate();
             assert!(matches!(result, Err(Error::InvalidPath)));
         }
     }
@@ -799,7 +771,7 @@ mod tests {
         let url = url_from_str(
             "http://localhost:8080/rest/content/current/source/SNOMEDCT_US/9468002/parents",
         );
-        let is_success = Parent::<crate::core::url::types::Source>::new(&config, &url)
+        let is_success = Parent::<types::Source>::new(&config, &url)
             .validate()
             .is_ok();
         assert!(is_success);
@@ -819,7 +791,7 @@ mod tests {
         ];
         for url in urls {
             let url = url_from_str(url);
-            let result = Parent::<crate::core::url::types::Source>::new(&config, &url).validate();
+            let result = Parent::<types::Source>::new(&config, &url).validate();
             assert!(
                 matches!(result, Err(Error::InvalidPath)),
                 "source-asserted validation not asserted with invalid path for url: {} with result: {:?}",
@@ -833,9 +805,7 @@ mod tests {
     fn validates_atom_parent_url() {
         let config = umls_config("http://localhost:8080/rest");
         let url = url_from_str("http://localhost:8080/rest/content/current/AUI/A10134087/parents");
-        let is_success = Parent::<crate::core::url::types::Atom>::new(&config, &url)
-            .validate()
-            .is_ok();
+        let is_success = Parent::<types::Atom>::new(&config, &url).validate().is_ok();
         assert!(is_success);
     }
 
@@ -852,7 +822,7 @@ mod tests {
         ];
         for url in urls {
             let url = url_from_str(url);
-            let result = Parent::<crate::core::url::types::Atom>::new(&config, &url).validate();
+            let result = Parent::<types::Atom>::new(&config, &url).validate();
             assert!(
                 matches!(result, Err(Error::InvalidPath)),
                 "source-asserted validation not asserted with invalid path for url: {} with result: {:?}",

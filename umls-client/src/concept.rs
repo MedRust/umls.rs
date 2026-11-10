@@ -14,9 +14,14 @@ use crate::atom::{AtomResponse, Page};
 #[cfg(feature = "reqwest")]
 use crate::core::aui::Aui;
 #[cfg(feature = "reqwest")]
+use crate::core::url::validator;
+#[cfg(feature = "reqwest")]
 use crate::search::core::get_trimmed_non_empty_string;
 #[cfg(feature = "reqwest")]
 use crate::{atom, definition, relation};
+
+#[cfg(feature = "reqwest")]
+use crate::types;
 
 #[cfg(feature = "reqwest")]
 use crate::{config::Config, core::cui::Cui, search::ConceptSnapshot};
@@ -35,7 +40,7 @@ pub enum Error<T> {
 
     /// Represents URL validation error.
     #[error("Url validation Error: {0}")]
-    Validator(#[source] crate::core::url::validator::Error),
+    Validator(#[source] validator::Error),
 }
 
 #[cfg(feature = "reqwest")]
@@ -121,9 +126,7 @@ impl Info<reqwest::Client, Cui> {
     /// Returns [`Error`] if endpoint construction, transport, HTTP status
     /// validation, or response decoding fails.
     pub async fn fetch(self, config: &Config) -> Result<Concept, Error<reqwest::Error>> {
-        let uri = config
-            .info_url::<crate::core::url::types::Concept, _>(self.value)
-            .url();
+        let uri = config.info_url::<types::Concept, _>(self.value).url();
 
         Info::new(uri).with_client(self.client).fetch(config).await
     }
@@ -200,13 +203,13 @@ pub struct Concept {
     /// Number of content-view memberships associated with the concept.
     pub cv_member_count: u64,
     /// Endpoint for the concept's atoms, when available.
-    pub atoms: atom::Atom<umls_http::WithoutClient, atom::All, Url>,
+    pub atoms: atom::Atom<umls_http::WithoutClient, types::atom::All, Url>,
     /// Endpoint for the concept's definitions, when available.
     pub definitions: Option<definition::Definition<umls_http::WithoutClient, Url>>,
     /// Endpoint for the concept's relations, when available.
     pub relations: Option<relation::Relation<umls_http::WithoutClient, Url>>,
     /// Endpoint for the default preferred atom, when available.
-    pub default_preferred_atom: atom::Atom<umls_http::WithoutClient, atom::Preferred, Url>,
+    pub default_preferred_atom: atom::Atom<umls_http::WithoutClient, types::atom::Preferred, Url>,
     /// Number of relations associated with the concept.
     pub relation_count: u64,
     /// Human-readable preferred name of the concept.
@@ -342,9 +345,7 @@ pub struct SemanticType {
 impl Info<reqwest::Client, Aui> {
     /// Fetch atom information for given atom.
     pub async fn fetch(self, config: &Config) -> Result<AtomResponse, Error<reqwest::Error>> {
-        let url = config
-            .info_url::<crate::core::url::types::Atom, _>(&self.value)
-            .url();
+        let url = config.info_url::<types::Atom, _>(&self.value).url();
 
         self.client()
             .get(url)

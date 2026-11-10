@@ -12,9 +12,10 @@ use umls_client::{
     concept::Info,
     config::Config,
     core::{aui::Aui, cui::Cui},
-    parent::{self, Parent, SourceConcept},
+    parent::{Parent, SourceConcept},
     relation,
     search::{self, core::DisplayName},
+    types,
 };
 use umls_http::reqwest::Client;
 
@@ -251,7 +252,7 @@ impl UmlsServer {
         let response = atom::Config::builder(cui)
             .page_number(number)
             .page_size(size)
-            .atoms::<atom::All>()
+            .atoms::<types::atom::All>()
             .with_client(self.client.clone())
             .fetch(&self.config)
             .await;
@@ -391,7 +392,7 @@ impl UmlsServer {
 
         let batch = Batch::new(size, number, aui);
 
-        let Ok(response) = Parent::<parent::types::Atom, _, _>::new(batch)
+        let Ok(response) = Parent::<types::Atom, _, _>::new(batch)
             .with_client(self.client.clone())
             .fetch(&self.config)
             .await
@@ -434,7 +435,7 @@ impl UmlsServer {
         let source_concept = SourceConcept::new(source, code);
         let batch = Batch::new(size, number, source_concept);
 
-        let result = Parent::<umls_client::parent::types::Source, _, _>::new(batch)
+        let result = Parent::<types::Source, _, _>::new(batch)
             .with_client(self.client.clone())
             .fetch(&self.config)
             .await;

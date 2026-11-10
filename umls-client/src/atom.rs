@@ -46,10 +46,14 @@
 //! # }
 //! ```
 
+use crate::core::url::validator;
 use std::{marker::PhantomData, num::NonZeroU64};
 
 use serde::{self, Deserialize};
 use umls_http::WithoutClient;
+
+#[cfg(feature = "reqwest")]
+use crate::types;
 
 #[cfg(feature = "reqwest")]
 use serde::Serialize;
@@ -82,7 +86,7 @@ pub enum Error<T> {
 
     /// Represents URL validation error.
     #[error("Url validation Error: {0}")]
-    Validator(#[source] crate::core::url::validator::Error),
+    Validator(#[source] validator::Error),
 }
 
 #[cfg(feature = "reqwest")]
@@ -367,51 +371,43 @@ impl<T> Config<T> {
     }
 }
 
-#[cfg(feature = "reqwest")]
-/// Marker selecting retrieval of all atoms associated with a concept.
-pub struct All;
-
-#[cfg(feature = "reqwest")]
-/// Marker selecting retrieval of preferred atoms associated with a concept.
-pub struct Preferred;
-
-#[cfg(feature = "reqwest")]
-impl Preferred {
-    /// Creates a request for the preferred atom associated with a concept.
-    ///
-    /// Pass a validated [`crate::core::cui::Cui`] as `value`, attach a `reqwest::Client` with [`Atom::with_client`], then call `fetch()` to
-    /// execute the request using the configured UMLS release.
-    ///
-    /// # Example
-    ///
-    /// ```no_run
-    /// # #[cfg(feature = "reqwest")]
-    /// use umls_http::reqwest;
-    /// use umls_client::{
-    ///     atom::Preferred,
-    ///     core::cui::Cui,
-    ///     config::Config,
-    /// };
-    ///
-    /// # #[cfg(feature = "reqwest")]
-    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-    /// let config = Config::builder(std::env::var("UMLS_API_KEY")?)
-    ///     .base_url("https://uts-ws.nlm.nih.gov/rest/".parse()?)
-    ///     .try_version("2026AB")?
-    ///     .build()?;
-    /// let cui = Cui::new("C0010200")?;
-    /// let atom = Preferred::for_concept(cui)
-    ///     .with_client(reqwest::Client::default())
-    ///     .fetch(&config).await?;
-    ///
-    /// println!("{}: {}", atom.ui, atom.name);
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub fn for_concept<T>(value: T) -> Atom<WithoutClient, Self, T> {
-        Atom::<WithoutClient, Self, T>::new(value)
-    }
-}
+// #[cfg(feature = "reqwest")]
+// impl Preferred {
+//     /// Creates a request for the preferred atom associated with a concept.
+//     ///
+//     /// Pass a validated [`crate::core::cui::Cui`] as `value`, attach a `reqwest::Client` with [`Atom::with_client`], then call `fetch()` to
+//     /// execute the request using the configured UMLS release.
+//     ///
+//     /// # Example
+//     ///
+//     /// ```no_run
+//     /// # #[cfg(feature = "reqwest")]
+//     /// use umls_http::reqwest;
+//     /// use umls_client::{
+//     ///     atom::Preferred,
+//     ///     core::cui::Cui,
+//     ///     config::Config,
+//     /// };
+//     ///
+//     /// # #[cfg(feature = "reqwest")]
+//     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+//     /// let config = Config::builder(std::env::var("UMLS_API_KEY")?)
+//     ///     .base_url("https://uts-ws.nlm.nih.gov/rest/".parse()?)
+//     ///     .try_version("2026AB")?
+//     ///     .build()?;
+//     /// let cui = Cui::new("C0010200")?;
+//     /// let atom = Preferred::for_concept(cui)
+//     ///     .with_client(reqwest::Client::default())
+//     ///     .fetch(&config).await?;
+//     ///
+//     /// println!("{}: {}", atom.ui, atom.name);
+//     /// # Ok(())
+//     /// # }
+//     /// ```
+//     pub fn for_concept<T>(value: T) -> Atom<WithoutClient, Self, T> {
+//         Atom::<WithoutClient, Self, T>::new(value)
+//     }
+// }
 
 /// An executable atom operation associated with a UMLS client configuration.
 ///
@@ -461,7 +457,7 @@ impl<S, T> Atom<WithoutClient, S, T> {
 }
 
 #[cfg(feature = "reqwest")]
-impl Atom<reqwest::Client, All, Batch<Config<Cui>>> {
+impl Atom<reqwest::Client, types::atom::All, Batch<Config<Cui>>> {
     /// Fetches one filtered page of atoms for a validated CUI.
     ///
     /// Uses the release returned by [`crate::config::Config::version`].
@@ -474,16 +470,17 @@ impl Atom<reqwest::Client, All, Batch<Config<Cui>>> {
         self,
         umls_config: &config::Config,
     ) -> Result<
-        Response<Page<Content<AtomResponse>>, Atom<reqwest::Client, All, Batch<Config<Cui>>>>,
+        Response<
+            Page<Content<AtomResponse>>,
+            Atom<reqwest::Client, types::atom::All, Batch<Config<Cui>>>,
+        >,
         Error<reqwest::Error>,
     > {
         let url = umls_config
-            .atom_url::<crate::core::url::types::Concept, crate::core::url::types::atoms::All, _>(
-                &self.value,
-            )
+            .atom_url::<types::Concept, types::atom::All, _>(&self.value)
             .url();
 
-        let body = Atom::<_, All, _>::new(url)
+        let body = Atom::<_, types::atom::All, _>::new(url)
             .with_client(self.client().clone())
             .fetch(umls_config)
             .await?;
@@ -493,7 +490,7 @@ impl Atom<reqwest::Client, All, Batch<Config<Cui>>> {
 }
 
 #[cfg(feature = "reqwest")]
-impl Atom<reqwest::Client, All, Cui> {
+impl Atom<reqwest::Client, types::atom::All, Cui> {
     /// Fetches the first, unfiltered page of atoms for a validated CUI.
     ///
     /// Uses the release returned by [`crate::config::Config::version`].
@@ -507,12 +504,10 @@ impl Atom<reqwest::Client, All, Cui> {
         umls_config: &config::Config,
     ) -> Result<Content<AtomResponse>, Error<reqwest::Error>> {
         let url = umls_config
-            .atom_url::<crate::core::url::types::Concept, crate::core::url::types::atoms::All, _>(
-                self.value,
-            )
+            .atom_url::<types::Concept, types::atom::All, _>(self.value)
             .url();
 
-        Atom::<_, All, _>::new(url)
+        Atom::<_, types::atom::All, _>::new(url)
             .with_client(self.client)
             .fetch(umls_config)
             .await
@@ -521,7 +516,7 @@ impl Atom<reqwest::Client, All, Cui> {
 }
 
 #[cfg(feature = "reqwest")]
-impl Atom<reqwest::Client, All, url::Url> {
+impl Atom<reqwest::Client, types::atom::All, url::Url> {
     /// Fetches one page of concept atoms from an atom-list URL endpoint.
     ///
     /// # Errors
@@ -533,7 +528,7 @@ impl Atom<reqwest::Client, All, url::Url> {
         umls_config: &config::Config,
     ) -> Result<Page<Content<AtomResponse>>, Error<reqwest::Error>> {
         umls_config
-            .atom_url_validator::<crate::core::url::types::Concept, crate::core::url::types::atoms::All>(self.value())
+            .atom_url_validator::<types::Concept, types::atom::All>(self.value())
             .validate()
             .map_err(Error::Validator)?;
 
@@ -551,7 +546,7 @@ impl Atom<reqwest::Client, All, url::Url> {
 }
 
 #[cfg(feature = "reqwest")]
-impl Atom<reqwest::Client, Preferred, Cui> {
+impl Atom<reqwest::Client, types::atom::Preferred, Cui> {
     /// Fetches the preferred concept atom for the given [`crate::core::cui::Cui`] using the
     /// configured UMLS release.
     ///
@@ -563,9 +558,11 @@ impl Atom<reqwest::Client, Preferred, Cui> {
         self,
         umls_config: &config::Config,
     ) -> Result<AtomResponse, Error<reqwest::Error>> {
-        let url = umls_config.atom_url::<crate::core::url::types::Concept, crate::core::url::types::atoms::Preferred, _>(self.value).url();
+        let url = umls_config
+            .atom_url::<types::Concept, types::atom::Preferred, _>(self.value)
+            .url();
 
-        Atom::<_, Preferred, _>::new(url)
+        Atom::<_, types::atom::Preferred, _>::new(url)
             .with_client(self.client)
             .fetch(umls_config)
             .await
@@ -573,7 +570,7 @@ impl Atom<reqwest::Client, Preferred, Cui> {
 }
 
 #[cfg(feature = "reqwest")]
-impl Atom<reqwest::Client, Preferred, url::Url> {
+impl Atom<reqwest::Client, types::atom::Preferred, url::Url> {
     /// Fetches the preferred concept atom from a preferred-atom URL endpoint.
     ///
     /// # Errors
@@ -585,7 +582,7 @@ impl Atom<reqwest::Client, Preferred, url::Url> {
         umls_config: &config::Config,
     ) -> Result<AtomResponse, Error<reqwest::Error>> {
         umls_config
-            .atom_url_validator::<crate::core::url::types::Concept, crate::core::url::types::atoms::Preferred>(self.value())
+            .atom_url_validator::<types::Concept, types::atom::Preferred>(self.value())
             .validate()
             .map_err(Error::Validator)?;
 
@@ -624,14 +621,18 @@ impl<T, C> Response<Page<Content<T>>, C> {
 }
 
 #[cfg(feature = "reqwest")]
-impl<T, U> super::search::Page<Content<T>, Atom<reqwest::Client, All, Batch<Config<U>>>> {
+impl<T, U>
+    super::search::Page<Content<T>, Atom<reqwest::Client, types::atom::All, Batch<Config<U>>>>
+{
     /// Consumes this page and returns a request for the next page.
     ///
     /// # Errors
     ///
     /// Returns [`BatchError::Overflow`] if the response indicates that no next
     /// page exists or if the page number cannot be incremented.
-    pub fn next(mut self) -> Result<Atom<reqwest::Client, All, Batch<Config<U>>>, BatchError> {
+    pub fn next(
+        mut self,
+    ) -> Result<Atom<reqwest::Client, types::atom::All, Batch<Config<U>>>, BatchError> {
         if !self.has_next() {
             return Err(BatchError::Overflow);
         }
@@ -647,7 +648,9 @@ impl<T, U> super::search::Page<Content<T>, Atom<reqwest::Client, All, Batch<Conf
     ///
     /// Returns [`BatchError::NoPreviousPage`] when this is the first page or
     /// the page number otherwise cannot be decremented.
-    pub fn previous(mut self) -> Result<Atom<reqwest::Client, All, Batch<Config<U>>>, BatchError> {
+    pub fn previous(
+        mut self,
+    ) -> Result<Atom<reqwest::Client, types::atom::All, Batch<Config<U>>>, BatchError> {
         if !self.has_previous() {
             return Err(BatchError::NoPreviousPage);
         }

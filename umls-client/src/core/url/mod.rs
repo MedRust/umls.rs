@@ -6,8 +6,7 @@
 //! [`Config`](crate::config::Config).
 //!
 //! Submodules:
-//! - [`validator`]: URL validation logic ensuring safety before HTTP transport.
-//! - [`types`]: Resource marker types used to parameterize URL builders and validators.
+//! - [`validator`](crate::core::url::validator): URL validation logic ensuring safety before HTTP transport.
 //!
 //! # Example
 //!
@@ -16,11 +15,12 @@
 //!
 //! let config = Config::builder("test-api-key").build()?;
 //! let cui = Cui::new("C0010200")?;
-//! let url = config.info_url::<umls_client::core::url::types::Concept, _>(cui).url();
+//! let url = config.info_url::<umls_client::types::Concept, _>(cui).url();
 //! assert!(url.as_str().contains("C0010200"));
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 
+use crate::types;
 use std::marker::PhantomData;
 
 /// URL validator objects.
@@ -38,24 +38,6 @@ use crate::relation;
 
 #[cfg(feature = "reqwest")]
 use crate::parent::SourceConcept;
-
-/// A umls type.
-pub mod types {
-    /// A concept url type.
-    pub struct Concept;
-    /// A atom url type.
-    pub struct Atom;
-    /// A source url type.
-    pub struct Source;
-
-    /// A atoms types.
-    pub mod atoms {
-        /// A all atom type url.
-        pub struct All;
-        /// A preferred atom url type.
-        pub struct Preferred;
-    }
-}
 
 /// Represents info url.
 #[derive(Debug, Clone)]
@@ -153,7 +135,7 @@ impl<'a, T, O, V> Atom<'a, T, O, V> {
     }
 }
 
-impl<'a> Atom<'a, types::Concept, types::atoms::All, Cui> {
+impl<'a> Atom<'a, types::Concept, types::atom::All, Cui> {
     /// Returns concept atoms url.
     pub fn url(&self) -> url::Url {
         let version = self.config().version().as_str().to_string();
@@ -173,7 +155,7 @@ impl<'a> Atom<'a, types::Concept, types::atoms::All, Cui> {
     }
 }
 
-impl<'a> Atom<'a, types::Concept, types::atoms::Preferred, Cui> {
+impl<'a> Atom<'a, types::Concept, types::atom::Preferred, Cui> {
     /// Returns preferred atom for concept url.
     pub fn url(&self) -> url::Url {
         let version = self.config().version().as_str().to_string();
@@ -194,7 +176,7 @@ impl<'a> Atom<'a, types::Concept, types::atoms::Preferred, Cui> {
     }
 }
 
-impl<'a> Atom<'a, types::Concept, types::atoms::All, &atom::Batch<atom::Config<Cui>>> {
+impl<'a> Atom<'a, types::Concept, types::atom::All, &atom::Batch<atom::Config<Cui>>> {
     /// Returns all atoms for concept url.
     pub fn url(&self) -> url::Url {
         let source_vocabularies_params = self
@@ -828,7 +810,7 @@ mod tests {
         let config = config::Config::builder("some_api_key").build()?;
         let cui: cui::Cui = "C0010200".parse()?;
 
-        let uri = Atom::<types::Concept, types::atoms::All, _>::new(&config, cui).url();
+        let uri = Atom::<types::Concept, types::atom::All, _>::new(&config, cui).url();
         assert_eq!(uri.scheme(), "https");
         assert_eq!(uri.host_str(), Some("uts-ws.nlm.nih.gov"));
         assert_eq!(uri.path(), "/rest/content/current/CUI/C0010200/atoms");
@@ -841,7 +823,7 @@ mod tests {
         let config = config::Config::builder("some_api_key").build()?;
         let cui: cui::Cui = "C0010200".parse()?;
 
-        let uri = Atom::<types::Concept, types::atoms::Preferred, _>::new(&config, cui).url();
+        let uri = Atom::<types::Concept, types::atom::Preferred, _>::new(&config, cui).url();
         assert_eq!(uri.scheme(), "https");
         assert_eq!(uri.host_str(), Some("uts-ws.nlm.nih.gov"));
         assert_eq!(
@@ -917,7 +899,7 @@ mod tests {
         let cui: cui::Cui = "C0010200".parse()?;
         let batch = atom::Config::builder(cui).build();
 
-        let uri = Atom::<types::Concept, types::atoms::All, _>::new(&config, &batch).url();
+        let uri = Atom::<types::Concept, types::atom::All, _>::new(&config, &batch).url();
         assert_eq!(uri.scheme(), "https");
         assert_eq!(uri.host_str(), Some("uts-ws.nlm.nih.gov"));
         assert_eq!(uri.path(), "/rest/content/current/CUI/C0010200/atoms");
@@ -943,7 +925,7 @@ mod tests {
             .try_add_source_vocabulary("SNOMEDCT_US")?
             .build();
 
-        let uri = Atom::<types::Concept, types::atoms::All, _>::new(&config, &batch).url();
+        let uri = Atom::<types::Concept, types::atom::All, _>::new(&config, &batch).url();
         assert_eq!(uri.scheme(), "https");
         assert_eq!(uri.host_str(), Some("uts-ws.nlm.nih.gov"));
         assert_eq!(uri.path(), "/rest/content/current/CUI/C0010200/atoms");
@@ -972,7 +954,7 @@ mod tests {
             .try_add_source_vocabulary("MSH")?
             .build();
 
-        let uri = Atom::<types::Concept, types::atoms::All, _>::new(&config, &batch).url();
+        let uri = Atom::<types::Concept, types::atom::All, _>::new(&config, &batch).url();
         assert_eq!(uri.scheme(), "https");
         assert_eq!(uri.host_str(), Some("uts-ws.nlm.nih.gov"));
         assert_eq!(uri.path(), "/rest/content/current/CUI/C0010200/atoms");
@@ -997,7 +979,7 @@ mod tests {
         let cui: cui::Cui = "C0010200".parse()?;
         let batch = atom::Config::builder(cui).try_add_term_type("PT")?.build();
 
-        let uri = Atom::<types::Concept, types::atoms::All, _>::new(&config, &batch).url();
+        let uri = Atom::<types::Concept, types::atom::All, _>::new(&config, &batch).url();
         assert_eq!(uri.scheme(), "https");
         assert_eq!(uri.host_str(), Some("uts-ws.nlm.nih.gov"));
         assert_eq!(uri.path(), "/rest/content/current/CUI/C0010200/atoms");
@@ -1026,7 +1008,7 @@ mod tests {
             .try_add_term_type("SY")?
             .build();
 
-        let uri = Atom::<types::Concept, types::atoms::All, _>::new(&config, &batch).url();
+        let uri = Atom::<types::Concept, types::atom::All, _>::new(&config, &batch).url();
         assert_eq!(uri.scheme(), "https");
         assert_eq!(uri.host_str(), Some("uts-ws.nlm.nih.gov"));
         assert_eq!(uri.path(), "/rest/content/current/CUI/C0010200/atoms");
@@ -1054,7 +1036,7 @@ mod tests {
             .should_include_obsolete(true)
             .build();
 
-        let uri = Atom::<types::Concept, types::atoms::All, _>::new(&config, &batch).url();
+        let uri = Atom::<types::Concept, types::atom::All, _>::new(&config, &batch).url();
         assert_eq!(uri.scheme(), "https");
         assert_eq!(uri.host_str(), Some("uts-ws.nlm.nih.gov"));
         assert_eq!(uri.path(), "/rest/content/current/CUI/C0010200/atoms");
@@ -1072,7 +1054,7 @@ mod tests {
             .should_include_suppressible(true)
             .build();
 
-        let uri = Atom::<types::Concept, types::atoms::All, _>::new(&config, &batch).url();
+        let uri = Atom::<types::Concept, types::atom::All, _>::new(&config, &batch).url();
         assert_eq!(uri.scheme(), "https");
         assert_eq!(uri.host_str(), Some("uts-ws.nlm.nih.gov"));
         assert_eq!(uri.path(), "/rest/content/current/CUI/C0010200/atoms");
@@ -1090,7 +1072,7 @@ mod tests {
             .page_size(200.try_into()?)
             .build();
 
-        let uri = Atom::<types::Concept, types::atoms::All, _>::new(&config, &batch).url();
+        let uri = Atom::<types::Concept, types::atom::All, _>::new(&config, &batch).url();
         assert_eq!(uri.scheme(), "https");
         assert_eq!(uri.host_str(), Some("uts-ws.nlm.nih.gov"));
         assert_eq!(uri.path(), "/rest/content/current/CUI/C0010200/atoms");
@@ -1118,7 +1100,7 @@ mod tests {
             .page_number(30.try_into()?)
             .build();
 
-        let uri = Atom::<types::Concept, types::atoms::All, _>::new(&config, &batch).url();
+        let uri = Atom::<types::Concept, types::atom::All, _>::new(&config, &batch).url();
         assert_eq!(uri.scheme(), "https");
         assert_eq!(uri.host_str(), Some("uts-ws.nlm.nih.gov"));
         assert_eq!(uri.path(), "/rest/content/current/CUI/C0010200/atoms");

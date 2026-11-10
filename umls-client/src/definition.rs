@@ -1,5 +1,10 @@
 use umls_http::WithoutClient;
 
+use crate::core::url::validator;
+
+#[cfg(feature = "reqwest")]
+use crate::types;
+
 #[cfg(feature = "reqwest")]
 use umls_http::reqwest;
 
@@ -26,7 +31,7 @@ pub enum Error<T> {
 
     /// Represents url validation failure.
     #[error("URL validator error: {0}")]
-    Validator(#[source] crate::core::url::validator::Error),
+    Validator(#[source] validator::Error),
 
     /// Represnets unsupporetd response class type.
     #[error("Unsupported class type")]
@@ -40,8 +45,8 @@ impl From<umls_http::reqwest::Error> for Error<umls_http::reqwest::Error> {
     }
 }
 
-impl<T> From<crate::core::url::validator::Error> for Error<T> {
-    fn from(value: crate::core::url::validator::Error) -> Self {
+impl<T> From<validator::Error> for Error<T> {
+    fn from(value: validator::Error) -> Self {
         Error::Validator(value)
     }
 }
@@ -178,7 +183,7 @@ impl Definition<reqwest::Client, url::Url> {
         umls_config: &config::Config,
     ) -> Result<Page<Content<dto::Definition>>, Error<umls_http::reqwest::Error>> {
         umls_config
-            .definition_url_validator::<crate::core::url::types::Concept>(self.value())
+            .definition_url_validator::<types::Concept>(self.value())
             .validate()?;
 
         let url = umls_config.authenticated_url(self.value);
@@ -234,7 +239,7 @@ impl Definition<reqwest::Client, Batch<Config>> {
         }
 
         let url = umls_config
-            .definition_url::<crate::core::url::types::Concept, _>(&self.value)
+            .definition_url::<types::Concept, _>(&self.value)
             .url();
 
         let page = Definition::new(url)
@@ -256,7 +261,7 @@ impl Definition<reqwest::Client, Config> {
         umls_config: &config::Config,
     ) -> Result<Content<dto::Definition>, Error<umls_http::reqwest::Error>> {
         let url = umls_config
-            .definition_url::<crate::core::url::types::Concept, _>(&self.value)
+            .definition_url::<types::Concept, _>(&self.value)
             .url();
 
         let page = Definition::new(url)

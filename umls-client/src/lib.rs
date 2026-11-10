@@ -52,3 +52,30 @@ pub mod relation;
 pub mod definition;
 /// Fetch parents from UMLS.
 pub mod parent;
+
+/// Represents zero-cost abstraction types.
+pub mod types {
+
+    /// A concept url type.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub struct Concept;
+
+    /// A atom url type.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub struct Atom;
+
+    /// A source url type.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub struct Source;
+
+    /// A atoms types.
+    pub mod atom {
+        /// Marker selecting retrieval of all atoms associated with a concept.
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        pub struct All;
+
+        /// Marker selecting retrieval of preferred atoms associated with a concept.
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        pub struct Preferred;
+    }
+}

@@ -3,8 +3,8 @@
 
 use httpmock::{Method::GET, MockServer};
 use umls_client::atom::Batch;
-use umls_client::parent::{self, SourceConcept};
-use umls_client::{config, core::aui::Aui, parent::Parent, search::core::DisplayName};
+use umls_client::parent::SourceConcept;
+use umls_client::{config, core::aui::Aui, parent::Parent, search::core::DisplayName, types};
 use url::Url;
 
 #[tokio::test]
@@ -33,7 +33,7 @@ async fn fetch_atom_parents_using_url() -> Result<(), Box<dyn std::error::Error>
 
     let aui = Aui::new("A10134087".try_into()?)?;
 
-    let pages = Parent::<parent::types::Atom, _, _>::new(aui)
+    let pages = Parent::<types::Atom, _, _>::new(aui)
         .with_client(client)
         .fetch(&umls_config)
         .await?;
@@ -127,7 +127,7 @@ async fn fetch_source_asserted_parents_using_url() -> Result<(), Box<dyn std::er
 
     let source_concept = SourceConcept::new("SNOMEDCT_US".try_into()?, "9468002".try_into()?);
 
-    let page = Parent::<parent::types::Source, _, _>::new(source_concept)
+    let page = Parent::<types::Source, _, _>::new(source_concept)
         .with_client(Default::default())
         .fetch(&umls_config)
         .await?;

@@ -2,9 +2,9 @@
 //!
 //! This module provides domain newtypes for unique identifiers used in the UMLS
 //! ecosystem, along with URL builders and validation logic:
-//! - [`cui`]: Concept Unique Identifier ([`Cui`](cui::Cui)).
-//! - [`aui`]: Atom Unique Identifier ([`Aui`](aui::Aui)).
-//! - [`url`]: Endpoint URL construction and safety validation.
+//! - [`cui`](crate::core::cui): Concept Unique Identifier ([`Cui`](crate::core::cui::Cui)).
+//! - [`aui`](crate::core::aui): Atom Unique Identifier ([`Aui`](crate::core::aui::Aui)).
+//! - [`url`](crate::core::url): Endpoint URL construction and safety validation.
 //!
 //! # Example
 //!
