@@ -16,6 +16,35 @@ use crate::{
     search::{Content, Response},
 };
 
+/// Represents relation error.
+#[derive(Debug, thiserror::Error)]
+pub enum Error<T> {
+    /// Represents client error.
+    #[error("Client error: {0}")]
+    Client(#[source] T),
+
+    /// Represents url validation failure.
+    #[error("URL validation error: {0}")]
+    Validator(crate::core::url::validator::Error),
+}
+
+#[cfg(feature = "reqwest")]
+impl From<umls_http::reqwest::Error> for Error<umls_http::reqwest::Error> {
+    fn from(value: umls_http::reqwest::Error) -> Self {
+        Error::Client(value)
+    }
+}
+
+impl<T> From<crate::core::url::validator::Error> for Error<T> {
+    fn from(value: crate::core::url::validator::Error) -> Self {
+        Error::Validator(value)
+    }
+}
+
+/// Represents Result of relation.
+#[cfg(feature = "reqwest")]
+pub type RelationResult<T> = std::result::Result<T, Error<umls_http::reqwest::Error>>;
+
 /// A UMLS concept relation client.
 pub struct Relation<C, V> {
     client: C,
@@ -65,7 +94,7 @@ impl Relation<Client, config::Config> {
     pub async fn fetch(
         self,
         umls_config: &crate::config::Config,
-    ) -> Result<Content<RelationDto>, Box<dyn std::error::Error>> {
+    ) -> RelationResult<Content<RelationDto>> {
         let url = umls_config
             .relation_url::<crate::core::url::types::Concept, _>(self.value())
             .url();
@@ -87,7 +116,7 @@ impl Relation<Client, Batch<config::Config>> {
     pub async fn fetch(
         self,
         umls_config: &crate::config::Config,
-    ) -> Result<Response<Page<Content<RelationDto>>, Self>, Box<dyn std::error::Error>> {
+    ) -> RelationResult<Response<Page<Content<RelationDto>>, Self>> {
         let url = umls_config
             .relation_url::<crate::core::url::types::Concept, _>(&self.value)
             .url();
@@ -110,7 +139,7 @@ impl Relation<Client, url::Url> {
     pub async fn fetch(
         self,
         umls_config: &crate::config::Config,
-    ) -> Result<Page<Content<RelationDto>>, Box<dyn std::error::Error>> {
+    ) -> RelationResult<Page<Content<RelationDto>>> {
         umls_config
             .relation_url_validator(self.value())
             .validate()?;

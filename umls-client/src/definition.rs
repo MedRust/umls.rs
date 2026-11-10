@@ -17,6 +17,42 @@ use crate::{
     search::{Content, Response},
 };
 
+/// Represents definition error.
+#[derive(Debug, thiserror::Error)]
+pub enum Error<T> {
+    /// Represents client error.
+    #[error("Client error: {0}")]
+    Client(#[source] T),
+
+    /// Represents url validation failure.
+    #[error("URL validator error: {0}")]
+    Validator(#[source] crate::core::url::validator::Error),
+
+    /// Represnets unsupporetd response class type.
+    #[error("Unsupported class type")]
+    UnsupportedClassType,
+}
+
+#[cfg(feature = "reqwest")]
+impl From<umls_http::reqwest::Error> for Error<umls_http::reqwest::Error> {
+    fn from(value: umls_http::reqwest::Error) -> Self {
+        Error::Client(value)
+    }
+}
+
+impl<T> From<crate::core::url::validator::Error> for Error<T> {
+    fn from(value: crate::core::url::validator::Error) -> Self {
+        Error::Validator(value)
+    }
+}
+
+#[cfg(feature = "reqwest")]
+impl<T> From<dto::UnsupportedClassType> for Error<T> {
+    fn from(_value: dto::UnsupportedClassType) -> Self {
+        Error::UnsupportedClassType
+    }
+}
+
 /// Filters and target information for retrieving concept definitions.
 ///
 /// The `Config` specifies the target concept by its [`Cui`] and an optional list of UMLS
@@ -140,7 +176,7 @@ impl Definition<reqwest::Client, url::Url> {
     pub async fn fetch(
         self,
         umls_config: &config::Config,
-    ) -> Result<Page<Content<dto::Definition>>, Box<dyn std::error::Error>> {
+    ) -> Result<Page<Content<dto::Definition>>, Error<umls_http::reqwest::Error>> {
         umls_config
             .definition_url_validator::<crate::core::url::types::Concept>(self.value())
             .validate()?;
@@ -156,7 +192,7 @@ impl Definition<reqwest::Client, url::Url> {
             .json::<Page<Content<dto::RawDefinition>>>()
             .await?;
 
-        let page = body.try_map::<_, Box<dyn std::error::Error>>(|x| {
+        let page = body.try_map::<_, Error<umls_http::reqwest::Error>>(|x| {
             let pages = x
                 .list
                 .into_iter()
@@ -177,7 +213,7 @@ impl Definition<reqwest::Client, Batch<Config>> {
         umls_config: &config::Config,
     ) -> Result<
         Response<Page<Content<dto::Definition>>, Definition<reqwest::Client, Batch<Config>>>,
-        Box<dyn std::error::Error>,
+        Error<umls_http::reqwest::Error>,
     > {
         let mut vector = [
             ("pageSize", self.value().size().get().to_string()),
@@ -218,7 +254,7 @@ impl Definition<reqwest::Client, Config> {
     pub async fn fetch(
         self,
         umls_config: &config::Config,
-    ) -> Result<Content<dto::Definition>, Box<dyn std::error::Error>> {
+    ) -> Result<Content<dto::Definition>, Error<umls_http::reqwest::Error>> {
         let url = umls_config
             .definition_url::<crate::core::url::types::Concept, _>(&self.value)
             .url();
@@ -307,12 +343,17 @@ pub mod dto {
         }
     }
 
+    /// Represents unsupported class type.
+    #[derive(Debug, thiserror::Error)]
+    #[error("Unsupported class type")]
+    pub struct UnsupportedClassType;
+
     impl TryFrom<RawDefinition> for Definition {
-        type Error = Box<dyn std::error::Error>;
+        type Error = UnsupportedClassType;
 
         fn try_from(value: RawDefinition) -> Result<Self, Self::Error> {
             if value.class_type != ClassType::Definition {
-                panic!();
+                return Err(UnsupportedClassType);
             }
 
             let metadata = MetaData::new(value.source_originated, value.root_source);
