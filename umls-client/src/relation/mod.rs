@@ -10,15 +10,19 @@ use crate::core::url::validator;
 use crate::types;
 
 #[cfg(feature = "reqwest")]
-use serde::{Deserialize, Serialize};
+use crate::dto::relation::RelationDto;
 
 #[cfg(feature = "reqwest")]
 use umls_http::reqwest::Client;
 
 #[cfg(feature = "reqwest")]
 use crate::{
-    atom::{Batch, BatchError, Page},
-    search::{Content, Response},
+    dto::{
+        batch::{Batch, BatchError},
+        content::Content,
+        page::Page,
+    },
+    search::Response,
 };
 
 /// Represents relation error.
@@ -162,69 +166,6 @@ impl Relation<Client, url::Url> {
 
         Ok(response)
     }
-}
-
-#[cfg(feature = "reqwest")]
-mod optional_string {
-    use serde::{Deserialize, Deserializer, Serializer};
-
-    pub fn serialize<S>(value: &Option<String>, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_str(value.as_deref().unwrap_or("NONE"))
-    }
-
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let value = Option::<String>::deserialize(deserializer)?;
-        Ok(match value {
-            Some(val) if val == "NONE" => None,
-            other => other,
-        })
-    }
-}
-
-/// A relationship DTO object.
-#[cfg(feature = "reqwest")]
-#[derive(Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RelationDto {
-    /// UMLS Relationship Unique Identifier (RUI)
-    pub ui: String,
-    /// Represents respective object is suppressible.
-    pub suppressible: bool,
-    /// The source unique identifier if present.
-    #[serde(with = "optional_string")]
-    pub source_ui: Option<String>,
-    /// Represents respective object is obsolete.
-    pub obsolete: bool,
-    /// Represents respective object is source originated.
-    pub source_originated: bool,
-    /// The root source vocabularies.
-    pub root_source: String,
-    /// The grou id if present.
-    #[serde(with = "optional_string")]
-    pub group_id: Option<String>,
-    /// The attribute count.
-    pub attribute_count: u32,
-    /// The class type.
-    pub class_type: String,
-    /// From Id
-    pub related_from_id: String,
-    /// From name
-    pub related_from_id_name: String,
-    /// The relationship label.
-    pub relation_label: String,
-    /// The additional relationship label.
-    #[serde(with = "optional_string")]
-    pub additional_relation_label: Option<String>,
-    /// The related id.
-    pub related_id: String,
-    /// The related id name
-    pub related_id_name: String,
 }
 
 #[cfg(feature = "reqwest")]

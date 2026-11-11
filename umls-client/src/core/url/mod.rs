@@ -37,7 +37,9 @@ use crate::{
 use crate::relation;
 
 #[cfg(feature = "reqwest")]
-use crate::parent::SourceConcept;
+use crate::dto::source::SourceConcept;
+
+use crate::dto::batch::Batch;
 
 /// Represents info url.
 #[derive(Debug, Clone)]
@@ -176,7 +178,7 @@ impl<'a> Atom<'a, types::Concept, types::atom::Preferred, Cui> {
     }
 }
 
-impl<'a> Atom<'a, types::Concept, types::atom::All, &atom::Batch<atom::Config<Cui>>> {
+impl<'a> Atom<'a, types::Concept, types::atom::All, &Batch<atom::Config<Cui>>> {
     /// Returns all atoms for concept url.
     pub fn url(&self) -> url::Url {
         let source_vocabularies_params = self
@@ -285,7 +287,7 @@ impl<'a> Definition<'a, types::Concept, Cui> {
     }
 }
 
-impl<'a> Definition<'a, types::Concept, &atom::Batch<definition::Config>> {
+impl<'a> Definition<'a, types::Concept, &Batch<definition::Config>> {
     /// Returns concept definitions url.
     pub fn url(&self) -> url::Url {
         let sabs = self
@@ -467,7 +469,7 @@ impl<'a> Relation<'a, types::Concept, &relation::config::Config> {
 }
 
 #[cfg(feature = "reqwest")]
-impl<'a> Relation<'a, types::Concept, &atom::Batch<relation::config::Config>> {
+impl<'a> Relation<'a, types::Concept, &Batch<relation::config::Config>> {
     /// Returns concept relations for configuration with batches.
     pub fn url(&self) -> url::Url {
         let labels = self
@@ -584,7 +586,7 @@ impl<'a> Parent<'a, types::Atom, Aui> {
     }
 }
 
-impl<'a> Parent<'a, types::Atom, &atom::Batch<Aui>> {
+impl<'a> Parent<'a, types::Atom, &Batch<Aui>> {
     /// Returns atom parents in batches url.
     pub fn url(&self) -> url::Url {
         let version = self.config().version().to_string();
@@ -642,7 +644,7 @@ impl<'a> Parent<'a, types::Source, SourceConcept> {
 }
 
 #[cfg(feature = "reqwest")]
-impl<'a> Parent<'a, types::Source, &atom::Batch<SourceConcept>> {
+impl<'a> Parent<'a, types::Source, &Batch<SourceConcept>> {
     /// Returns a source-asserted concept in batches url.
     pub fn url(&self) -> url::Url {
         let version = self.config().version().to_string();
@@ -767,6 +769,7 @@ mod tests {
         atom, config,
         core::{aui, cui, url::Definition},
         definition,
+        dto::batch::Batch,
         search::{
             self,
             core::{DisplayName, InputType, ReturnIdType, SearchType},
@@ -774,7 +777,7 @@ mod tests {
     };
 
     #[cfg(feature = "reqwest")]
-    use crate::{parent::SourceConcept, relation};
+    use crate::{dto::source::SourceConcept, relation};
 
     use super::{Atom, Info, Parent, Relation, Search, types};
 
@@ -1165,7 +1168,7 @@ mod tests {
         let config = config::Config::builder("some_api_key").build()?;
         let cui: cui::Cui = "C0010200".parse()?;
         let def_config = definition::Config::builder(cui).build();
-        let batch = atom::Batch::new(25.try_into()?, 1.try_into()?, def_config);
+        let batch = Batch::new(25.try_into()?, 1.try_into()?, def_config);
 
         let uri = Definition::<types::Concept, _>::new(&config, &batch).url();
         assert_eq!(uri.scheme(), "https");
@@ -1183,7 +1186,7 @@ mod tests {
         let def_config = definition::Config::builder(cui)
             .try_add_source_vocabulary("SNOMEDCT_US")?
             .build();
-        let batch = atom::Batch::new(25.try_into()?, 1.try_into()?, def_config);
+        let batch = Batch::new(25.try_into()?, 1.try_into()?, def_config);
 
         let uri = Definition::<types::Concept, _>::new(&config, &batch).url();
         assert_eq!(uri.scheme(), "https");
@@ -1203,7 +1206,7 @@ mod tests {
             .try_add_source_vocabulary("SNOMEDCT_US")?
             .try_add_source_vocabulary("MSH")?
             .build();
-        let batch = atom::Batch::new(25.try_into()?, 1.try_into()?, def_config);
+        let batch = Batch::new(25.try_into()?, 1.try_into()?, def_config);
 
         let uri = Definition::<types::Concept, _>::new(&config, &batch).url();
         assert_eq!(uri.scheme(), "https");
@@ -1218,7 +1221,7 @@ mod tests {
         let config = config::Config::builder("some_api_key").build()?;
         let cui: cui::Cui = "C0010200".parse()?;
         let def_config = definition::Config::builder(cui).build();
-        let batch = atom::Batch::new(200.try_into()?, 1.try_into()?, def_config);
+        let batch = Batch::new(200.try_into()?, 1.try_into()?, def_config);
 
         let uri = Definition::<types::Concept, _>::new(&config, &batch).url();
         assert_eq!(uri.scheme(), "https");
@@ -1233,7 +1236,7 @@ mod tests {
         let config = config::Config::builder("some_api_key").build()?;
         let cui: cui::Cui = "C0010200".parse()?;
         let def_config = definition::Config::builder(cui).build();
-        let batch = atom::Batch::new(25.try_into()?, 30.try_into()?, def_config);
+        let batch = Batch::new(25.try_into()?, 30.try_into()?, def_config);
 
         let uri = Definition::<types::Concept, _>::new(&config, &batch).url();
         assert_eq!(uri.scheme(), "https");
@@ -1380,7 +1383,7 @@ mod tests {
 
         let batch_relation_config = [
             (
-                atom::Batch::new(
+                Batch::new(
                     25.try_into()?,
                     1.try_into()?,
                     relation::config::Config::builder("C0010200".parse()?).build(),
@@ -1388,7 +1391,7 @@ mod tests {
                 "includeRelationLabels=&includeAdditionalRelationLabels=&sabs=&includeObsolete=false&includeSuppressible=false&pageSize=25&pageNumber=1&apiKey=some_api_key",
             ),
             (
-                atom::Batch::new(
+                Batch::new(
                     25.try_into()?,
                     1.try_into()?,
                     relation::config::Config::builder("C0010200".parse()?)
@@ -1398,7 +1401,7 @@ mod tests {
                 "includeRelationLabels=CHD&includeAdditionalRelationLabels=&sabs=&includeObsolete=false&includeSuppressible=false&pageSize=25&pageNumber=1&apiKey=some_api_key",
             ),
             (
-                atom::Batch::new(
+                Batch::new(
                     25.try_into()?,
                     1.try_into()?,
                     relation::config::Config::builder("C0010200".parse()?)
@@ -1408,7 +1411,7 @@ mod tests {
                 "includeRelationLabels=&includeAdditionalRelationLabels=&sabs=&includeObsolete=true&includeSuppressible=false&pageSize=25&pageNumber=1&apiKey=some_api_key",
             ),
             (
-                atom::Batch::new(
+                Batch::new(
                     25.try_into()?,
                     1.try_into()?,
                     relation::config::Config::builder("C0010200".parse()?)
@@ -1418,7 +1421,7 @@ mod tests {
                 "includeRelationLabels=&includeAdditionalRelationLabels=&sabs=&includeObsolete=false&includeSuppressible=true&pageSize=25&pageNumber=1&apiKey=some_api_key",
             ),
             (
-                atom::Batch::new(
+                Batch::new(
                     25.try_into()?,
                     1.try_into()?,
                     relation::config::Config::builder("C0010200".parse()?)
@@ -1428,7 +1431,7 @@ mod tests {
                 "includeRelationLabels=&includeAdditionalRelationLabels=isa&sabs=&includeObsolete=false&includeSuppressible=false&pageSize=25&pageNumber=1&apiKey=some_api_key",
             ),
             (
-                atom::Batch::new(
+                Batch::new(
                     25.try_into()?,
                     1.try_into()?,
                     relation::config::Config::builder("C0010200".parse()?)
@@ -1438,7 +1441,7 @@ mod tests {
                 "includeRelationLabels=&includeAdditionalRelationLabels=&sabs=Findings&includeObsolete=false&includeSuppressible=false&pageSize=25&pageNumber=1&apiKey=some_api_key",
             ),
             (
-                atom::Batch::new(
+                Batch::new(
                     200.try_into()?,
                     1.try_into()?,
                     relation::config::Config::builder("C0010200".parse()?).build(),
@@ -1446,7 +1449,7 @@ mod tests {
                 "includeRelationLabels=&includeAdditionalRelationLabels=&sabs=&includeObsolete=false&includeSuppressible=false&pageSize=200&pageNumber=1&apiKey=some_api_key",
             ),
             (
-                atom::Batch::new(
+                Batch::new(
                     25.try_into()?,
                     30.try_into()?,
                     relation::config::Config::builder("C0010200".parse()?).build(),
@@ -1485,14 +1488,14 @@ mod tests {
 
         let batch_parents = [
             (
-                atom::Batch::new(300.try_into()?, 1.try_into()?, {
+                Batch::new(300.try_into()?, 1.try_into()?, {
                     let display_name: DisplayName = "A8345234".parse()?;
                     aui::Aui::new(display_name)
                 }?),
                 "pageSize=300&pageNumber=1&apiKey=some_api_key",
             ),
             (
-                atom::Batch::new(25.try_into()?, 30.try_into()?, {
+                Batch::new(25.try_into()?, 30.try_into()?, {
                     let display_name: DisplayName = "A8345234".parse()?;
                     aui::Aui::new(display_name)
                 }?),
@@ -1531,7 +1534,7 @@ mod tests {
 
         let sets = [
             (
-                atom::Batch::new(
+                Batch::new(
                     300.try_into()?,
                     1.try_into()?,
                     SourceConcept::new("SNOMEDCT_US".try_into()?, "9468002".try_into()?),
@@ -1539,7 +1542,7 @@ mod tests {
                 "pageSize=300&pageNumber=1&apiKey=some_api_key",
             ),
             (
-                atom::Batch::new(
+                Batch::new(
                     25.try_into()?,
                     30.try_into()?,
                     SourceConcept::new("SNOMEDCT_US".try_into()?, "9468002".try_into()?),
@@ -1547,7 +1550,7 @@ mod tests {
                 "pageSize=25&pageNumber=30&apiKey=some_api_key",
             ),
             (
-                atom::Batch::new(
+                Batch::new(
                     300.try_into()?,
                     30.try_into()?,
                     SourceConcept::new("SNOMEDCT_US".try_into()?, "9468002".try_into()?),

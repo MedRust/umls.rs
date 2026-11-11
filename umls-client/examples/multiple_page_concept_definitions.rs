@@ -16,11 +16,12 @@ use ratatui::{
     widgets::{Block, Cell, Paragraph, Row, Table, TableState, Wrap},
 };
 use umls_client::{
-    atom::Batch,
     config::Config,
     core::cui::Cui,
-    definition::{self, Definition, dto},
-    search::{Content, Page},
+    definition::{self, Definition},
+    dto::definition as dto,
+    dto::{batch::Batch, content::Content},
+    search::Page,
 };
 use umls_http::reqwest;
 

@@ -5,8 +5,8 @@
 use httpmock::{Method::GET, MockServer};
 use serde_json::Value;
 use umls_client::{
-    atom::Batch,
     config,
+    dto::batch::Batch,
     relation::{self, Relation, config::Config},
 };
 

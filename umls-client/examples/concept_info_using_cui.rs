@@ -14,11 +14,7 @@ use ratatui::{
     text::{Line, Text},
     widgets::{Block, Borders, Paragraph, Wrap},
 };
-use umls_client::{
-    concept::{self, Concept},
-    config::Config,
-    core::cui::Cui,
-};
+use umls_client::{concept, config::Config, core::cui::Cui, dto::concept::Payload};
 use umls_http::reqwest;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -29,7 +25,7 @@ enum Focus {
 
 struct App {
     input: String,
-    concept: Option<Concept>,
+    concept: Option<Payload>,
     status: String,
     focus: Focus,
     scroll: u16,
@@ -230,7 +226,7 @@ fn render_status(frame: &mut Frame<'_>, app: &App, area: Rect) {
     );
 }
 
-fn concept_text(concept: &Concept) -> Text<'static> {
+fn concept_text(concept: &Payload) -> Text<'static> {
     let mut lines = vec![
         field("CUI", &concept.ui),
         field("Name", &concept.name),
@@ -273,7 +269,7 @@ fn field(label: &str, value: &str) -> Line<'static> {
     ])
 }
 
-fn concept_line_count(concept: &Concept) -> u16 {
+fn concept_line_count(concept: &Payload) -> u16 {
     let fixed_lines = 13_u16;
     let semantic_lines = u16::try_from(concept.semantic_types.len().max(1)).unwrap_or(u16::MAX);
     fixed_lines.saturating_add(semantic_lines)

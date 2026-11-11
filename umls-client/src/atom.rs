@@ -49,14 +49,17 @@
 use crate::core::url::validator;
 use std::{marker::PhantomData, num::NonZeroU64};
 
-use serde::{self, Deserialize};
 use umls_http::WithoutClient;
 
 #[cfg(feature = "reqwest")]
-use crate::types;
+use crate::{dto::batch::BatchError, types};
+
+use crate::dto::page::Page;
+
+use crate::dto::batch::Batch;
 
 #[cfg(feature = "reqwest")]
-use serde::Serialize;
+use crate::dto::atom::AtomResponse;
 
 #[cfg(feature = "reqwest")]
 use crate::core::cui::Cui;
@@ -64,8 +67,10 @@ use crate::core::cui::Cui;
 #[cfg(feature = "reqwest")]
 use umls_http::reqwest;
 
+use crate::dto::content::Content;
+
 use crate::search::{
-    Content, Response,
+    Response,
     core::{DisplayName, EmptyString},
 };
 
@@ -100,88 +105,6 @@ impl From<reqwest::Error> for Error<reqwest::Error> {
 impl<T> From<http::uri::InvalidUri> for Error<T> {
     fn from(value: http::uri::InvalidUri) -> Self {
         Error::Uri(value)
-    }
-}
-
-#[derive(Debug, thiserror::Error)]
-/// An error produced while changing the requested atom page.
-pub enum BatchError {
-    /// No next page exists, or incrementing the page number would exceed
-    /// [`u64::MAX`].
-    #[error("Page overflow")]
-    Overflow,
-
-    /// The first page has no preceding page.
-    #[error("No previous page")]
-    NoPreviousPage,
-}
-
-/// A value paired with non-zero pagination parameters.
-#[derive(Debug, Clone)]
-pub struct Batch<T> {
-    size: NonZeroU64,
-    number: NonZeroU64,
-    value: T,
-}
-
-impl<T> Batch<T> {
-    /// Creates a paginated value with the supplied page size and page number.
-    pub fn new(size: NonZeroU64, number: NonZeroU64, value: T) -> Self {
-        Self {
-            size,
-            number,
-            value,
-        }
-    }
-
-    /// Returns the maximum number of atoms requested per page.
-    pub fn size(&self) -> std::num::NonZero<u64> {
-        self.size
-    }
-
-    /// Returns the one-based page number.
-    pub fn number(&self) -> std::num::NonZero<u64> {
-        self.number
-    }
-
-    /// Returns the value associated with these pagination parameters.
-    pub fn value(&self) -> &T {
-        &self.value
-    }
-
-    /// Increments the page number by one.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`BatchError::Overflow`] if incrementing would exceed
-    /// [`u64::MAX`].
-    pub fn checked_next(&mut self) -> Result<(), BatchError> {
-        let number = self
-            .number
-            .get()
-            .checked_add(1)
-            .and_then(NonZeroU64::new)
-            .ok_or(BatchError::Overflow)?;
-
-        self.number = number;
-        Ok(())
-    }
-
-    /// Decrements the page number by one.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`BatchError::NoPreviousPage`] when already on the first page.
-    pub fn checked_previous(&mut self) -> Result<(), BatchError> {
-        let number = self
-            .number
-            .get()
-            .checked_sub(1)
-            .and_then(NonZeroU64::new)
-            .ok_or(BatchError::NoPreviousPage)?;
-
-        self.number = number;
-        Ok(())
     }
 }
 
@@ -659,98 +582,4 @@ impl<T, U>
 
         Ok(self.client)
     }
-}
-
-#[derive(Debug, Clone, Deserialize)]
-/// A decoded page returned by the UMLS concept-atoms endpoint.
-pub struct Page<T> {
-    #[serde(rename = "pageSize")]
-    size: NonZeroU64,
-    #[serde(rename = "pageNumber")]
-    number: NonZeroU64,
-    #[serde(rename = "pageCount")]
-    count: NonZeroU64,
-    #[serde(rename = "result")]
-    pub(crate) content: T,
-}
-
-impl<T> Page<T> {
-    /// Returns the maximum number of atoms requested or returned per page.
-    pub fn size(&self) -> std::num::NonZero<u64> {
-        self.size
-    }
-
-    /// Returns the one-based number of this page.
-    pub fn number(&self) -> std::num::NonZero<u64> {
-        self.number
-    }
-
-    /// Returns the page count reported by the UMLS API.
-    pub fn count(&self) -> std::num::NonZero<u64> {
-        self.count
-    }
-
-    /// Returns this page's decoded content.
-    pub fn content(&self) -> &T {
-        &self.content
-    }
-
-    /// A conversion of page content type without affecting the size, number, count.
-    pub fn try_map<U, E>(self, f: impl FnOnce(T) -> Result<U, E>) -> Result<Page<U>, E> {
-        Ok(Page {
-            size: self.size,
-            number: self.number,
-            count: self.count,
-            content: f(self.content)?,
-        })
-    }
-}
-
-#[cfg(feature = "reqwest")]
-mod bool_as_string {
-    use serde::{Deserialize, Deserializer, Serializer, de};
-
-    pub fn serialize<S>(value: &bool, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_str(if *value { "true" } else { "false" })
-    }
-
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<bool, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let value = String::deserialize(deserializer)?;
-        match value.as_str() {
-            "true" => Ok(true),
-            "false" => Ok(false),
-            _ => Err(de::Error::custom("expected \"true\" or \"false\"")),
-        }
-    }
-}
-
-#[cfg(feature = "reqwest")]
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-/// A summary of one source-specific atom associated with a UMLS concept.
-pub struct AtomResponse {
-    /// The Atom Unique Identifier (AUI).
-    pub ui: DisplayName,
-
-    /// Whether the atom is suppressible.
-    #[serde(with = "bool_as_string")]
-    pub suppressible: bool,
-
-    /// Whether the atom is obsolete.
-    #[serde(with = "bool_as_string")]
-    pub obsolete: bool,
-    /// The abbreviation of the atom's root source vocabulary.
-    pub root_source: DisplayName,
-    /// The source vocabulary's term-type abbreviation.
-    pub term_type: DisplayName,
-    /// The atom's language code.
-    pub language: DisplayName,
-    /// The human-readable atom name.
-    pub name: DisplayName,
 }

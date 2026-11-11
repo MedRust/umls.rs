@@ -1,5 +1,8 @@
 use umls_http::WithoutClient;
 
+#[cfg(feature = "reqwest")]
+use crate::dto::definition as dto;
+
 use crate::core::url::validator;
 
 #[cfg(feature = "reqwest")]
@@ -14,12 +17,12 @@ use crate::{
 };
 
 #[cfg(feature = "reqwest")]
-use crate::{atom::Batch, config};
+use crate::config;
 
 #[cfg(feature = "reqwest")]
 use crate::{
-    atom::Page,
-    search::{Content, Response},
+    dto::{batch::Batch, content::Content, page::Page},
+    search::Response,
 };
 
 /// Represents definition error.
@@ -270,101 +273,5 @@ impl Definition<reqwest::Client, Config> {
             .await?;
 
         Ok(page.content)
-    }
-}
-
-/// Encapsulates the definition DTO symbols.
-#[cfg(feature = "reqwest")]
-pub mod dto {
-    use serde::{Deserialize, Serialize};
-
-    use crate::search::core::DisplayName;
-
-    /// Represents possible the de/serializable class type.
-    #[derive(Debug, Deserialize, Serialize, PartialEq, Eq, Clone, Copy)]
-    pub enum ClassType {
-        /// A difinition class type.
-        Definition,
-    }
-
-    #[derive(Debug, Deserialize, Clone)]
-    pub(crate) struct RawDefinition {
-        #[serde(rename = "classType")]
-        class_type: ClassType,
-
-        #[serde(rename = "sourceOriginated")]
-        source_originated: bool,
-
-        #[serde(rename = "rootSource")]
-        root_source: DisplayName,
-
-        value: DisplayName,
-    }
-
-    /// The metadata of the respecitve definition.
-    pub struct MetaData {
-        source_originated: bool,
-        root_source: DisplayName,
-    }
-
-    impl MetaData {
-        fn new(source_originated: bool, root_source: DisplayName) -> Self {
-            Self {
-                source_originated,
-                root_source,
-            }
-        }
-
-        /// Returns the definition is source originated or not.
-        pub fn is_source_originated(&self) -> bool {
-            self.source_originated
-        }
-
-        /// Returns the root source vocabulary of the definition.
-        pub fn root_source(&self) -> &DisplayName {
-            &self.root_source
-        }
-    }
-
-    /// The definition object.
-    pub struct Definition {
-        value: DisplayName,
-        metadata: MetaData,
-    }
-
-    impl Definition {
-        fn new(value: DisplayName, metadata: MetaData) -> Self {
-            Self { value, metadata }
-        }
-
-        /// Returns human readable representation of definition.
-        pub fn value(&self) -> &DisplayName {
-            &self.value
-        }
-
-        /// Returns the reference to metadata.
-        pub fn metadata(&self) -> &MetaData {
-            &self.metadata
-        }
-    }
-
-    /// Represents unsupported class type.
-    #[derive(Debug, thiserror::Error)]
-    #[error("Unsupported class type")]
-    pub struct UnsupportedClassType;
-
-    impl TryFrom<RawDefinition> for Definition {
-        type Error = UnsupportedClassType;
-
-        fn try_from(value: RawDefinition) -> Result<Self, Self::Error> {
-            if value.class_type != ClassType::Definition {
-                return Err(UnsupportedClassType);
-            }
-
-            let metadata = MetaData::new(value.source_originated, value.root_source);
-            let definition = Definition::new(value.value, metadata);
-
-            Ok(definition)
-        }
     }
 }

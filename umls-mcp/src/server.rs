@@ -8,11 +8,12 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::{num::NonZeroU64, sync::Arc};
 use umls_client::{
-    atom::{self, Batch},
+    atom,
     concept::Info,
     config::Config,
     core::{aui::Aui, cui::Cui},
-    parent::{Parent, SourceConcept},
+    dto::{batch::Batch, source::SourceConcept},
+    parent::Parent,
     relation,
     search::{self, core::DisplayName},
     types,
@@ -477,7 +478,7 @@ mod tests {
     use super::*;
     use httpmock::prelude::*;
     use serde_json::Value;
-    use umls_client::{atom::AtomResponse, relation::RelationDto};
+    use umls_client::dto::{atom::AtomResponse, relation::RelationDto};
 
     fn server(base_url: &str) -> UmlsServer {
         let config = Config::builder("secret-test-key")

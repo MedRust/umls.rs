@@ -4,9 +4,10 @@
 use httpmock::{Method::GET, MockServer};
 use serde_json::json;
 use umls_client::{
-    concept::{Concept, ConceptClass, Info},
+    concept::Info,
     config,
     core::{aui::Aui, cui::Cui},
+    dto::concept::Payload,
     search::core::DisplayName,
 };
 use url::Url;
@@ -78,12 +79,11 @@ async fn successfully_get_atom_info() -> Result<(), Box<dyn std::error::Error>> 
     Ok(())
 }
 
-fn assert_concept(concept: &Concept) {
+fn assert_concept(concept: &Payload) {
     assert_eq!(concept.ui, "C0010200");
     assert_eq!(concept.name, "Coughing");
     assert_eq!(concept.date_added, "09-30-1990");
     assert_eq!(concept.major_revision_date, "09-03-2024");
-    assert_eq!(concept.class_type, ConceptClass::Concept);
     assert!(!concept.suppressible);
     assert_eq!(concept.status, "R");
     assert!(!concept.semantic_types.is_empty());

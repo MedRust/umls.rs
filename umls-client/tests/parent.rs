@@ -2,8 +2,8 @@
 #![cfg(feature = "reqwest")]
 
 use httpmock::{Method::GET, MockServer};
-use umls_client::atom::Batch;
-use umls_client::parent::SourceConcept;
+use umls_client::dto::batch::Batch;
+use umls_client::dto::source::SourceConcept;
 use umls_client::{config, core::aui::Aui, parent::Parent, search::core::DisplayName, types};
 use url::Url;
 

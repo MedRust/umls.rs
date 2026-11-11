@@ -15,9 +15,9 @@ use ratatui::{
 };
 use umls_client::{
     config::Config,
-    search::{
-        self, ConceptSnapshot, Content, Page, Response, Search, core::Term, return_type::Concept,
-    },
+    dto::content::Content,
+    search::{self, ConceptSnapshot, Page, Response, Search, core::Term},
+    types::Concept,
 };
 use umls_http::reqwest;
 

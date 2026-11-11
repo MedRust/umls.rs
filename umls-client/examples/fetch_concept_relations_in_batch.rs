@@ -2,7 +2,7 @@
 mod common;
 use clap::Parser;
 use umls_client::{
-    atom::Batch,
+    dto::batch::Batch,
     relation::{Relation, config::Config},
 };
 use umls_http::reqwest::Client;

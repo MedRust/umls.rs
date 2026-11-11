@@ -53,6 +53,9 @@ pub mod definition;
 /// Fetch parents from UMLS.
 pub mod parent;
 
+/// A data transfer object.
+pub mod dto;
+
 /// Represents zero-cost abstraction types.
 pub mod types {
 
@@ -79,3 +82,5 @@ pub mod types {
         pub struct Preferred;
     }
 }
+
+pub mod pagination;
