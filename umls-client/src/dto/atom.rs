@@ -1,5 +1,5 @@
+use crate::dto::display_name::DisplayName;
 use crate::dto::serde::bool_as_string;
-use crate::search::core::DisplayName;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

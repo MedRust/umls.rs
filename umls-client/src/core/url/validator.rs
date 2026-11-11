@@ -31,7 +31,7 @@ use std::marker::PhantomData;
 
 use url::Url;
 
-use crate::{config::Config, core::aui::Aui, search::core::DisplayName};
+use crate::{config::Config, core::aui::Aui, dto::display_name::DisplayName};
 
 /// Validate url against with the base url.
 ///

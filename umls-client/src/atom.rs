@@ -67,12 +67,12 @@ use crate::core::cui::Cui;
 #[cfg(feature = "reqwest")]
 use umls_http::reqwest;
 
-use crate::dto::content::Content;
-
-use crate::search::{
-    Response,
-    core::{DisplayName, EmptyString},
+use crate::dto::{
+    content::Content,
+    display_name::{DisplayName, EmptyString},
 };
+
+use crate::search::Response;
 
 #[cfg(feature = "reqwest")]
 use crate::config;

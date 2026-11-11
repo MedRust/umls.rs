@@ -24,3 +24,6 @@ pub mod batch;
 
 /// Implements list encapsulation object.
 pub mod content;
+
+/// Implement non empty utf8 string implementation.
+pub mod display_name;

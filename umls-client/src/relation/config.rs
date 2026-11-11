@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use crate::{
     core::cui::Cui,
-    search::core::{DisplayName, EmptyString},
+    dto::display_name::{DisplayName, EmptyString},
 };
 
 /// A relationship configuration.

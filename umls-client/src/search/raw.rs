@@ -14,10 +14,7 @@ use serde::Deserialize;
 use umls_http::WithoutClient;
 
 #[cfg(feature = "reqwest")]
-use crate::{
-    config::Config,
-    search::{Request, core::DisplayName},
-};
+use crate::{config::Config, dto::display_name::DisplayName, search::Request};
 
 #[cfg(feature = "reqwest")]
 use umls_http::reqwest;

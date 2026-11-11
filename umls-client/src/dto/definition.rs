@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::search::core::DisplayName;
+use crate::dto::display_name::DisplayName;
 
 /// Represents possible the de/serializable class type.
 #[derive(Debug, Deserialize, Serialize, PartialEq, Eq, Clone, Copy)]

@@ -13,7 +13,7 @@ use umls_http::reqwest;
 
 use crate::{
     core::cui::Cui,
-    search::core::{DisplayName, EmptyString},
+    dto::display_name::{DisplayName, EmptyString},
 };
 
 #[cfg(feature = "reqwest")]

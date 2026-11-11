@@ -1,4 +1,4 @@
-use crate::{atom, definition, relation, search::core::get_trimmed_non_empty_string, types};
+use crate::{atom, definition, dto::display_name::get_trimmed_non_empty_string, relation, types};
 use serde::Deserialize;
 use url::Url;
 

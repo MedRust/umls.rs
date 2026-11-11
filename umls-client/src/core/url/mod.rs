@@ -769,10 +769,10 @@ mod tests {
         atom, config,
         core::{aui, cui, url::Definition},
         definition,
-        dto::batch::Batch,
+        dto::{batch::Batch, display_name::DisplayName},
         search::{
             self,
-            core::{DisplayName, InputType, ReturnIdType, SearchType},
+            core::{InputType, ReturnIdType, SearchType},
         },
     };
 

@@ -7,10 +7,13 @@ use umls_http::WithoutClient;
 use crate::{
     concept,
     config::Config,
-    dto::content::Content,
+    dto::{
+        content::Content,
+        display_name::{DisplayName, EmptyString},
+    },
     search::core::{
-        DEFAULT_PAGE_NUMBER, DEFAULT_PAGE_SIZE, DisplayName, EmptyString, Inclusion, InputType,
-        ReturnIdType, SearchType, Term, TermMatch,
+        DEFAULT_PAGE_NUMBER, DEFAULT_PAGE_SIZE, Inclusion, InputType, ReturnIdType, SearchType,
+        Term, TermMatch,
     },
     types,
 };

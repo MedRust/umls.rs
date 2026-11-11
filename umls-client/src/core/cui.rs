@@ -1,7 +1,7 @@
 use core::str;
 use std::str::FromStr;
 
-use crate::search::core::{EmptyString, get_trimmed_non_empty_string};
+use crate::dto::display_name::{EmptyString, get_trimmed_non_empty_string};
 
 #[derive(Debug, thiserror::Error)]
 /// An error produced while validating a [`crate::core::cui::Cui`].

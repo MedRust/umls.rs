@@ -1,4 +1,4 @@
-use crate::search::core::DisplayName;
+use crate::dto::display_name::DisplayName;
 
 fn is_valid_aui(value: &DisplayName) -> bool {
     let value = value.as_str();

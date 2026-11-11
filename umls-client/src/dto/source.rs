@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::search::core::DisplayName;
+use crate::dto::display_name::DisplayName;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -67,7 +67,7 @@ impl SourceAtomCluster {
 }
 
 impl TryFrom<SerializableSourceAtomCluster> for SourceAtomCluster {
-    type Error = crate::search::core::EmptyString;
+    type Error = crate::dto::display_name::EmptyString;
 
     fn try_from(wire: SerializableSourceAtomCluster) -> Result<Self, Self::Error> {
         Ok(Self {
@@ -109,7 +109,7 @@ impl SourceConcept {
 #[cfg(test)]
 mod tests {
 
-    use crate::search::core::EmptyString;
+    use crate::dto::display_name::EmptyString;
 
     use super::*;
 

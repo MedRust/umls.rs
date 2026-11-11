@@ -16,7 +16,8 @@ use umls_http::reqwest;
 use crate::core::aui::Aui;
 
 #[cfg(feature = "reqwest")]
-use crate::search::core::EmptyString;
+use crate::dto::display_name::EmptyString;
+
 #[cfg(feature = "reqwest")]
 use crate::search::{self, Response};
 
