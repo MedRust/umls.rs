@@ -1,3 +1,5 @@
+use std::marker::PhantomData;
+
 use umls_http::WithoutClient;
 
 #[cfg(feature = "reqwest")]
@@ -59,12 +61,13 @@ impl<T> From<http::uri::InvalidUri> for Error<T> {
 /// The available `fetch` method depends on whether the value is a [`crate::core::cui::Cui`], a
 /// [`http::Uri`], or a [`crate::search::ConceptSnapshot`]. Attach a `reqwest::Client` using
 /// [`Self::with_client`] before fetching; fetching consumes the request.
-pub struct Info<C, T> {
+pub struct Info<C, M, T> {
     client: C,
     value: T,
+    _marker: PhantomData<M>,
 }
 
-impl<C, T> Info<C, T> {
+impl<C, M, T> Info<C, M, T> {
     /// Returns the wrapped reference value.
     pub fn value(&self) -> &T {
         &self.value
@@ -76,12 +79,13 @@ impl<C, T> Info<C, T> {
     }
 }
 
-impl<T> Info<WithoutClient, T> {
+impl<M, T> Info<WithoutClient, M, T> {
     /// Wraps a concept reference value.
     pub fn new(value: T) -> Self {
         Self {
             client: WithoutClient,
             value,
+            _marker: PhantomData,
         }
     }
 
@@ -106,16 +110,17 @@ impl<T> Info<WithoutClient, T> {
     ///
     /// Execution requires the `reqwest` feature and a `reqwest::Client`.
     /// Clone an existing client to share its connection pool across requests.
-    pub fn with_client<C>(self, client: C) -> Info<C, T> {
+    pub fn with_client<C>(self, client: C) -> Info<C, M, T> {
         Info {
             client,
             value: self.value,
+            _marker: PhantomData,
         }
     }
 }
 
 #[cfg(feature = "reqwest")]
-impl Info<reqwest::Client, Cui> {
+impl Info<reqwest::Client, types::Concept, Cui> {
     /// Retrieves the concept identified by this CUI.
     ///
     /// # Errors
@@ -133,7 +138,7 @@ impl Info<reqwest::Client, Cui> {
 }
 
 #[cfg(feature = "reqwest")]
-impl Info<reqwest::Client, url::Url> {
+impl Info<reqwest::Client, types::Concept, url::Url> {
     /// Retrieves a concept from the wrapped UMLS resource URL.
     ///
     /// # Errors
@@ -165,7 +170,7 @@ impl Info<reqwest::Client, url::Url> {
 }
 
 #[cfg(feature = "reqwest")]
-impl Info<reqwest::Client, ConceptSnapshot> {
+impl Info<reqwest::Client, types::Concept, ConceptSnapshot> {
     /// Retrieves the full concept represented by a search-result snapshot.
     ///
     /// # Errors
@@ -180,7 +185,7 @@ impl Info<reqwest::Client, ConceptSnapshot> {
 }
 
 #[cfg(feature = "reqwest")]
-impl Info<reqwest::Client, Aui> {
+impl Info<reqwest::Client, types::Concept, Aui> {
     /// Fetch atom information for given atom.
     pub async fn fetch(self, config: &Config) -> Result<AtomResponse, Error<reqwest::Error>> {
         let url = config.info_url::<types::Atom, _>(&self.value).url();
