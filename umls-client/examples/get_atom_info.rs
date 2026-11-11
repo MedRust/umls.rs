@@ -17,7 +17,7 @@
 //! ```
 mod common;
 use clap::Parser;
-use umls_client::{concept::Info, core::aui::Aui, search::core::DisplayName};
+use umls_client::{core::aui::Aui, dto::display_name::DisplayName, info::Info};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

@@ -33,10 +33,10 @@
 //! # }
 //! ```
 
-/// Concept identifiers, concept resources, and concept retrieval.
-pub mod concept;
 /// Client configuration and configuration validation.
 pub mod config;
+/// Concept identifiers, concept resources, and concept retrieval.
+pub mod info;
 /// Raw and high-level UMLS search APIs.
 pub mod search;
 

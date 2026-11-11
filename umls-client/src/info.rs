@@ -92,7 +92,7 @@ impl<T> Info<WithoutClient, T> {
     /// ```no_run
     /// # #[cfg(feature = "reqwest")]
     /// use umls_http::reqwest;
-    /// use umls_client::{concept::{Info}, core::cui::Cui, config::Config};
+    /// use umls_client::{info::Info, core::cui::Cui, config::Config};
     /// # #[cfg(feature = "reqwest")]
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let config = Config::builder(std::env::var("UMLS_API_KEY")?).build()?;

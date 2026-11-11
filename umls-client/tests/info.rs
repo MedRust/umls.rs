@@ -4,11 +4,10 @@
 use httpmock::{Method::GET, MockServer};
 use serde_json::json;
 use umls_client::{
-    concept::Info,
     config,
     core::{aui::Aui, cui::Cui},
-    dto::concept::Payload,
-    search::core::DisplayName,
+    dto::{concept::Payload, display_name::DisplayName},
+    info::Info,
 };
 use url::Url;
 
@@ -191,7 +190,7 @@ async fn rejects_invalid_url() -> Result<(), Box<dyn std::error::Error>> {
     let result = Info::new(url).with_client(client).fetch(&config).await;
     assert!(matches!(
         result,
-        Err(umls_client::concept::Error::Validator(_))
+        Err(umls_client::info::Error::Validator(_))
     ));
     Ok(())
 }

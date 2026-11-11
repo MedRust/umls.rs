@@ -9,14 +9,12 @@ use serde_json::{Value, json};
 use std::{num::NonZeroU64, sync::Arc};
 use umls_client::{
     atom,
-    concept::Info,
     config::Config,
     core::{aui::Aui, cui::Cui},
-    dto::{batch::Batch, source::SourceConcept},
+    dto::{batch::Batch, display_name::DisplayName, source::SourceConcept},
+    info::Info,
     parent::Parent,
-    relation,
-    search::{self, core::DisplayName},
-    types,
+    relation, search, types,
 };
 use umls_http::reqwest::Client;
 

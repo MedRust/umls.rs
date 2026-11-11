@@ -21,9 +21,8 @@ use std::time::Duration;
 use clap::Parser;
 use tokio::time::sleep;
 use umls_client::{
-    dto::{batch::Batch, source::SourceConcept},
+    dto::{batch::Batch, display_name::DisplayName, source::SourceConcept},
     parent::Parent,
-    search::core::DisplayName,
 };
 
 mod common;

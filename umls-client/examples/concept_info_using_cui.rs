@@ -14,7 +14,7 @@ use ratatui::{
     text::{Line, Text},
     widgets::{Block, Borders, Paragraph, Wrap},
 };
-use umls_client::{concept, config::Config, core::cui::Cui, dto::concept::Payload};
+use umls_client::{config::Config, core::cui::Cui, dto::concept::Payload, info};
 use umls_http::reqwest;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -148,7 +148,7 @@ async fn fetch_concept(
     app.status = format!("Loading {cui}…");
     let _ = terminal.draw(|frame| render(frame, app));
 
-    match concept::Info::new(cui)
+    match info::Info::new(cui)
         .with_client(client.clone())
         .fetch(config)
         .await

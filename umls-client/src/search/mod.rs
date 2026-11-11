@@ -5,12 +5,12 @@ use std::{marker::PhantomData, num::NonZeroU64};
 use umls_http::WithoutClient;
 
 use crate::{
-    concept,
     config::Config,
     dto::{
         content::Content,
         display_name::{DisplayName, EmptyString},
     },
+    info,
     search::core::{
         DEFAULT_PAGE_NUMBER, DEFAULT_PAGE_SIZE, Inclusion, InputType, ReturnIdType, SearchType,
         Term, TermMatch,
@@ -648,7 +648,7 @@ pub enum PageError<E: std::error::Error> {
 /// ```no_run
 /// # #[cfg(feature = "reqwest")]
 /// use umls_http::reqwest;
-/// use umls_client::{concept::Info, config::Config, search::ConceptSnapshot};
+/// use umls_client::{info::Info, config::Config, search::ConceptSnapshot};
 /// # #[cfg(feature = "reqwest")]
 /// async fn fetch_concept(
 ///     snapshot: ConceptSnapshot,
@@ -663,7 +663,7 @@ pub enum PageError<E: std::error::Error> {
 pub struct ConceptSnapshot {
     cui: crate::core::cui::Cui,
     root_source: DisplayName,
-    pub(crate) info: concept::Info<umls_http::WithoutClient, url::Url>,
+    pub(crate) info: info::Info<umls_http::WithoutClient, url::Url>,
     name: DisplayName,
     semantic_types: Vec<DisplayName>,
 }
@@ -674,7 +674,7 @@ impl ConceptSnapshot {
     pub(crate) fn new(
         cui: crate::core::cui::Cui,
         root_source: DisplayName,
-        info: concept::Info<umls_http::WithoutClient, url::Url>,
+        info: info::Info<umls_http::WithoutClient, url::Url>,
         name: DisplayName,
         semantic_types: Vec<DisplayName>,
     ) -> Self {
@@ -698,7 +698,7 @@ impl ConceptSnapshot {
     }
 
     /// Returns the resource reference used to retrieve the full concept.
-    pub fn info(&self) -> &concept::Info<umls_http::WithoutClient, url::Url> {
+    pub fn info(&self) -> &info::Info<umls_http::WithoutClient, url::Url> {
         &self.info
     }
 
@@ -735,7 +735,7 @@ impl TryFrom<RawSearchDto> for ConceptSnapshot {
         let semantic_types = value
             .semantic_types
             .ok_or(ConceptSnapshotError::MissingSemanticTypes)?;
-        let info = concept::Info::new(value.uri);
+        let info = info::Info::new(value.uri);
         let name = value.name;
 
         Ok(ConceptSnapshot::new(
