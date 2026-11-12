@@ -7,7 +7,8 @@ use umls_client::{
     config,
     core::{aui::Aui, cui::Cui},
     dto::{concept::Payload, display_name::DisplayName},
-    info::Info,
+    info::{self, Info},
+    types,
 };
 use url::Url;
 
@@ -143,7 +144,7 @@ async fn fetch_concept_info_using_url() -> Result<(), Box<dyn std::error::Error>
         .base_url(base_url)
         .build()?;
 
-    let info = Info::new(url)
+    let info = Info::<_, types::Concept, _>::new(url)
         .with_client(Default::default())
         .fetch(&config)
         .await?;
@@ -187,10 +188,74 @@ async fn rejects_invalid_url() -> Result<(), Box<dyn std::error::Error>> {
     let client = umls_http::reqwest::Client::default();
     let url = "https://uts-ws.nlm.nih.gov/rest/content/current/CUI/".parse::<url::Url>()?;
 
-    let result = Info::new(url).with_client(client).fetch(&config).await;
+    let result = Info::<_, types::Concept, _>::new(url)
+        .with_client(client)
+        .fetch(&config)
+        .await;
     assert!(matches!(
         result,
         Err(umls_client::info::Error::Validator(_))
     ));
     Ok(())
+}
+
+#[tokio::test]
+async fn fetches_source_asserted_concept_info_using_url() -> Result<(), Box<dyn std::error::Error>>
+{
+    _ = env_logger::builder().is_test(true).try_init();
+
+    let mock_server = MockServer::start_async().await;
+    let mock = mock_server
+        .mock_async(|when, then| {
+            when.method("GET")
+                .path("/content/2024AA/source/SNOMEDCT_US/9468002")
+                .query_param("apiKey", "some_api_key");
+            let json_string = include_str!("fixtures/source_asserted_concept_info.json");
+            let body: serde_json::Value = serde_json::from_str(json_string).unwrap();
+            then.status(200).json_body(body);
+        })
+        .await;
+
+    let base_url: url::Url = mock_server.base_url().parse()?;
+
+    let url = base_url.join("/content/2024AA/source/SNOMEDCT_US/9468002")?;
+
+    let config = config::Config::builder("some_api_key")
+        .base_url(base_url)
+        .try_version("2024AA")?
+        .build()?;
+
+    let response = Info::<_, types::Source, _>::new(url)
+        .with_client(Default::default())
+        .fetch(&config)
+        .await
+        .expect("The fetch should call the mock server REST API call");
+
+    assert_eq!(response.ui().as_str(), "9468002");
+    assert_eq!(response.name().as_str(), "Closed fracture of carpal bone");
+    assert_eq!(response.root_source().as_str(), "SNOMEDCT_US");
+    assert!(!response.obsolete());
+    assert!(!response.suppressible());
+    assert_eq!(response.atom_count(), 8);
+    assert_eq!(response.cv_member_count(), 0);
+
+    mock.assert_async().await;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn rejects_invalid_source_asserted_concept_info_using_url() {
+    let config = config::Config::builder("some_api_key")
+        .build()
+        .expect("The non empty api key with default values should build configuration.");
+
+    let url = "https://uts-ws.nlm.nih.gov/rest/content/current/CUI/C0009044/relations"
+        .parse::<url::Url>()
+        .expect("The valid HTTP url should be parsed to `url::Url`.");
+    let result = Info::<_, types::Source, _>::new(url)
+        .with_client(Default::default())
+        .fetch(&config)
+        .await;
+    assert!(matches!(result, Err(info::Error::Validator(_))))
 }

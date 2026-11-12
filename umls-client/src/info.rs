@@ -133,7 +133,10 @@ impl Info<reqwest::Client, types::Concept, Cui> {
     ) -> Result<dto::concept::Payload, Error<reqwest::Error>> {
         let uri = config.info_url::<types::Concept, _>(self.value).url();
 
-        Info::new(uri).with_client(self.client).fetch(config).await
+        Info::<_, types::Concept, _>::new(uri)
+            .with_client(self.client)
+            .fetch(config)
+            .await
     }
 }
 
@@ -150,7 +153,7 @@ impl Info<reqwest::Client, types::Concept, url::Url> {
         config: &Config,
     ) -> Result<dto::concept::Payload, Error<reqwest::Error>> {
         config
-            .info_url_validator(self.value())
+            .info_url_validator::<types::Concept>(self.value())
             .validate()
             .map_err(Error::Validator)?;
 
@@ -199,5 +202,63 @@ impl Info<reqwest::Client, types::Atom, Aui> {
             .await
             .map(|x| x.content)
             .map_err(Error::Client)
+    }
+}
+
+#[cfg(feature = "reqwest")]
+impl Info<reqwest::Client, types::Source, url::Url> {
+    /// Fetches source-asserted concept information for given source concept.
+    ///
+    /// The method validates, add authorization, send request and handle response.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # #[cfg(feature = "reqwest")]
+    /// use umls_http::reqwest;
+    /// use umls_client::{info::Info, core::cui::Cui, config::Config, types};
+    /// # #[cfg(feature = "reqwest")]
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// let config = Config::builder(std::env::var("UMLS_API_KEY")?).build()?;
+    /// let client = reqwest::Client::default();
+    /// let url =
+    /// "https://uts-ws.nlm.nih.gov/rest/content/current/source/SNOMEDCT_US/9468002".parse::<url::Url>()?;
+    /// let concept = Info::<_, types::Source, _>::new(url)
+    ///     .with_client(client).fetch(&config).await?;
+    /// println!("{}", concept.name());
+    /// # Ok(())
+    /// # }
+    /// ```
+    /// ```no_run
+    /// # #[cfg(feature = "reqwest")]
+    /// use umls_http::reqwest;
+    ///
+    /// ```
+    ///
+    /// # Errors
+    /// - [`Error::Client`]: When HTTP failure and JSON deserialization error.
+    /// - [`Error::Validator`]: When URL validation failure.
+    pub async fn fetch(
+        self,
+        config: &Config,
+    ) -> Result<dto::source::SourceAtomCluster, Error<reqwest::Error>> {
+        config
+            .info_url_validator::<types::Source>(self.value())
+            .validate()
+            .map_err(Error::Validator)?;
+
+        let client = self.client;
+        let url = config.authenticated_url(self.value);
+
+        Ok(client
+            .get(url)
+            .send()
+            .await?
+            .error_for_status()?
+            .json::<Page<dto::source::SerializableSourceAtomCluster>>()
+            .await?
+            .content
+            .try_into()
+            .unwrap())
     }
 }
