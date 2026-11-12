@@ -148,6 +148,15 @@ impl<'a> Validator<'a> {
             .cui_check()
     }
 
+    fn source_url_validator(base_url: &'a Url, url: &'a Url) -> Result<Self, Error> {
+        Validator::try_validation_against_base_url(base_url, url)?
+            .static_text_check("content")?
+            .umls_version_check()?
+            .static_text_check("source")?
+            .non_empty_check()?
+            .non_empty_check()
+    }
+
     fn finish(self) -> Result<(), Error> {
         let mut split = self.split;
         if split.next().is_some() {
@@ -241,6 +250,23 @@ impl<'a> Info<'a, types::Concept> {
     /// - [`Error::MismatchPort`] - When url port (if any) is mismatch.
     pub fn validate(&self) -> Result<(), Error> {
         Validator::concept_url_validator(self.config().base_url(), self.url())?.finish()
+    }
+}
+
+impl<'a> Info<'a, types::Source> {
+    /// Validate source concept info url.
+    ///
+    /// The method validate against the base url.
+    ///
+    /// # Errors
+    /// - [`Error::MismatchScheme`] - When url and base url scheme mismatch.
+    /// - [`Error::MismatchHost`] - When url and base url host mismatch.
+    /// - [`Error::CannotBeABase`] - When url is cannot be a base.
+    /// - [`Error::InvalidPath`] - When url path mismatch.
+    /// - [`Error::Version`] - Invalid version format in url path.
+    /// - [`Error::MismatchPort`] - When url port (if any) is mismatch.
+    pub fn validate(&self) -> Result<(), Error> {
+        Validator::source_url_validator(self.config().base_url(), self.url())?.finish()
     }
 }
 
@@ -452,12 +478,7 @@ impl<'a> Parent<'a, types::Source> {
     /// - [`Error::Version`] - Invalid version format in url path.
     /// - [`Error::MismatchPort`] - When url port (if any) is mismatch.
     pub fn validate(&self) -> Result<(), Error> {
-        Validator::try_validation_against_base_url(self.config().base_url(), self.url())?
-            .static_text_check("content")?
-            .umls_version_check()?
-            .static_text_check("source")?
-            .non_empty_check()?
-            .non_empty_check()?
+        Validator::source_url_validator(self.config().base_url(), self.url())?
             .static_text_check("parents")?
             .finish()
     }
@@ -601,7 +622,7 @@ mod tests {
 
         for url in urls {
             let url = url_from_str(url);
-            let result = Info::new(&config, &url).validate();
+            let result = Info::<types::Concept>::new(&config, &url).validate();
             assert!(matches!(result, Err(Error::InvalidPath)));
         }
     }
@@ -611,7 +632,7 @@ mod tests {
         let config = umls_config("http://localhost:8080/rest");
 
         let url = url_from_str("http://localhost:8080/rest/content/AA2024/CUI/C0009044");
-        let result = Info::new(&config, &url).validate();
+        let result = Info::<types::Concept>::new(&config, &url).validate();
 
         assert!(matches!(result, Err(Error::Version(_))));
     }
@@ -620,7 +641,7 @@ mod tests {
     fn rejects_invalid_concept_info_url_path_cui_format() {
         let config = umls_config("http://localhost:8080/rest");
         let url = url_from_str("http://localhost:8080/rest/content/current/CUI/0009044");
-        let result = Info::new(&config, &url).validate();
+        let result = Info::<types::Concept>::new(&config, &url).validate();
         assert!(matches!(result, Err(Error::Cui(_))));
     }
 
@@ -872,6 +893,87 @@ mod tests {
     fn validate_base_url_with_trailing_slash() {
         let config = umls_config("http://localhost:8080/rest/");
         let url = url_from_str("http://localhost:8080/rest/content/current/CUI/C0009044");
-        Info::new(&config, &url).validate().expect("The validation should be successful when configuration with base url contains trailing slash");
+        Info::<types::Concept>::new(&config, &url).validate().expect("The validation should be successful when configuration with base url contains trailing slash");
+    }
+
+    #[test]
+    fn validates_source_info_url() {
+        let config = umls_config("http://localhost:8080/rest");
+        let url =
+            url_from_str("http://localhost:8080/rest/content/current/source/SNOMEDCT_US/9468002");
+        Info::<types::Source>::new(&config, &url)
+            .validate()
+            .expect("The validation should be successful for valid url.");
+    }
+
+    #[test]
+    fn rejects_source_info_url_path_segments() {
+        let config = umls_config("http://localhost:8080/rest");
+        let urls = [
+            "http://localhost:8080/rest/chunk/current/source/SNOMEDCT_US/9468002",
+            "http://localhost:8080/rest//current/source/SNOMEDCT_US/9468002",
+            "http://localhost:8080/rest/content/current//SNOMEDCT_US/9468002",
+            "http://localhost:8080/rest/content/current/source//9468002",
+            "http://localhost:8080/rest/content/current/source/SNOMEDCT_US/",
+        ];
+
+        for url in urls {
+            let url = url_from_str(url);
+            let result = Info::<types::Source>::new(&config, &url).validate();
+            assert!(matches!(result, Err(Error::InvalidPath)));
+        }
+    }
+
+    #[test]
+    fn rejects_invalid_source_info_url_version_format() {
+        let config = umls_config("http://localhost:8080/rest");
+        let url =
+            url_from_str("http://localhost:8080/rest/content/A2024A/source/SNOMEDCT_US/9468002");
+        let result = Info::<types::Source>::new(&config, &url).validate();
+        assert!(matches!(result, Err(Error::Version(_))));
+    }
+
+    #[test]
+    fn rejects_mismatch_host_for_source_info_url() {
+        let config = umls_config("http://localhost/rest");
+        let url = url_from_str(
+            "http://uts-ws.nlm.nih.gov/rest/content/current/source/SNOMEDCT_US/9468002",
+        );
+        let result = Info::<types::Source>::new(&config, &url).validate();
+        assert!(result.is_err());
+        assert!(matches!(result, Err(Error::MismatchHost)));
+    }
+
+    #[test]
+    fn rejects_mismatch_scheme_for_source_info_url() {
+        let config = umls_config("http://uts-ws.nlm.nih.gov/rest");
+        let url = url_from_str(
+            "https://uts-ws.nlm.nih.gov/rest/content/current/source/SNOMEDCT_US/9468002",
+        );
+        let result = Info::<types::Source>::new(&config, &url).validate();
+        assert!(result.is_err());
+        assert!(matches!(result, Err(Error::MismatchScheme)));
+    }
+
+    #[test]
+    fn rejects_mismatch_port_for_source_info_url() {
+        let config = umls_config("https://uts-ws.nlm.nih.gov/rest");
+        let url = url_from_str(
+            "https://uts-ws.nlm.nih.gov:8080/rest/content/current/source/SNOMEDCT_US/9468002",
+        );
+        let result = Info::<types::Source>::new(&config, &url).validate();
+        assert!(result.is_err());
+        assert!(matches!(result, Err(Error::MismatchPort)));
+    }
+
+    #[test]
+    fn rejects_incomplete_source_info_url() {
+        let config = umls_config("http://localhost:8080/rest");
+        let url = url_from_str(
+            "http://localhost:8080/rest/content/current/source/SNOMEDCT_US/9468002/parents",
+        );
+        let result = Info::<types::Source>::new(&config, &url).validate();
+        assert!(result.is_err());
+        assert!(matches!(result, Err(Error::Incomplete)));
     }
 }
