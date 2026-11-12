@@ -6,7 +6,7 @@ use serde_json::json;
 use umls_client::{
     config,
     core::{aui::Aui, cui::Cui},
-    dto::{concept::Payload, display_name::DisplayName},
+    dto::{concept::Payload, display_name::DisplayName, source::SourceConcept},
     info::{self, Info},
     types,
 };
@@ -258,4 +258,49 @@ async fn rejects_invalid_source_asserted_concept_info_using_url() {
         .fetch(&config)
         .await;
     assert!(matches!(result, Err(info::Error::Validator(_))))
+}
+
+#[tokio::test]
+async fn fetches_source_asserted_concept_info_using_source_concept()
+-> Result<(), Box<dyn std::error::Error>> {
+    _ = env_logger::builder().is_test(true).try_init();
+
+    let mock_server = MockServer::start_async().await;
+    let mock = mock_server
+        .mock_async(|when, then| {
+            when.method("GET")
+                .path("/content/2024AA/source/SNOMEDCT_US/9468002")
+                .query_param("apiKey", "some_api_key");
+            let json_string = include_str!("fixtures/source_asserted_concept_info.json");
+            let body: serde_json::Value = serde_json::from_str(json_string).unwrap();
+            then.status(200).json_body(body);
+        })
+        .await;
+
+    let base_url: url::Url = mock_server.base_url().parse()?;
+
+    let config = config::Config::builder("some_api_key")
+        .base_url(base_url)
+        .try_version("2024AA")?
+        .build()?;
+
+    let source_concept = SourceConcept::new("SNOMEDCT_US".parse()?, "9468002".parse()?);
+
+    let response = Info::<_, types::Source, _>::new(source_concept)
+        .with_client(Default::default())
+        .fetch(&config)
+        .await
+        .expect("The fetch should call the mock server REST API call");
+
+    assert_eq!(response.ui().as_str(), "9468002");
+    assert_eq!(response.name().as_str(), "Closed fracture of carpal bone");
+    assert_eq!(response.root_source().as_str(), "SNOMEDCT_US");
+    assert!(!response.obsolete());
+    assert!(!response.suppressible());
+    assert_eq!(response.atom_count(), 8);
+    assert_eq!(response.cv_member_count(), 0);
+
+    mock.assert_async().await;
+
+    Ok(())
 }
