@@ -19,7 +19,7 @@ use crate::dto;
 use crate::dto::concept::Payload;
 #[cfg(feature = "reqwest")]
 use crate::dto::page::Page;
-#[cfg(feature = "reqwest")]
+
 use crate::types;
 
 #[cfg(feature = "reqwest")]
@@ -61,6 +61,7 @@ impl<T> From<http::uri::InvalidUri> for Error<T> {
 /// The available `fetch` method depends on whether the value is a [`crate::core::cui::Cui`], a
 /// [`http::Uri`], or a [`crate::search::ConceptSnapshot`]. Attach a `reqwest::Client` using
 /// [`Self::with_client`] before fetching; fetching consumes the request.
+#[derive(Debug)]
 pub struct Info<C, M, T> {
     client: C,
     value: T,
@@ -260,5 +261,69 @@ impl Info<reqwest::Client, types::Source, url::Url> {
             .content
             .try_into()
             .unwrap())
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for Info<WithoutClient, types::Source, url::Url> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        url::Url::deserialize(deserializer).map(Info::new)
+    }
+}
+
+impl serde::Serialize for Info<WithoutClient, types::Source, url::Url> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.value().serialize(serializer)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn serializes_info_with_url() {
+        let url = "https://uts-ws.nlm.nih.gov/rest/content/current/source/SNOMEDCT_US/9468002"
+            .parse::<url::Url>()
+            .expect("The HTTP url string should be parsed to `url::Url`.");
+        let info = Info::<_, types::Source, _>::new(url);
+        let json_string = serde_json::to_string(&info)
+            .expect("The Info object with valid url object should be able to serialize to string.");
+        assert_eq!(
+            json_string,
+            "\"https://uts-ws.nlm.nih.gov/rest/content/current/source/SNOMEDCT_US/9468002\""
+        );
+    }
+
+    #[test]
+    fn deserialize_info_with_url() {
+        let json_string =
+            "\"https://uts-ws.nlm.nih.gov/rest/content/current/source/SNOMEDCT_US/9468002\"";
+        let info =
+            serde_json::from_str::<Info<WithoutClient, types::Source, url::Url>>(json_string)
+                .expect("The valid JSON HTTP url string should be parsed to Info object.");
+        assert_eq!(
+            info.value().as_str(),
+            "https://uts-ws.nlm.nih.gov/rest/content/current/source/SNOMEDCT_US/9468002"
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_url_json_deserialization() {
+        let json_string = "\"SNOMEDCT_US\"";
+        match serde_json::from_str::<Info<WithoutClient, types::Source, url::Url>>(json_string) {
+            Err(e) => {
+                assert!(e.is_data());
+                assert!(!e.is_syntax());
+                assert!(!e.is_io());
+                assert!(!e.is_eof());
+            }
+            _ => panic!("The expect to return error"),
+        }
     }
 }
