@@ -20,7 +20,7 @@
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 
-use crate::types;
+use crate::{dto, types};
 use std::marker::PhantomData;
 
 /// URL validator objects.
@@ -104,6 +104,27 @@ impl<'a> Info<'a, types::Atom, &Aui> {
             .push(aui);
 
         self.config().authenticated_url(url)
+    }
+}
+
+impl<'a> Info<'a, types::Source, &dto::source::SourceConcept> {
+    /// Returns source-asserted concept info url.
+    pub fn url(&self) -> url::Url {
+        let version = self.config().version().as_str().to_string();
+        let source = self.value().source().as_str();
+        let code = self.value().code().as_str();
+
+        let mut url = self.config().base_url().clone();
+        url.path_segments_mut()
+            .expect("The base url should be a base")
+            .pop_if_empty()
+            .push("content")
+            .push(&version)
+            .push("source")
+            .push(source)
+            .push(code);
+
+        url
     }
 }
 
@@ -777,7 +798,9 @@ mod tests {
     };
 
     #[cfg(feature = "reqwest")]
-    use crate::{dto::source::SourceConcept, relation};
+    use crate::relation;
+
+    use crate::dto::source::SourceConcept;
 
     use super::{Atom, Info, Parent, Relation, Search, types};
 
@@ -1642,5 +1665,23 @@ mod tests {
         }
 
         Ok(())
+    }
+
+    #[test]
+    fn generate_source_asserted_concept_info_url() {
+        let base_url = "http://localhost:8080/rest".parse().unwrap();
+        let config = config::Config::builder("some_api_key")
+            .base_url(base_url)
+            .build()
+            .expect("The non empty api key and valid base url withd default values should be able to build `Config` object.");
+
+        let source_concept =
+            SourceConcept::new("SNOMEDCT_US".parse().unwrap(), "9468002".parse().unwrap());
+
+        let url = Info::<types::Source, _>::new(&config, &source_concept).url();
+        assert_eq!(
+            url.as_str(),
+            "http://localhost:8080/rest/content/current/source/SNOMEDCT_US/9468002"
+        );
     }
 }
