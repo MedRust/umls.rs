@@ -185,7 +185,7 @@ impl Info<reqwest::Client, types::Concept, ConceptSnapshot> {
 }
 
 #[cfg(feature = "reqwest")]
-impl Info<reqwest::Client, types::Concept, Aui> {
+impl Info<reqwest::Client, types::Atom, Aui> {
     /// Fetch atom information for given atom.
     pub async fn fetch(self, config: &Config) -> Result<AtomResponse, Error<reqwest::Error>> {
         let url = config.info_url::<types::Atom, _>(&self.value).url();
