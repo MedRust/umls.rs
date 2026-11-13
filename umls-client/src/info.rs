@@ -281,6 +281,51 @@ impl serde::Serialize for Info<WithoutClient, types::Source, url::Url> {
     }
 }
 
+#[cfg(feature = "reqwest")]
+impl Info<reqwest::Client, types::Source, dto::source::SourceConcept> {
+    /// Fetches source-asserted concept information for given source concept.
+    ///
+    /// The method generate, validate, authenticated url, send request and handle response.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # #[cfg(feature = "reqwest")]
+    /// use umls_http::reqwest;
+    /// use umls_client::{info::Info, core::cui::Cui, config::Config, types, dto::source::SourceConcept};
+    /// # #[cfg(feature = "reqwest")]
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// let config = Config::builder(std::env::var("UMLS_API_KEY")?).build()?;
+    /// let client = reqwest::Client::default();
+    /// let source_concept = SourceConcept::new("SNOMEDCT_US".parse()?,"9468002".parse()?);
+    /// let concept = Info::<_, types::Source, _>::new(source_concept)
+    ///     .with_client(client).fetch(&config).await?;
+    /// println!("{}", concept.name());
+    /// # Ok(())
+    /// # }
+    /// ```
+    /// ```no_run
+    /// # #[cfg(feature = "reqwest")]
+    /// use umls_http::reqwest;
+    ///
+    /// ```
+    ///
+    /// # Errors
+    /// - [`Error::Client`]: When HTTP failure and JSON deserialization error.
+    /// - [`Error::Validator`]: When URL validation failure.
+    pub async fn fetch(
+        self,
+        config: &Config,
+    ) -> Result<dto::source::SourceAtomCluster, Error<reqwest::Error>> {
+        let url = config.info_url(self.value()).url();
+
+        Info::<_, types::Source, _>::new(url)
+            .with_client(self.client)
+            .fetch(config)
+            .await
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
