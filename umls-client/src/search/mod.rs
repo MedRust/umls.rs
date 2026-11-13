@@ -639,10 +639,6 @@ pub enum PageError<E: std::error::Error> {
 
 /// A compact concept representation returned by a search.
 ///
-/// With the `reqwest` feature, pass an owned snapshot to [`concept::Info::new`],
-/// attach a client with `with_client()`, and call `fetch(&config)` to retrieve
-/// the full concept. [`Self::info`] provides a borrowed resource reference.
-///
 /// # Example
 ///
 /// ```no_run
@@ -663,7 +659,7 @@ pub enum PageError<E: std::error::Error> {
 pub struct ConceptSnapshot {
     cui: crate::core::cui::Cui,
     root_source: DisplayName,
-    pub(crate) info: info::Info<umls_http::WithoutClient, url::Url>,
+    pub(crate) info: info::Info<umls_http::WithoutClient, types::Concept, url::Url>,
     name: DisplayName,
     semantic_types: Vec<DisplayName>,
 }
@@ -674,7 +670,7 @@ impl ConceptSnapshot {
     pub(crate) fn new(
         cui: crate::core::cui::Cui,
         root_source: DisplayName,
-        info: info::Info<umls_http::WithoutClient, url::Url>,
+        info: info::Info<umls_http::WithoutClient, types::Concept, url::Url>,
         name: DisplayName,
         semantic_types: Vec<DisplayName>,
     ) -> Self {
@@ -698,7 +694,7 @@ impl ConceptSnapshot {
     }
 
     /// Returns the resource reference used to retrieve the full concept.
-    pub fn info(&self) -> &info::Info<umls_http::WithoutClient, url::Url> {
+    pub fn info(&self) -> &info::Info<umls_http::WithoutClient, types::Concept, url::Url> {
         &self.info
     }
 
