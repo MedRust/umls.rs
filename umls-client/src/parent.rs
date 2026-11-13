@@ -7,16 +7,13 @@ use crate::types;
 use std::marker::PhantomData;
 
 #[cfg(feature = "reqwest")]
-use crate::dto::source::{SerializableSourceAtomCluster, SourceAtomCluster, SourceConcept};
+use crate::dto::source::{SourceAtomCluster, SourceConcept};
 
 #[cfg(feature = "reqwest")]
 use umls_http::reqwest;
 
 #[cfg(feature = "reqwest")]
 use crate::core::aui::Aui;
-
-#[cfg(feature = "reqwest")]
-use crate::dto::display_name::EmptyString;
 
 #[cfg(feature = "reqwest")]
 use crate::search::{self, Response};
@@ -266,7 +263,7 @@ impl Parent<types::Source, umls_http::reqwest::Client, url::Url> {
 
         let url = umls_config.authenticated_url(self.value);
 
-        let response: Page<Content<SerializableSourceAtomCluster>> = client
+        let response: Page<Content<SourceAtomCluster>> = client
             .get(url)
             .send()
             .await?
@@ -274,18 +271,7 @@ impl Parent<types::Source, umls_http::reqwest::Client, url::Url> {
             .json()
             .await?;
 
-        let value = response
-            .try_map::<_, EmptyString>(|x| {
-                let value = x
-                    .list
-                    .into_iter()
-                    .map(TryInto::<SourceAtomCluster>::try_into)
-                    .collect::<Result<Vec<SourceAtomCluster>, _>>()?;
-                Ok(Content::new(value))
-            })
-            .map_err(|_| Error::Domain)?;
-
-        Ok(value)
+        Ok(response)
     }
 }
 

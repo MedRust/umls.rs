@@ -61,3 +61,8 @@ required-features = ["reqwest"]
 [[example]]
 name = "get_source_parent_concepts"
 required-features = ["reqwest"]
+
+
+[[example]]
+name = "get_source_concept_info_using_url"
+required-features = ["reqwest"]
