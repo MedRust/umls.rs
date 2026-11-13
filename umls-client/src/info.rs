@@ -251,16 +251,15 @@ impl Info<reqwest::Client, types::Source, url::Url> {
         let client = self.client;
         let url = config.authenticated_url(self.value);
 
-        Ok(client
+        client
             .get(url)
             .send()
             .await?
             .error_for_status()?
-            .json::<Page<dto::source::SerializableSourceAtomCluster>>()
-            .await?
-            .content
-            .try_into()
-            .unwrap())
+            .json::<Page<dto::source::SourceAtomCluster>>()
+            .await
+            .map(|x| x.content)
+            .map_err(Error::Client)
     }
 }
 
