@@ -3,7 +3,7 @@ use serde::Deserialize;
 /// An owned collection of converted results.
 #[derive(Debug)]
 pub struct Content<T> {
-    pub(crate) list: Vec<T>,
+    list: Vec<T>,
 }
 
 impl<T> Content<T> {
@@ -15,6 +15,11 @@ impl<T> Content<T> {
     /// Returns the results as a slice in API-provided order.
     pub fn list(&self) -> &[T] {
         &self.list
+    }
+
+    /// Returns list and consumes self.
+    pub fn into_list(self) -> Vec<T> {
+        self.list
     }
 }
 

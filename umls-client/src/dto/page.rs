@@ -12,7 +12,7 @@ pub struct Page<T> {
     #[serde(rename = "pageCount")]
     count: NonZeroU64,
     #[serde(rename = "result")]
-    pub(crate) content: T,
+    content: T,
 }
 
 impl<T> Page<T> {
@@ -44,5 +44,10 @@ impl<T> Page<T> {
             count: self.count,
             content: f(self.content)?,
         })
+    }
+
+    /// Returns content object and consumes self.
+    pub fn into_content(self) -> T {
+        self.content
     }
 }

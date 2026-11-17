@@ -201,7 +201,7 @@ impl Info<reqwest::Client, types::Atom, Aui> {
             .error_for_status()?
             .json::<Page<AtomResponse>>()
             .await
-            .map(|x| x.content)
+            .map(|x| x.into_content())
             .map_err(Error::Client)
     }
 }
@@ -258,7 +258,7 @@ impl Info<reqwest::Client, types::Source, url::Url> {
             .error_for_status()?
             .json::<Page<dto::source::SourceAtomCluster>>()
             .await
-            .map(|x| x.content)
+            .map(|x| x.into_content())
             .map_err(Error::Client)
     }
 }

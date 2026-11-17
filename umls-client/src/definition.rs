@@ -202,7 +202,7 @@ impl Definition<reqwest::Client, url::Url> {
 
         let page = body.try_map::<_, Error<umls_http::reqwest::Error>>(|x| {
             let pages = x
-                .list
+                .into_list()
                 .into_iter()
                 .map(|x| x.try_into())
                 .collect::<Result<Vec<dto::Definition>, _>>()?;
@@ -272,6 +272,6 @@ impl Definition<reqwest::Client, Config> {
             .fetch(umls_config)
             .await?;
 
-        Ok(page.content)
+        Ok(page.into_content())
     }
 }

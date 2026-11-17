@@ -434,7 +434,7 @@ impl Atom<reqwest::Client, types::atom::All, Cui> {
             .with_client(self.client)
             .fetch(umls_config)
             .await
-            .map(|x| x.content)
+            .map(|x| x.into_content())
     }
 }
 
@@ -518,7 +518,7 @@ impl Atom<reqwest::Client, types::atom::Preferred, url::Url> {
             .error_for_status()?
             .json::<Page<AtomResponse>>()
             .await
-            .map(|x| x.content)
+            .map(|x| x.into_content())
             .map_err(Error::Client)
     }
 }
@@ -528,7 +528,7 @@ impl<T, C> Response<Page<Content<T>>, C> {
     ///
     /// Pagination metadata and retained request state are discarded.
     pub fn into_content(self) -> Content<T> {
-        self.body.content
+        self.body.into_content()
     }
 
     /// Converts the response into a navigable page retaining request state.
@@ -537,7 +537,7 @@ impl<T, C> Response<Page<Content<T>>, C> {
         let size = self.body.size();
         let number = self.body.number();
 
-        let content = self.body.content;
+        let content = self.body.into_content();
 
         super::search::Page::new(content, size, number, Some(count), self.client)
     }

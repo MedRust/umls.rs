@@ -113,7 +113,7 @@ impl Relation<Client, config::Config> {
             .fetch(umls_config)
             .await?;
 
-        Ok(response.content)
+        Ok(response.into_content())
     }
 }
 
