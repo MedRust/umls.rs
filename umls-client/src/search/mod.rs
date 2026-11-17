@@ -6,10 +6,7 @@ use umls_http::WithoutClient;
 
 use crate::{
     config::Config,
-    dto::{
-        content::Content,
-        display_name::{DisplayName, EmptyString},
-    },
+    dto::display_name::{DisplayName, EmptyString},
     info,
     search::core::{
         DEFAULT_PAGE_NUMBER, DEFAULT_PAGE_SIZE, Inclusion, InputType, ReturnIdType, SearchType,
@@ -17,6 +14,9 @@ use crate::{
     },
     types,
 };
+
+#[cfg(feature = "reqwest")]
+use crate::dto::content::Content;
 
 #[cfg(feature = "reqwest")]
 use crate::search::raw::{RawSearchDto, SearchResponse};
