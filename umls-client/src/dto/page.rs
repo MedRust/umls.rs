@@ -2,6 +2,8 @@ use std::num::NonZeroU64;
 
 use serde::Deserialize;
 
+use crate::dto::content::Content;
+
 #[derive(Debug, Clone, Deserialize)]
 /// A decoded page returned by the UMLS concept-atoms endpoint.
 pub struct Page<T> {
@@ -49,5 +51,27 @@ impl<T> Page<T> {
     /// Returns content object and consumes self.
     pub fn into_content(self) -> T {
         self.content
+    }
+}
+
+impl<T> Page<Content<T>> {
+    /// Try iterative map on each element.
+    pub fn try_iter_map<U, E>(
+        self,
+        f: impl FnMut(T) -> Result<U, E>,
+    ) -> Result<Page<Content<U>>, E> {
+        let result = self
+            .content
+            .into_list()
+            .into_iter()
+            .map(f)
+            .collect::<Result<Vec<U>, E>>()?;
+
+        Ok(Page {
+            size: self.size,
+            number: self.number,
+            count: self.count,
+            content: Content::new(result),
+        })
     }
 }

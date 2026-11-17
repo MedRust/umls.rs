@@ -6,8 +6,9 @@ use umls_http::WithoutClient;
 
 use crate::core::url::validator;
 
+use crate::dto::relation;
 #[cfg(feature = "reqwest")]
-use crate::types;
+use crate::{dto::relation::SerializableRelation, types};
 
 #[cfg(feature = "reqwest")]
 use crate::dto::relation::RelationDto;
@@ -35,6 +36,10 @@ pub enum Error<T> {
     /// Represents url validation failure.
     #[error("URL validation error: {0}")]
     Validator(validator::Error),
+
+    /// Represents DTO construction validation error.
+    #[error("DTO validation error: {0}")]
+    Dto(#[source] relation::Error),
 }
 
 #[cfg(feature = "reqwest")]
@@ -161,10 +166,12 @@ impl Relation<Client, url::Url> {
             .send()
             .await?
             .error_for_status()?
-            .json::<Page<Content<RelationDto>>>()
+            .json::<Page<Content<SerializableRelation>>>()
             .await?;
 
-        Ok(response)
+        response
+            .try_iter_map(TryInto::<RelationDto>::try_into)
+            .map_err(Error::Dto)
     }
 }
 

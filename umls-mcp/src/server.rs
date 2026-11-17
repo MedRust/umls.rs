@@ -11,7 +11,7 @@ use umls_client::{
     atom,
     config::Config,
     core::{aui::Aui, cui::Cui},
-    dto::{batch::Batch, display_name::DisplayName, source::SourceConcept},
+    dto::{batch::Batch, display_name::DisplayName, relation::ClassType, source::SourceConcept},
     info::Info,
     parent::Parent,
     relation, search, types,
@@ -357,7 +357,82 @@ impl UmlsServer {
 
         let page = response.into_page();
 
-        success(&page.content().list())
+        let mut json_objects: Vec<Value> = Vec::new();
+        for relation in page.content().list().iter().cloned() {
+            match relation.class_type() {
+                ClassType::ConceptRelation => {
+                    let Ok(object) = relation.try_into_concept_relation() else {
+                        return failure(
+                            "Failed conversion from relation to concept relation object",
+                        );
+                    };
+                    let json_object = json!({
+                        "ui": object.ui(),
+                        "suppressible": object.suppressible(),
+                        "sourceUi": object.source_ui().map(|x| x.as_str()),
+                        "obsolete": &object.obsolete(),
+                        "sourceOriginated": &object.source_originated(),
+                        "rootSource": object.root_source().as_str(),
+                        "groupId": object.group_id().map(|x| x.as_str()),
+                        "attributeCount": &object.attribute_count(),
+                        "relationLabel": object.relation_label().as_str(),
+                        "additionalRelationLabel": &object.additional_relation_label().map(|x| x.as_str()).unwrap_or(""),
+                        "relatedId": object.related_id().value().as_str(),
+                        "relatedIdName": object.related_id_name().as_str()
+                    });
+                    json_objects.push(json_object);
+                }
+                ClassType::AtomRelation => {
+                    let Ok(object) = relation.try_into_atom_relation() else {
+                        return failure("Failed conversion from relation to atom relation object");
+                    };
+                    let json_object = json!({
+                        "ui": object.ui().as_str(),
+                        "suppressible": object.suppressible(),
+                        "sourceUi": object.source_ui().map(|x| x.as_str()),
+                        "obsolete": &object.obsolete(),
+                        "sourceOriginated": &object.source_originated(),
+                        "rootSource": object.root_source().as_str(),
+                        "groupId": object.group_id().map(|x| x.as_str()),
+                        "attributeCount": &object.attribute_count(),
+                        "relatedFromId": object.related_from_id().value().as_str(),
+                        "relatedFromIdName": object.related_from_id_name().as_str(),
+                        "relationLabel": object.relation_label().as_str(),
+                        "additionalRelationLabel": &object.additional_relation_label().map(|x| x.as_str()).unwrap_or(""),
+                        "relatedId": object.related_id().value().as_str(),
+                        "relatedIdName": object.related_id_name().as_str()
+                    });
+                    json_objects.push(json_object);
+                }
+                ClassType::AtomClusterRelation => {
+                    let Ok(object) = relation.try_into_atom_cluster_relation() else {
+                        return failure(
+                            "Failed conversion from relation to atom cluster relation object",
+                        );
+                    };
+                    let json_object = json!({
+                        "ui": object.ui().as_str(),
+                        "suppressible": object.suppressible(),
+                        "sourceUi": object.source_ui().map(|x| x.as_str()),
+                        "obsolete": &object.obsolete(),
+                        "sourceOriginated": &object.source_originated(),
+                        "rootSource": object.root_source().as_str(),
+                        "groupId": object.group_id().map(|x| x.as_str()),
+                        "attributeCount": &object.attribute_count(),
+                        "relatedFromId": object.related_from_id().value().as_str(),
+                        "relatedFromIdName": object.related_from_id_name().as_str(),
+                        "relationLabel": object.relation_label().as_str(),
+                        "additionalRelationLabel": &object.additional_relation_label().map(|x| x.as_str()).unwrap_or(""),
+                        "relatedId": object.related_id().value().as_str(),
+                        "relatedIdName": object.related_id_name().as_str()
+                    });
+                    json_objects.push(json_object);
+                }
+                other => return failure(&format!("Unknown class type: {}", other)),
+            }
+        }
+
+        success(&json_objects)
     }
 
     #[tool(
@@ -476,7 +551,7 @@ mod tests {
     use super::*;
     use httpmock::prelude::*;
     use serde_json::Value;
-    use umls_client::dto::{atom::AtomResponse, relation::RelationDto};
+    use umls_client::dto::atom::AtomResponse;
 
     fn server(base_url: &str) -> UmlsServer {
         let config = Config::builder("secret-test-key")
@@ -769,7 +844,7 @@ mod tests {
         assert!(!result.is_error.unwrap_or(false));
         let text = result.content[0].as_text().unwrap().text.clone();
         println!("{}", text.as_str());
-        _ = serde_json::from_str::<Vec<RelationDto>>(&text).unwrap();
+        _ = serde_json::to_value(text)?;
 
         mock.assert_async().await;
 

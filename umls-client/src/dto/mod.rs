@@ -13,7 +13,6 @@ pub mod source;
 /// Relation dto object.
 pub mod relation;
 
-/// Custom serde customization.
 pub mod serde;
 
 /// Page object.
