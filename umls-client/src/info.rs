@@ -6,14 +6,14 @@ use umls_http::WithoutClient;
 use umls_http::reqwest;
 
 #[cfg(feature = "reqwest")]
-use crate::dto::atom::AtomResponse;
+use crate::dto::{atom::AtomResponse, concept::SerializableConcept};
 
 #[cfg(feature = "reqwest")]
 use crate::core::aui::Aui;
 #[cfg(feature = "reqwest")]
 use crate::core::url::validator;
 #[cfg(feature = "reqwest")]
-use crate::dto;
+use crate::dto::{self, page};
 
 #[cfg(feature = "reqwest")]
 use crate::dto::concept::Payload;
@@ -165,9 +165,8 @@ impl Info<reqwest::Client, types::Concept, url::Url> {
             .send()
             .await?
             .error_for_status()?
-            .json::<dto::concept::ConceptResponse>()
+            .json::<page::Page<SerializableConcept>>()
             .await
-            .map(|x| x.result)
             .map(Into::<Payload>::into)
             .map_err(Error::Client)
     }

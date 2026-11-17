@@ -1,12 +1,10 @@
-use crate::{atom, definition, dto::display_name::get_trimmed_non_empty_string, relation, types};
+use crate::{
+    atom, definition,
+    dto::{display_name::get_trimmed_non_empty_string, page},
+    relation, types,
+};
 use serde::Deserialize;
 use url::Url;
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct ConceptResponse {
-    pub(crate) result: SerializableConcept,
-}
 
 /// A full concept returned by the UMLS content endpoint.
 pub struct Payload {
@@ -84,8 +82,9 @@ pub(crate) struct SerializableConcept {
     name: String,
 }
 
-impl From<SerializableConcept> for Payload {
-    fn from(value: SerializableConcept) -> Self {
+impl From<page::Page<SerializableConcept>> for Payload {
+    fn from(value: page::Page<SerializableConcept>) -> Self {
+        let value = value.into_content();
         let definitions = match value.definitions {
             OptionalResource::Available(url) => Some(definition::Definition::new(url)),
             OptionalResource::Unavailable => None,

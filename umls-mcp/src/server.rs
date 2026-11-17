@@ -602,7 +602,7 @@ mod tests {
         let mock_server = MockServer::start_async().await;
         let mock = mock_server.mock_async(|when, then| {
             when.method(GET).path("/rest/content/2024AB/CUI/C0010200");
-            then.status(200).json_body(json!({"result": {
+            then.status(200).json_body(json!({"pageSize": 25, "pageNumber": 1, "pageCount": 1, "result": {
                 "classType": "Concept", "ui": "C0010200", "name": "Cough",
                 "suppressible": false, "status": "R", "dateAdded": "01-01-1990",
                 "majorRevisionDate": "01-01-2024", "semanticTypes": [{"name": "Sign or Symptom", "uri": "NONE"}],
