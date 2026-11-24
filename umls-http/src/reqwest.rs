@@ -1,4 +1,3 @@
-#![allow(missing_docs)]
 //! Provides clients for JSON requests and streamed HTTP responses.
 //!
 //! The `reqwest` feature enables [`Client`].
@@ -16,11 +15,14 @@ use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 const JSON_HEADER: &str = "application/json";
 
+/// An HTTP client used to query server.
 pub type Client = ReqwestClient<Any>;
 
+/// Typestate marker preserving backward-compatible, unvalidated request builders.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Any;
 
+/// Typestate marker that enables automatic JSON response validation and deserialization.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Json;
 
@@ -66,6 +68,7 @@ impl ReqwestClient<Any> {
         }
     }
 
+    /// Consumes `self` and returns a new [`ReqwestClient`] configured with the specified typestate marker.
     pub fn with_type<T>(self) -> ReqwestClient<T> {
         ReqwestClient {
             client: self.client,
@@ -82,7 +85,21 @@ impl ReqwestClient<Any> {
 }
 
 impl ReqwestClient<Json> {
-    /// Returns a [`bytes::Bytes`] object for given url.
+    /// Constructs and sends a GET request to the target URL, validating and deserializing the JSON response.
+    ///
+    /// Sends a GET request with an `Accept: application/json` header, verifies that the response
+    /// media type is JSON, and on success deserializes the response body into `V`.
+    ///
+    /// # Errors
+    ///
+    /// - [`ClientError::Opaque`]: A response header value contains one or more non-ASCII characters.
+    /// - [`ClientError::MissingHeader`]: A required header (e.g. `Content-Type`) is missing from the response.
+    /// - [`ClientError::UnsupportedContentTypeHeader`]: The response `Content-Type` is not `application/json`.
+    /// - [`ClientError::UnsupportedStatusCode`]: An unhandled HTTP status code was received.
+    /// - [`ClientError::Validation`]: The request failed upstream validation (HTTP 400).
+    /// - [`ClientError::NotFound`]: The requested resource was not found (HTTP 404).
+    /// - [`ClientError::Unauthorized`]: Authentication failed (HTTP 401).
+    /// - [`ClientError::Client`]: Underlying HTTP transport error or JSON deserialization failure.
     pub async fn get<T: IntoUrl, V: DeserializeOwned>(&self, url: T) -> Result<V, ClientError> {
         let response = self.get_request_builder(url).send().await?;
 
@@ -97,32 +114,39 @@ impl ReqwestClient<Json> {
     }
 }
 
+/// Represents an error produced by [`ReqwestClient`].
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum ClientError {
+    /// Represents an underlying HTTP transport or JSON deserialization error.
     #[error("Client error: {0}")]
     Client(#[source] reqwest::Error),
 
+    /// Represents a header value containing non-ASCII characters.
     #[error("Opaque header value: {0}")]
     Opaque(#[source] http::header::ToStrError),
 
+    /// Represents a missing response header.
     #[error("Missing header: {0}")]
     MissingHeader(String),
 
+    /// Represents unsupported `Content-Type` header.
     #[error("Unsupported content type header")]
     UnsupportedContentTypeHeader,
 
+    /// Represents an upstream API validation error.
     #[error("Validation error: {0}")]
     Validation(String),
 
+    /// Represents an authentication failure.
     #[error("Unauthorized: {0}")]
     Unauthorized(String),
 
-    #[error("Unsupported error name: {0}")]
-    UnsupportedErrorName(ErrorName),
-
+    /// Represents an unexpected or unhandled HTTP response status code.
     #[error("Unsupported status code: {0}")]
     UnsupportedStatusCode(StatusCode),
 
+    /// Represents a resource not found error.
     #[error("NotFound error: {0}")]
     NotFound(String),
 }
@@ -145,7 +169,7 @@ impl From<ErrorResponse> for ClientError {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[non_exhaustive]
-pub enum ErrorName {
+enum ErrorName {
     #[serde(rename = "UnauthorizedError")]
     Unauthorized,
     #[serde(rename = "ValidationError")]
@@ -171,7 +195,7 @@ impl std::fmt::Display for ErrorName {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ErrorResponse {
+struct ErrorResponse {
     pub name: ErrorName,
     pub status: u16,
     pub message: String,
