@@ -144,7 +144,7 @@ pub enum ClientError {
 
 impl From<reqwest::Error> for ClientError {
     fn from(value: reqwest::Error) -> Self {
-        ClientError::Client(value)
+        ClientError::Client(value.without_url())
     }
 }
 
