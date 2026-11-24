@@ -6,13 +6,15 @@
 use std::marker::PhantomData;
 
 use http::{
-    StatusCode,
+    HeaderMap, HeaderName, StatusCode,
     header::{ACCEPT, CONTENT_TYPE},
 };
 use reqwest::IntoUrl;
 
 pub use reqwest::Error;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
+
+const JSON_HEADER: &str = "application/json";
 
 pub type Client = ReqwestClient<Any>;
 
@@ -82,33 +84,16 @@ impl ReqwestClient<Any> {
 impl ReqwestClient<Json> {
     /// Returns a [`bytes::Bytes`] object for given url.
     pub async fn get<T: IntoUrl, V: DeserializeOwned>(&self, url: T) -> Result<V, ClientError> {
-        let response = self
-            .client
-            .get(url)
-            .header(ACCEPT, "application/json")
-            .send()
-            .await?;
+        let response = self.get_request_builder(url).send().await?;
 
-        let headers = response.headers();
-        match headers.get(CONTENT_TYPE) {
-            Some(x) => {
-                let str = x.to_str().map_err(ClientError::Opaque)?;
-                if !["application/json", "application/json; charset=utf-8"].contains(&str) {
-                    return Err(ClientError::UnsupportedContentTypeHeader);
-                }
-            }
-            None => {
-                return Err(ClientError::MissingContentTypeHeader);
-            }
-        }
+        validate_json_response(&response)?;
+        let response = validate_response_body(response).await?;
 
-        match response.status() {
-            StatusCode::OK => response.json::<V>().await.map_err(ClientError::Client),
-            StatusCode::BAD_REQUEST | StatusCode::UNAUTHORIZED | StatusCode::NOT_FOUND => {
-                Err(response.json::<ErrorResponse>().await?.into())
-            }
-            other => Err(ClientError::UnsupportedStatusCode(other)),
-        }
+        response.json::<V>().await.map_err(ClientError::Client)
+    }
+
+    fn get_request_builder<T: IntoUrl>(&self, url: T) -> reqwest::RequestBuilder {
+        self.client.get(url).header(ACCEPT, JSON_HEADER)
     }
 }
 
@@ -120,8 +105,8 @@ pub enum ClientError {
     #[error("Opaque header value: {0}")]
     Opaque(#[source] http::header::ToStrError),
 
-    #[error("Missing content type header")]
-    MissingContentTypeHeader,
+    #[error("Missing header: {0}")]
+    MissingHeader(String),
 
     #[error("Unsupported content type header")]
     UnsupportedContentTypeHeader,
@@ -190,4 +175,56 @@ pub struct ErrorResponse {
     pub name: ErrorName,
     pub status: u16,
     pub message: String,
+}
+
+/// Returns ascii header value.
+///
+/// # Errors
+///
+/// - [`ClientError::Opaque`]: The header value contains one or more non ascii characters.
+/// - [`ClientError::MissingHeader`]: The missing header.
+fn header_value(header: &HeaderMap, key: HeaderName) -> Result<&str, ClientError> {
+    match header.get(&key) {
+        Some(header_value) => header_value.to_str().map_err(ClientError::Opaque),
+        None => Err(ClientError::MissingHeader(key.as_str().to_owned())),
+    }
+}
+
+/// Validates JSON content type.
+///
+/// # Errors
+///
+/// - [`ClientError::Opaque`]: The header value contains one or more non ascii characters.
+/// - [`ClientError::MissingHeader`]: The missing header.
+/// - [`ClientError::UnsupportedContentTypeHeader`]: The content type header is not a "application/json"
+fn validate_json_response(response: &reqwest::Response) -> Result<(), ClientError> {
+    let headers = response.headers();
+    let content_type = header_value(headers, CONTENT_TYPE)?;
+    let media_type = content_type.split(";").next().unwrap_or_default().trim();
+    if !media_type.eq_ignore_ascii_case(JSON_HEADER) {
+        return Err(ClientError::UnsupportedContentTypeHeader);
+    }
+    Ok(())
+}
+
+/// Validates response using status code.
+///
+/// The function return [`reqwest::Response`] object when status code is `200(OK)` else return [`ClientError`].
+///
+/// # Errors
+///
+/// - [`ClientError::UnsupportedStatusCode`]: Unhandled status code.
+/// - [`ClientError::Validation`]: Bad request generation with message.
+/// - [`ClientError::NotFound`]: Resource not found.
+/// - [`ClientError::Unauthorized`]: Autthentication failed.
+async fn validate_response_body(
+    response: reqwest::Response,
+) -> Result<reqwest::Response, ClientError> {
+    match response.status() {
+        StatusCode::OK => Ok(response),
+        StatusCode::BAD_REQUEST | StatusCode::UNAUTHORIZED | StatusCode::NOT_FOUND => {
+            Err(response.json::<ErrorResponse>().await?.into())
+        }
+        other => Err(ClientError::UnsupportedStatusCode(other)),
+    }
 }
