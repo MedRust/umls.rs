@@ -4,7 +4,7 @@
 //!
 //! The crate provides validated request types, high-level search pagination,
 //! concept retrieval, and concept atom retrieval. Start by creating a
-//! [`config::Config`], then build a request with [`search::Request`] for search
+//! [`config::Config`], then build a request with [`dto::search::concept::Config`] for search
 //! or [`atom::Config::builder`] for atoms.
 //!
 //! Enable the `reqwest` feature for request execution. Configuration contains
@@ -16,18 +16,23 @@
 //!
 //! ```no_run
 //! # #[cfg(feature = "reqwest")]
-//! use umls_http::reqwest;
-//! use umls_client::{config::Config, search::Request};
+//! use umls_http::{reqwest, WithoutClient};
+//! use umls_client::{config::Config, search::Search, dto::{search::{concept, Input}, batch::Batch}, types};
 //!
 //! # #[cfg(feature = "reqwest")]
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! let config = Config::builder("your-api-key").build()?;
-//! let response = Request::builder("cough".parse()?)
-//!     .concept(&config)
+//! let concept = concept::Config::builder()
+//!     .input(Input::Atom("cough".parse()?))
+//!     .build()?;
+//!
+//! let batch = Batch::new(25.try_into()?, 1.try_into()?, concept);
+//!
+//! let response = Search::<WithoutClient, types::Concept, _>::new(batch)
 //!     .with_client(reqwest::Client::default())
-//!     .get()
+//!     .fetch(&config)
 //!     .await?;
-//! let concepts = response.into_content()?;
+//! let concepts = response.into_content();
 //! println!("received {} results", concepts.list().len());
 //! # Ok(())
 //! # }

@@ -20,7 +20,11 @@
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 
-use crate::{dto, types};
+use crate::{
+    dto,
+    search::core::{DEFAULT_PAGE_NUMBER, DEFAULT_PAGE_SIZE},
+    types,
+};
 use std::marker::PhantomData;
 
 /// URL validator objects.
@@ -717,14 +721,16 @@ impl<'a, V> Search<'a, V> {
     }
 }
 
-impl<'a> Search<'a, &crate::search::Request> {
+impl<'a>
+    Search<'a, &crate::dto::search::concept::Config<crate::dto::search::partial_search::NoPartial>>
+{
     /// Returns a search url.
     pub fn url(&self) -> url::Url {
         let source_vocabularies_params = self
             .value()
             .source_vocabularies()
             .iter()
-            .map(|x| x.as_ref())
+            .map(|x| x.as_str())
             .collect::<Vec<&str>>()
             .join(",");
 
@@ -732,9 +738,9 @@ impl<'a> Search<'a, &crate::search::Request> {
             .value()
             .semantic_types()
             .iter()
-            .map(|x| x.as_ref())
+            .map(|x| x.as_str())
             .collect::<Vec<&str>>()
-            .join(",");
+            .join("|");
 
         let semantic_groups_params = self
             .value()
@@ -745,15 +751,16 @@ impl<'a> Search<'a, &crate::search::Request> {
             .join(",");
 
         let version = self.config().version().to_string();
-        let term = self.value().term().as_str();
-        let input_type = self.value().input_type().as_str().to_string();
-        let include_obsolete = self.value().obsolete().is_included().to_string();
-        let include_suppressible = self.value().suppressible().is_included().to_string();
-        let return_id_type = self.value().return_id_type().as_str();
-        let search_type = self.value().search_type().as_str();
-        let partial_search = self.value().term_match().allows_partial().to_string();
-        let page_number = self.value().page().number().to_string();
-        let page_size = self.value().page().size().to_string();
+        let term = self.value().input().text().as_str();
+        let input_type = self.value().input().input_type();
+        let include_obsolete = self.value().include_obsolete().to_string();
+        let include_suppressible = self.value().include_suppressible().to_string();
+        let return_id_type = "concept";
+        let search_type = self.value().search_type();
+        let search_type = search_type.as_str();
+        let partial_search = false.to_string();
+        let page_number = DEFAULT_PAGE_NUMBER.get().to_string();
+        let page_size = DEFAULT_PAGE_SIZE.get().to_string();
 
         let mut url = self.config().base_url().clone();
         url.path_segments_mut()
@@ -764,7 +771,82 @@ impl<'a> Search<'a, &crate::search::Request> {
 
         url.query_pairs_mut()
             .append_pair("string", term)
-            .append_pair("inputType", &input_type)
+            .append_pair("inputType", input_type)
+            .append_pair("includeObsolete", &include_obsolete)
+            .append_pair("includeSuppressible", &include_suppressible)
+            .append_pair("returnIdType", return_id_type)
+            .append_pair("sabs", &source_vocabularies_params)
+            .append_pair("searchType", search_type)
+            .append_pair("semanticTypes", &semantic_types_params)
+            .append_pair("semanticGroups", &semantic_groups_params)
+            .append_pair("partialSearch", &partial_search)
+            .append_pair("pageSize", &page_size)
+            .append_pair("pageNumber", &page_number)
+            .finish();
+
+        self.config().authenticated_url(url)
+    }
+}
+
+impl<'a>
+    Search<
+        'a,
+        &dto::batch::Batch<
+            crate::dto::search::concept::Config<crate::dto::search::partial_search::NoPartial>,
+        >,
+    >
+{
+    /// Returns a search url.
+    pub fn url(&self) -> url::Url {
+        let source_vocabularies_params = self
+            .value()
+            .value()
+            .source_vocabularies()
+            .iter()
+            .map(|x| x.as_str())
+            .collect::<Vec<&str>>()
+            .join(",");
+
+        let semantic_types_params = self
+            .value()
+            .value()
+            .semantic_types()
+            .iter()
+            .map(|x| x.as_str())
+            .collect::<Vec<&str>>()
+            .join("|");
+
+        let semantic_groups_params = self
+            .value()
+            .value()
+            .semantic_groups()
+            .iter()
+            .map(|x| x.as_ref())
+            .collect::<Vec<&str>>()
+            .join(",");
+
+        let version = self.config().version().to_string();
+        let term = self.value().value().input().text().as_str();
+        let input_type = self.value().value().input().input_type();
+        let include_obsolete = self.value().value().include_obsolete().to_string();
+        let include_suppressible = self.value().value().include_suppressible().to_string();
+        let return_id_type = "concept";
+        let search_type = self.value().value().search_type();
+        let search_type = search_type.as_str();
+        let partial_search = false.to_string();
+        let page_number = self.value().number().to_string();
+        let page_size = self.value().size().to_string();
+
+        let mut url = self.config().base_url().clone();
+        url.path_segments_mut()
+            .expect("The base url should be a base.")
+            .pop_if_empty()
+            .push("search")
+            .push(&version);
+
+        url.query_pairs_mut()
+            .append_pair("string", term)
+            .append_pair("inputType", input_type)
             .append_pair("includeObsolete", &include_obsolete)
             .append_pair("includeSuppressible", &include_suppressible)
             .append_pair("returnIdType", return_id_type)
@@ -791,10 +873,6 @@ mod tests {
         core::{aui, cui, url::Definition},
         definition,
         dto::{batch::Batch, display_name::DisplayName},
-        search::{
-            self,
-            core::{InputType, ReturnIdType, SearchType},
-        },
     };
 
     #[cfg(feature = "reqwest")]
@@ -802,7 +880,7 @@ mod tests {
 
     use crate::dto::source::SourceConcept;
 
-    use super::{Atom, Info, Parent, Relation, Search, types};
+    use super::{Atom, Info, Parent, Relation, types};
 
     #[test]
     fn construct_concept_info_uri_for_cui() -> Result<(), Box<dyn std::error::Error>> {
@@ -1590,77 +1668,6 @@ mod tests {
                 uri.path(),
                 "/rest/content/current/source/SNOMEDCT_US/9468002/parents"
             );
-            assert_eq!(uri.query(), Some(query));
-        }
-
-        Ok(())
-    }
-
-    #[test]
-    fn construct_search_url() -> Result<(), Box<dyn std::error::Error>> {
-        let sets = [
-            (
-                search::Request::builder("Cough".try_into()?).build(),
-                "string=Cough&inputType=atom&includeObsolete=false&includeSuppressible=false&returnIdType=concept&sabs=&searchType=words&semanticTypes=&semanticGroups=&partialSearch=false&pageSize=25&pageNumber=1&apiKey=some_api_key",
-            ),
-            (
-                search::Request::builder("Cough".try_into()?)
-                    .obsolete(search::core::Inclusion::Include)
-                    .build(),
-                "string=Cough&inputType=atom&includeObsolete=true&includeSuppressible=false&returnIdType=concept&sabs=&searchType=words&semanticTypes=&semanticGroups=&partialSearch=false&pageSize=25&pageNumber=1&apiKey=some_api_key",
-            ),
-            (
-                search::Request::builder("Cough".try_into()?)
-                    .suppressible(search::core::Inclusion::Include)
-                    .build(),
-                "string=Cough&inputType=atom&includeObsolete=false&includeSuppressible=true&returnIdType=concept&sabs=&searchType=words&semanticTypes=&semanticGroups=&partialSearch=false&pageSize=25&pageNumber=1&apiKey=some_api_key",
-            ),
-            (
-                search::Request::builder("Cough".try_into()?)
-                    .input_type(InputType::Code)
-                    .build(),
-                "string=Cough&inputType=code&includeObsolete=false&includeSuppressible=false&returnIdType=concept&sabs=&searchType=words&semanticTypes=&semanticGroups=&partialSearch=false&pageSize=25&pageNumber=1&apiKey=some_api_key",
-            ),
-            (
-                search::Request::builder("Cough".try_into()?)
-                    .return_id_type(ReturnIdType::Aui)
-                    .build(),
-                "string=Cough&inputType=atom&includeObsolete=false&includeSuppressible=false&returnIdType=aui&sabs=&searchType=words&semanticTypes=&semanticGroups=&partialSearch=false&pageSize=25&pageNumber=1&apiKey=some_api_key",
-            ),
-            (
-                search::Request::builder("Cough".try_into()?)
-                    .try_add_source_vocabulary("SNOMEDCT_US")?
-                    .build(),
-                "string=Cough&inputType=atom&includeObsolete=false&includeSuppressible=false&returnIdType=concept&sabs=SNOMEDCT_US&searchType=words&semanticTypes=&semanticGroups=&partialSearch=false&pageSize=25&pageNumber=1&apiKey=some_api_key",
-            ),
-            (
-                search::Request::builder("Cough".try_into()?)
-                    .try_add_source_vocabulary("SNOMEDCT_US")?
-                    .try_add_source_vocabulary("MSH")?
-                    .build(),
-                "string=Cough&inputType=atom&includeObsolete=false&includeSuppressible=false&returnIdType=concept&sabs=SNOMEDCT_US%2CMSH&searchType=words&semanticTypes=&semanticGroups=&partialSearch=false&pageSize=25&pageNumber=1&apiKey=some_api_key",
-            ),
-            (
-                search::Request::builder("Cough".try_into()?)
-                    .search_type(SearchType::Exact)
-                    .build(),
-                "string=Cough&inputType=atom&includeObsolete=false&includeSuppressible=false&returnIdType=concept&sabs=&searchType=exact&semanticTypes=&semanticGroups=&partialSearch=false&pageSize=25&pageNumber=1&apiKey=some_api_key",
-            ),
-            (
-                search::Request::builder("Cough".try_into()?)
-                    .try_add_semantic_type("Findings")?
-                    .build(),
-                "string=Cough&inputType=atom&includeObsolete=false&includeSuppressible=false&returnIdType=concept&sabs=&searchType=words&semanticTypes=Findings&semanticGroups=&partialSearch=false&pageSize=25&pageNumber=1&apiKey=some_api_key",
-            ),
-        ];
-
-        for (request, query) in sets {
-            let umls_config = config::Config::builder("some_api_key").build()?;
-
-            let uri = Search::new(&umls_config, &request).url();
-            assert_eq!(uri.scheme(), "https");
-            assert_eq!(uri.host_str(), Some("uts-ws.nlm.nih.gov"));
-            assert_eq!(uri.path(), "/rest/search/current");
             assert_eq!(uri.query(), Some(query));
         }
 

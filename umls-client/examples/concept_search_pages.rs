@@ -15,14 +15,29 @@ use ratatui::{
 };
 use umls_client::{
     config::Config,
-    dto::content::Content,
-    search::{self, ConceptSnapshot, Page, Response, Search, core::Term},
-    types::Concept,
+    dto::{self, content::Content, search::partial_search::NoPartial},
+    search::{self, Page, Response, Search},
+    types::{self, Concept},
 };
-use umls_http::reqwest;
+use umls_http::{WithoutClient, reqwest};
 
-type ConceptPage<'a> =
-    Page<Content<ConceptSnapshot>, Search<'a, umls_http::reqwest::Client, Concept>>;
+type ConceptPage = Page<
+    Content<dto::search::ConceptResponse>,
+    Search<
+        umls_http::reqwest::Client,
+        Concept,
+        dto::batch::Batch<dto::search::concept::Config<dto::search::partial_search::NoPartial>>,
+    >,
+>;
+
+type ConceptResponse = Response<
+    dto::page::Page<dto::content::Content<dto::search::ConceptResponse>>,
+    Search<
+        umls_http::reqwest::Client,
+        Concept,
+        dto::batch::Batch<dto::search::concept::Config<dto::search::partial_search::NoPartial>>,
+    >,
+>;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Focus {
@@ -30,17 +45,17 @@ enum Focus {
     Results,
 }
 
-struct App<'a> {
+struct App {
     input: String,
     active_term: Option<String>,
-    page: Option<ConceptPage<'a>>,
+    page: Option<ConceptPage>,
     status: String,
     focus: Focus,
     table_state: TableState,
     should_quit: bool,
 }
 
-impl App<'_> {
+impl App {
     fn new() -> Self {
         Self {
             input: String::new(),
@@ -113,10 +128,10 @@ async fn run(terminal: &mut DefaultTerminal, config: &Config) -> Result<(), Box<
                 KeyCode::Home => select_first_result(&mut app),
                 KeyCode::End => select_last_result(&mut app),
                 KeyCode::Char('n') => {
-                    next_page(&mut app, terminal).await;
+                    next_page(&mut app, config, terminal).await;
                 }
                 KeyCode::Char('p') => {
-                    previous_page(&mut app, terminal).await;
+                    previous_page(&mut app, config, terminal).await;
                 }
                 KeyCode::Char('/') => app.focus = Focus::Search,
                 KeyCode::Char('q') => app.should_quit = true,
@@ -128,9 +143,9 @@ async fn run(terminal: &mut DefaultTerminal, config: &Config) -> Result<(), Box<
     Ok(())
 }
 
-async fn search<'a>(
-    app: &mut App<'a>,
-    config: &'a Config,
+async fn search(
+    app: &mut App,
+    config: &Config,
     client: &reqwest::Client,
     terminal: &mut DefaultTerminal,
 ) {
@@ -140,7 +155,7 @@ async fn search<'a>(
         return;
     }
 
-    let term = match Term::try_new(&raw_term) {
+    let term = match raw_term.clone().try_into() {
         Ok(term) => term,
         Err(error) => {
             app.status = format!("Invalid search term: {error}");
@@ -148,35 +163,40 @@ async fn search<'a>(
         }
     };
 
-    app.status = format!("Searching for {raw_term:?}…");
+    app.status = format!("Searching for {:?}…", term);
     let _ = terminal.draw(|frame| render(frame, app));
 
-    match search::Builder::new(term)
-        .concept(config)
+    let concept = umls_client::dto::search::concept::Config::<NoPartial>::builder()
+        .input(umls_client::dto::search::Input::Atom(term))
+        .build()
+        .unwrap();
+
+    let batch =
+        umls_client::dto::batch::Batch::new(25.try_into().unwrap(), 2.try_into().unwrap(), concept);
+
+    match search::Search::<WithoutClient, types::Concept, _>::new(batch)
         .with_client(client.clone())
-        .get()
+        .fetch(config)
         .await
     {
-        Ok(response) => match response.into_page() {
-            Ok(page) => {
-                let result_count = page.count().map_or(0, NonZeroU64::get);
-                app.active_term = Some(raw_term.to_owned());
-                app.status = if result_count == 0 {
-                    format!("No concepts found for {raw_term:?}.")
-                } else {
-                    format!("Found {result_count} concepts for {raw_term:?}.")
-                };
-                app.focus = Focus::Results;
-                app.page = Some(page);
-                select_first_result(app);
-            }
-            Err(error) => app.status = format!("Could not read search results: {error}"),
-        },
+        Ok(response) => {
+            let page = response.into_page();
+            let result_count = page.count().map_or(0, NonZeroU64::get);
+            app.active_term = Some(raw_term.to_owned());
+            app.status = if result_count == 0 {
+                format!("No concepts found for {raw_term:?}.")
+            } else {
+                format!("Found {result_count} concepts for {raw_term:?}.")
+            };
+            app.focus = Focus::Results;
+            app.page = Some(page);
+            select_first_result(app);
+        }
         Err(error) => app.status = format!("Search failed: {error}"),
     }
 }
 
-async fn next_page(app: &mut App<'_>, terminal: &mut DefaultTerminal) {
+async fn next_page(app: &mut App, config: &Config, terminal: &mut DefaultTerminal) {
     let Some(page) = app.page.as_ref() else {
         app.status = "Search before requesting another page.".into();
         return;
@@ -192,7 +212,7 @@ async fn next_page(app: &mut App<'_>, terminal: &mut DefaultTerminal) {
 
     let page = app.page.take().expect("page was checked above");
     match page.next() {
-        Ok(search) => match search.get().await {
+        Ok(search) => match search.fetch(config).await {
             Ok(response) => replace_page(app, response, "Loaded the next page."),
             Err(error) => app.status = format!("Could not load the page: {error}"),
         },
@@ -202,7 +222,7 @@ async fn next_page(app: &mut App<'_>, terminal: &mut DefaultTerminal) {
     }
 }
 
-async fn previous_page(app: &mut App<'_>, terminal: &mut DefaultTerminal) {
+async fn previous_page(app: &mut App, config: &Config, terminal: &mut DefaultTerminal) {
     let Some(page) = app.page.as_ref() else {
         app.status = "Search before requesting another page.".into();
         return;
@@ -218,7 +238,7 @@ async fn previous_page(app: &mut App<'_>, terminal: &mut DefaultTerminal) {
 
     let page = app.page.take().expect("page was checked above");
     match page.previous() {
-        Ok(search) => match search.get().await {
+        Ok(search) => match search.fetch(config).await {
             Ok(response) => replace_page(app, response, "Loaded the previous page."),
             Err(error) => {
                 app.status = format!("Could not load the page: {error}");
@@ -230,25 +250,15 @@ async fn previous_page(app: &mut App<'_>, terminal: &mut DefaultTerminal) {
     }
 }
 
-fn replace_page<'a>(
-    app: &mut App<'a>,
-    response: Response<
-        search::raw::SearchResponse,
-        Search<'a, umls_http::reqwest::Client, Concept>,
-    >,
-    success_message: &str,
-) {
-    match response.into_page() {
-        Ok(page) => {
-            app.page = Some(page);
-            select_first_result(app);
-            app.status = success_message.into();
-        }
-        Err(error) => app.status = format!("Could not read search results: {error}"),
-    }
+fn replace_page(app: &mut App, response: ConceptResponse, success_message: &str) {
+    let page = response.into_page();
+
+    app.page = Some(page);
+    select_first_result(app);
+    app.status = success_message.into();
 }
 
-fn select_next_result(app: &mut App<'_>) {
+fn select_next_result(app: &mut App) {
     let result_count = app
         .page
         .as_ref()
@@ -265,7 +275,7 @@ fn select_next_result(app: &mut App<'_>) {
     app.table_state.select(Some(next));
 }
 
-fn select_previous_result(app: &mut App<'_>) {
+fn select_previous_result(app: &mut App) {
     let result_count = app
         .page
         .as_ref()
@@ -282,7 +292,7 @@ fn select_previous_result(app: &mut App<'_>) {
     app.table_state.select(Some(previous));
 }
 
-fn select_first_result(app: &mut App<'_>) {
+fn select_first_result(app: &mut App) {
     let has_results = app
         .page
         .as_ref()
@@ -290,7 +300,7 @@ fn select_first_result(app: &mut App<'_>) {
     app.table_state.select(has_results.then_some(0));
 }
 
-fn select_last_result(app: &mut App<'_>) {
+fn select_last_result(app: &mut App) {
     let last = app
         .page
         .as_ref()
@@ -298,7 +308,7 @@ fn select_last_result(app: &mut App<'_>) {
     app.table_state.select(last);
 }
 
-fn render(frame: &mut Frame<'_>, app: &mut App<'_>) {
+fn render(frame: &mut Frame<'_>, app: &mut App) {
     let [search_area, table_area, status_area, help_area] = Layout::vertical([
         Constraint::Length(3),
         Constraint::Min(8),
@@ -323,7 +333,7 @@ fn render(frame: &mut Frame<'_>, app: &mut App<'_>) {
     );
 }
 
-fn render_search(frame: &mut Frame<'_>, app: &App<'_>, area: Rect) {
+fn render_search(frame: &mut Frame<'_>, app: &App, area: Rect) {
     let input = Paragraph::new(app.input.as_str())
         .block(Block::default().title(" Search ").borders(Borders::ALL))
         .style(if app.focus == Focus::Search {
@@ -341,7 +351,7 @@ fn render_search(frame: &mut Frame<'_>, app: &App<'_>, area: Rect) {
     }
 }
 
-fn render_results(frame: &mut Frame<'_>, app: &mut App<'_>, area: Rect) {
+fn render_results(frame: &mut Frame<'_>, app: &mut App, area: Rect) {
     let header = Row::new(["#", "CUI", "Name", "Root source", "Semantic types"])
         .style(
             Style::default()
@@ -365,9 +375,9 @@ fn render_results(frame: &mut Frame<'_>, app: &mut App<'_>, area: Rect) {
 
             Row::new([
                 Cell::from((index + 1).to_string()),
-                Cell::from(concept.cui().to_owned()),
-                Cell::from(concept.name().to_owned()),
-                Cell::from(concept.root_source().to_owned()),
+                Cell::from(concept.ui().as_str().to_owned()),
+                Cell::from(concept.name().as_str().to_owned()),
+                Cell::from(concept.root_source().as_str().to_owned()),
                 Cell::from(semantic_types),
             ])
         });
@@ -406,7 +416,7 @@ fn render_results(frame: &mut Frame<'_>, app: &mut App<'_>, area: Rect) {
     frame.render_stateful_widget(table, area, &mut app.table_state);
 }
 
-fn render_status(frame: &mut Frame<'_>, app: &App<'_>, area: Rect) {
+fn render_status(frame: &mut Frame<'_>, app: &App, area: Rect) {
     let active_term = app
         .active_term
         .as_deref()

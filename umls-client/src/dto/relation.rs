@@ -374,6 +374,9 @@ pub enum ClassType {
     AtomClusterRelation,
     /// Atom relation class type (`AtomRelation`).
     AtomRelation,
+    /// Search result class type
+    #[serde(rename = "searchResults")]
+    SearchResults,
 }
 
 impl ClassType {
@@ -383,6 +386,7 @@ impl ClassType {
             ClassType::ConceptRelation => "ConceptRelation",
             ClassType::AtomClusterRelation => "AtomClusterRelation",
             ClassType::AtomRelation => "AtomRelation",
+            ClassType::SearchResults => "searchResults",
         }
     }
 }

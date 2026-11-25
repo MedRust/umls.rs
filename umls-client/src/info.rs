@@ -20,10 +20,11 @@ use crate::dto::concept::Payload;
 #[cfg(feature = "reqwest")]
 use crate::dto::page::Page;
 
+#[cfg(feature = "reqwest")]
 use crate::types;
 
 #[cfg(feature = "reqwest")]
-use crate::{config::Config, core::cui::Cui, search::ConceptSnapshot};
+use crate::{config::Config, core::cui::Cui};
 
 #[cfg(feature = "reqwest")]
 #[derive(Debug, thiserror::Error)]
@@ -59,7 +60,7 @@ impl<T> From<http::uri::InvalidUri> for Error<T> {
 /// A typed reference to information that can identify a UMLS concept.
 ///
 /// The available `fetch` method depends on whether the value is a [`crate::core::cui::Cui`], a
-/// [`http::Uri`], or a [`crate::search::ConceptSnapshot`]. Attach a `reqwest::Client` using
+/// [`http::Uri`], or a [`crate::dto::search::ConceptResponse`]. Attach a `reqwest::Client` using
 /// [`Self::with_client`] before fetching; fetching consumes the request.
 #[derive(Debug)]
 pub struct Info<C, M, T> {
@@ -173,21 +174,6 @@ impl Info<reqwest::Client, types::Concept, url::Url> {
 }
 
 #[cfg(feature = "reqwest")]
-impl Info<reqwest::Client, types::Concept, ConceptSnapshot> {
-    /// Retrieves the full concept represented by a search-result snapshot.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`Error`] if the concept request cannot be completed or decoded.
-    pub async fn fetch(
-        self,
-        config: &Config,
-    ) -> Result<dto::concept::Payload, Error<reqwest::Error>> {
-        self.value.info.with_client(self.client).fetch(config).await
-    }
-}
-
-#[cfg(feature = "reqwest")]
 impl Info<reqwest::Client, types::Atom, Aui> {
     /// Fetch atom information for given atom.
     pub async fn fetch(self, config: &Config) -> Result<AtomResponse, Error<reqwest::Error>> {
@@ -262,7 +248,7 @@ impl Info<reqwest::Client, types::Source, url::Url> {
     }
 }
 
-impl<'de> serde::Deserialize<'de> for Info<WithoutClient, types::Source, url::Url> {
+impl<'de, M> serde::Deserialize<'de> for Info<WithoutClient, M, url::Url> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -271,7 +257,7 @@ impl<'de> serde::Deserialize<'de> for Info<WithoutClient, types::Source, url::Ur
     }
 }
 
-impl serde::Serialize for Info<WithoutClient, types::Source, url::Url> {
+impl<M> serde::Serialize for Info<WithoutClient, M, url::Url> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -328,6 +314,7 @@ impl Info<reqwest::Client, types::Source, dto::source::SourceConcept> {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::types;
 
     #[test]
     fn serializes_info_with_url() {

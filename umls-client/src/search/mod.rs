@@ -4,372 +4,99 @@ use std::{marker::PhantomData, num::NonZeroU64};
 
 use umls_http::WithoutClient;
 
-use crate::{
-    config::Config,
-    dto::display_name::{DisplayName, EmptyString},
-    info,
-    search::core::{
-        DEFAULT_PAGE_NUMBER, DEFAULT_PAGE_SIZE, Inclusion, InputType, ReturnIdType, SearchType,
-        Term, TermMatch,
-    },
-    types,
-};
-
-#[cfg(feature = "reqwest")]
-use crate::dto::content::Content;
-
-#[cfg(feature = "reqwest")]
-use crate::search::raw::{RawSearchDto, SearchResponse};
-
-/// Low-level request and response types for the UMLS search endpoint.
-pub mod raw;
+use crate::dto::batch::BatchError;
 
 /// Shared validation primitives used by public value types.
 pub mod core;
 
-/// Builder for a validated UMLS search [`Request`].
-///
-/// New builders exclude obsolete and suppressible terms, return concept
-/// identifiers, use word matching, require all terms, and request the first
-/// page with 25 results.
-pub struct Builder {
-    term: Term,
-    input_type: InputType,
-    return_id_type: ReturnIdType,
-    obsolete: Inclusion,
-    suppressible: Inclusion,
-    source_vocabularies: Vec<DisplayName>,
-    search_type: SearchType,
-    semantic_types: Vec<DisplayName>,
-    semantic_groups: Vec<DisplayName>,
-    term_match: TermMatch,
-    page_size: NonZeroU64,
-    page_number: NonZeroU64,
-}
-
-impl Builder {
-    /// Creates a builder with the default UMLS search parameters.
-    pub fn new(term: Term) -> Self {
-        Self {
-            term,
-            input_type: InputType::Atom,
-            return_id_type: ReturnIdType::Concept,
-            obsolete: Inclusion::Exclude,
-            suppressible: Inclusion::Exclude,
-            source_vocabularies: Vec::new(),
-            search_type: SearchType::Words,
-            semantic_types: Vec::new(),
-            semantic_groups: Vec::new(),
-            term_match: TermMatch::AllTerms,
-            page_size: DEFAULT_PAGE_SIZE,
-            page_number: DEFAULT_PAGE_NUMBER,
-        }
-    }
-
-    /// Replaces the search term.
-    pub fn term(mut self, term: Term) -> Self {
-        self.term = term;
-        self
-    }
-
-    /// Sets how the search term should be interpreted.
-    pub fn input_type(mut self, input_type: InputType) -> Self {
-        self.input_type = input_type;
-        self
-    }
-
-    /// Sets what type of information to return.
-    pub fn return_id_type(mut self, return_id_type: ReturnIdType) -> Self {
-        self.return_id_type = return_id_type;
-        self
-    }
-
-    /// Controls whether matches on obsolete terms are included.
-    pub fn obsolete(mut self, obsolete: Inclusion) -> Self {
-        self.obsolete = obsolete;
-        self
-    }
-
-    /// Controls whether matches on suppressible terms are included.
-    pub fn suppressible(mut self, suppressible: Inclusion) -> Self {
-        self.suppressible = suppressible;
-        self
-    }
-
-    /// Replaces the source-vocabulary filters.
-    pub fn source_vocabularies(mut self, source_vocabularies: Vec<DisplayName>) -> Self {
-        self.source_vocabularies = source_vocabularies;
-        self
-    }
-
-    /// Adds a source-vocabulary filter.
-    pub fn try_add_source_vocabulary(
-        mut self,
-        source_vocabulary: impl TryInto<DisplayName, Error = EmptyString>,
-    ) -> Result<Self, EmptyString> {
-        self.source_vocabularies.push(source_vocabulary.try_into()?);
-        Ok(self)
-    }
-
-    /// Sets the matching strategy.
-    pub fn search_type(mut self, search_type: SearchType) -> Self {
-        self.search_type = search_type;
-        self
-    }
-
-    /// Replaces the semantic-type filters.
-    pub fn semantic_types(mut self, semantic_types: Vec<DisplayName>) -> Self {
-        self.semantic_types = semantic_types;
-        self
-    }
-
-    /// Adds a semantic-type filter.
-    pub fn try_add_semantic_type(
-        mut self,
-        semantic_type: impl TryInto<DisplayName, Error = EmptyString>,
-    ) -> Result<Self, EmptyString> {
-        self.semantic_types.push(semantic_type.try_into()?);
-        Ok(self)
-    }
-
-    /// Replaces the semantic-group filters.
-    pub fn semantic_groups(mut self, semantic_groups: Vec<DisplayName>) -> Self {
-        self.semantic_groups = semantic_groups;
-        self
-    }
-
-    /// Adds a semantic-group filter.
-    pub fn try_add_semantic_group(
-        mut self,
-        semantic_group: impl TryInto<DisplayName, Error = EmptyString>,
-    ) -> Result<Self, EmptyString> {
-        self.semantic_groups.push(semantic_group.try_into()?);
-        Ok(self)
-    }
-
-    /// Sets whether all query terms are required or partial matches are
-    /// allowed.
-    pub fn term_match(mut self, term_match: TermMatch) -> Self {
-        self.term_match = term_match;
-        self
-    }
-
-    /// Sets the maximum number of results requested for a page.
-    pub fn page_size(mut self, page_size: NonZeroU64) -> Self {
-        self.page_size = page_size;
-        self
-    }
-
-    /// Sets the one-based page number to request.
-    pub fn page_number(mut self, page_number: NonZeroU64) -> Self {
-        self.page_number = page_number;
-        self
-    }
-
-    /// Builds the search request.
-    ///
-    /// Page size and number are already valid because they are represented by
-    /// [`NonZeroU64`].
-    pub fn build(self) -> Request {
-        let page = core::PageRequest::new(self.page_size, self.page_number);
-
-        Request {
-            term: self.term,
-            input_type: self.input_type,
-            return_id_type: self.return_id_type,
-            obsolete: self.obsolete,
-            suppressible: self.suppressible,
-            source_vocabularies: self.source_vocabularies,
-            search_type: self.search_type,
-            semantic_types: self.semantic_types,
-            semantic_groups: self.semantic_groups,
-            term_match: self.term_match,
-            page,
-        }
-    }
-
-    /// Return a concept search.
-    ///
-    /// The method override return id type to [ReturnIdType::Concept] before creation of [Search]
-    /// object.
-    pub fn concept<'a>(self, config: &'a Config) -> Search<'a, WithoutClient, types::Concept> {
-        let request = self.return_id_type(ReturnIdType::Concept).build();
-        Search::<WithoutClient, _>::new(config, request)
-    }
-}
-
-/// A validated set of parameters for a UMLS Metathesaurus search.
-///
-/// Construct requests with [`Request::builder`] and [`Builder::build`].
-#[derive(Debug, Clone)]
-pub struct Request {
-    term: Term,
-    input_type: InputType,
-    return_id_type: ReturnIdType,
-    obsolete: Inclusion,
-    suppressible: Inclusion,
-    source_vocabularies: Vec<DisplayName>,
-    search_type: SearchType,
-    semantic_types: Vec<DisplayName>,
-    semantic_groups: Vec<DisplayName>,
-    term_match: TermMatch,
-    page: core::PageRequest,
-}
-
-impl Request {
-    /// Creates a request builder for the supplied search term.
-    pub fn builder(term: Term) -> Builder {
-        Builder::new(term)
-    }
-
-    /// Returns the search term.
-    pub fn term(&self) -> &Term {
-        &self.term
-    }
-
-    /// Returns how the search term is interpreted.
-    pub fn input_type(&self) -> InputType {
-        self.input_type
-    }
-
-    /// Returns whether matches on obsolete terms are included.
-    pub fn obsolete(&self) -> Inclusion {
-        self.obsolete
-    }
-
-    /// Returns whether matches on suppressible terms are included.
-    pub fn suppressible(&self) -> Inclusion {
-        self.suppressible
-    }
-
-    /// Returns the source vocabularies used to restrict the search.
-    pub fn source_vocabularies(&self) -> &[DisplayName] {
-        &self.source_vocabularies
-    }
-
-    /// Returns the matching strategy used by the search.
-    pub fn search_type(&self) -> SearchType {
-        self.search_type
-    }
-
-    /// Returns the semantic types used to restrict the search.
-    pub fn semantic_types(&self) -> &[DisplayName] {
-        &self.semantic_types
-    }
-
-    /// Returns the semantic groups used to restrict the search.
-    pub fn semantic_groups(&self) -> &[DisplayName] {
-        &self.semantic_groups
-    }
-
-    /// Returns whether all query terms or partial terms may match.
-    pub fn term_match(&self) -> TermMatch {
-        self.term_match
-    }
-
-    /// Returns the request's pagination parameters.
-    pub fn page(&self) -> &core::PageRequest {
-        &self.page
-    }
-
-    #[cfg(feature = "reqwest")]
-    pub(crate) fn page_mut(&mut self) -> &mut core::PageRequest {
-        &mut self.page
-    }
-
-    /// Returns the identifier type requested for search results.
-    pub fn return_id_type(&self) -> ReturnIdType {
-        self.return_id_type
-    }
-}
+#[cfg(feature = "reqwest")]
+use crate::{
+    dto::{self, content::Content, search::partial_search::NoPartial},
+    types,
+};
 
 /// An executable UMLS search associated with a client configuration.
 ///
 /// `T` is a zero-sized marker describing the requested result type.
-pub struct Search<'a, C, T> {
+pub struct Search<C, T, V> {
     client: C,
-    config: &'a Config,
-    request: Request,
-    _value: PhantomData<T>,
+    value: V,
+    _type: PhantomData<T>,
 }
 
-impl<'a, C, T> Search<'a, C, T> {
-    fn new(config: &'a Config, request: Request) -> Search<'a, WithoutClient, T> {
-        Search {
-            client: WithoutClient,
-            config,
-            request,
-            _value: PhantomData,
-        }
-    }
-
-    #[cfg(feature = "reqwest")]
-    pub(crate) fn request_mut(&mut self) -> &mut Request {
-        &mut self.request
-    }
-
+impl<C, T, V> Search<C, T, V> {
     /// Return the reference of client.
     pub fn client(&self) -> &C {
         &self.client
     }
+
+    /// Returns value.
+    pub fn value(&self) -> &V {
+        &self.value
+    }
+
+    #[cfg(feature = "reqwest")]
+    fn value_mut(&mut self) -> &mut V {
+        &mut self.value
+    }
 }
 
-impl<'a, T> Search<'a, WithoutClient, T> {
+impl<T, V> Search<WithoutClient, T, V> {
+    /// Create new search object without client.
+    pub fn new(value: V) -> Search<WithoutClient, T, V> {
+        Search {
+            client: WithoutClient,
+            value,
+            _type: PhantomData,
+        }
+    }
+
     /// Attaches an owned HTTP client without sending a request.
     ///
     /// Execution requires the `reqwest` feature and a `reqwest::Client`.
     /// Clone an existing client to share its connection pool across requests.
-    pub fn with_client<C>(self, client: C) -> Search<'a, C, T> {
+    pub fn with_client<C>(self, client: C) -> Search<C, T, V> {
         Search {
             client,
-            config: self.config,
-            request: self.request,
-            _value: PhantomData,
+            value: self.value,
+            _type: PhantomData,
         }
     }
 }
 
 #[cfg(feature = "reqwest")]
-impl<'a> Search<'a, umls_http::reqwest::Client, types::Concept> {
+impl
+    Search<
+        umls_http::reqwest::Client,
+        types::Concept,
+        dto::batch::Batch<dto::search::concept::Config<NoPartial>>,
+    >
+{
     /// Executes a search that returns concept identifiers.
     ///
     /// The returned response can be converted into content with
     /// [`Response::into_content`] or into a navigable page with
     /// [`Response::into_page`].
-    ///
-    /// # Errors
-    ///
-    /// Returns [`SearchError`] when URL construction, transport, HTTP status
-    /// validation, or response decoding fails.
-    pub async fn get(
+    pub async fn fetch(
         self,
+        config: &crate::config::Config,
     ) -> Result<
-        Response<SearchResponse, Search<'a, umls_http::reqwest::Client, types::Concept>>,
-        SearchError<umls_http::reqwest::Error>,
+        Response<dto::page::Page<Content<dto::search::ConceptResponse>>, Self>,
+        Box<dyn std::error::Error>,
     > {
-        use umls_http::WithoutClient;
+        let url = config.search_url(self.value()).url();
 
-        let body = raw::Search::<WithoutClient>::default()
-            .with_client(self.client.clone())
-            .search(self.config, &self.request)
+        let body = self
+            .client
+            .clone()
+            .with_type::<umls_http::reqwest::Json>()
+            .get::<_, dto::search::SearchPage>(url)
             .await
-            .map_err(SearchError::Raw)?;
+            .map(Into::<dto::page::Page<Content<dto::search::RawSearch>>>::into)?
+            .try_iter_map(TryInto::<dto::search::ConceptResponse>::try_into)?;
 
         Ok(Response::new(body, self))
     }
-}
-
-#[derive(Debug, thiserror::Error)]
-#[non_exhaustive]
-/// An error produced while executing a high-level search.
-pub enum SearchError<T> {
-    /// The underlying raw search operation failed.
-    #[error(transparent)]
-    Raw(#[from] raw::Error<T>),
-
-    /// The underlying raw pagination failer.
-    #[error(transparent)]
-    Page(#[from] core::PageError),
 }
 
 /// One page of content together with pagination state.
@@ -466,164 +193,111 @@ pub struct Response<T, C> {
 impl<T, C> Response<T, C> {
     #[cfg(feature = "reqwest")]
     /// Creates a response wrapper from its body and retained client state.
-    pub(crate) fn new(body: T, client: C) -> Self {
+    pub fn new(body: T, client: C) -> Self {
         Self { body, client }
     }
 }
 
 #[cfg(feature = "reqwest")]
-fn convert_raw_search_to_concept_snapshot(
-    list: Vec<RawSearchDto>,
-) -> Result<Vec<ConceptSnapshot>, ConceptSnapshotError> {
-    list.into_iter().map(TryFrom::try_from).collect()
-}
+impl
+    Page<
+        Content<dto::search::ConceptResponse>,
+        Search<
+            umls_http::reqwest::Client,
+            types::Concept,
+            dto::batch::Batch<dto::search::concept::Config<dto::search::partial_search::NoPartial>>,
+        >,
+    >
+{
+    /**
+    Consumes this page and returns a search request for the next page.
 
-#[cfg(feature = "reqwest")]
-impl<'a> Response<SearchResponse, Search<'a, umls_http::reqwest::Client, types::Concept>> {
-    /// Converts raw search records into concept snapshots.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`ConceptSnapshotError`] if any raw result lacks required
-    /// concept fields or contains an invalid CUI.
-    pub fn into_content(self) -> Result<Content<ConceptSnapshot>, ConceptSnapshotError> {
-        let objects = convert_raw_search_to_concept_snapshot(self.body.result.results)?;
-        Ok(Content::new(objects))
+    Preserves the attached HTTP client and search filters without making a network
+    request.
+
+    # Example
+
+    ```no_run
+    use umls_http::{reqwest, WithoutClient};
+    use umls_client::{config::Config, search::Search, dto::{search::{concept, Input}, batch::Batch}, types};
+    # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    let config = Config::builder(std::env::var("UMLS_API_KEY")?).build()?;
+    let concept = concept::Config::builder()
+        .input(Input::Atom("cough".parse()?))
+        .build()?;
+
+    let batch = Batch::new(25.try_into()?, 1.try_into()?, concept);
+
+    let page = Search::<WithoutClient, types::Concept, _>::new(batch)
+        .with_client(reqwest::Client::default())
+        .fetch(&config).await?.into_page();
+
+    if page.has_next() {
+        let next_request = page.next()?;
+        let next_page = next_request.fetch(&config).await?.into_page();
     }
+    # Ok(())
+    # }
+    ```
 
-    /// Converts the response into a navigable page of concept snapshots.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`PageError::Custom`] if any result cannot be converted into a
-    /// [`ConceptSnapshot`].
-    pub fn into_page(
-        self,
-    ) -> PageResult<
-        Page<Content<ConceptSnapshot>, Search<'a, umls_http::reqwest::Client, types::Concept>>,
-        ConceptSnapshotError,
-    > {
-        let count = self.body.result.rec_count.and_then(NonZeroU64::new);
-        let size = self.body.page_size;
-        let number = self.body.page_number;
+    # Errors
 
-        let objects = convert_raw_search_to_concept_snapshot(self.body.result.results)
-            .map_err(PageError::Custom)?;
-        let content = Content::new(objects);
-
-        Ok(Page::new(content, size, number, count, self.client))
-    }
-}
-
-#[cfg(feature = "reqwest")]
-impl<'a> Page<Content<ConceptSnapshot>, Search<'a, umls_http::reqwest::Client, types::Concept>> {
-    /// Consumes this page and returns a search request for the next page.
-    ///
-    /// Preserves the attached HTTP client and search filters without making a network
-    /// request. Call `get().await` on the returned request to fetch its results.
-    ///
-    /// # Example
-    ///
-    /// ```no_run
-    /// use umls_http::reqwest;
-    /// use umls_client::{config::Config, search::Request};
-    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-    /// let config = Config::builder(std::env::var("UMLS_API_KEY")?).build()?;
-    /// let page = Request::builder("cough".parse()?)
-    ///     .concept(&config)
-    ///     .with_client(reqwest::Client::default())
-    ///     .get().await?.into_page()?;
-    /// if page.has_next() {
-    ///     let next_request = page.next()?;
-    ///     let next_page = next_request.get().await?.into_page()?;
-    /// }
-    /// # Ok(())
-    /// # }
-    /// ```
-    ///
-    /// # Errors
-    ///
-    /// Returns [`PageError::NoNextPage`] at the final page. A page-number
-    /// adjustment failure is wrapped in [`PageError::Custom`] as [`SearchError::Page`].
-    /// HTTP and response-decoding errors are returned by the subsequent `get()` call.
+    Returns [`PageError::NoNextPage`] at the final page.
+    */
     pub fn next(
         mut self,
     ) -> Result<
-        Search<'a, umls_http::reqwest::Client, types::Concept>,
-        PageError<SearchError<umls_http::reqwest::Error>>,
+        Search<
+            umls_http::reqwest::Client,
+            types::Concept,
+            dto::batch::Batch<dto::search::concept::Config<dto::search::partial_search::NoPartial>>,
+        >,
+        PageError,
     > {
         if !self.has_next() {
             return Err(PageError::NoNextPage);
         }
 
-        self.client_mut()
-            .request_mut()
-            .page_mut()
-            .checked_next()
-            .map_err(SearchError::Page)
-            .map_err(PageError::Custom)?;
+        self.client_mut().value_mut().checked_next()?;
 
         Ok(self.client)
     }
 
-    /// Consumes this page and returns a search request for the previous page.
-    ///
-    /// Preserves the attached HTTP client and search filters without making a network
-    /// request. Call `get().await` on the returned request to fetch its results.
-    ///
-    /// # Example
-    ///
-    /// ```no_run
-    /// use umls_http::reqwest;
-    /// use umls_client::{config::Config, search::Request};
-    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-    /// let config = Config::builder(std::env::var("UMLS_API_KEY")?).build()?;
-    /// let page = Request::builder("cough".parse()?)
-    ///     .concept(&config)
-    ///     .with_client(reqwest::Client::default())
-    ///     .get().await?.into_page()?;
-    /// if page.has_next() {
-    ///     let page = page.next()?.get().await?.into_page()?;
-    ///     let previous_request = page.previous()?;
-    ///     let previous_page = previous_request.get().await?.into_page()?;
-    /// }
-    /// # Ok(())
-    /// # }
-    /// ```
-    ///
-    /// # Errors
-    ///
-    /// Returns [`PageError::NoPreviousPage`] at the first page. A page-number
-    /// adjustment failure is wrapped in [`PageError::Custom`] as [`SearchError::Page`].
-    /// HTTP and response-decoding errors are returned by the subsequent `get()` call.
+    /**
+     * Consumes this page and returns a search request for the previous page.
+     *
+     * Preserves the attached HTTP client and search filters without making a network
+     * request.
+     *
+     * # Errors
+     * Returns [`PageError::NoPreviousPage`] at the first page.
+     */
     pub fn previous(
         mut self,
     ) -> PageResult<
-        Search<'a, umls_http::reqwest::Client, types::Concept>,
-        SearchError<umls_http::reqwest::Error>,
+        Search<
+            umls_http::reqwest::Client,
+            types::Concept,
+            dto::batch::Batch<dto::search::concept::Config<dto::search::partial_search::NoPartial>>,
+        >,
     > {
         if !self.has_previous() {
             return Err(PageError::NoPreviousPage);
         }
 
-        self.client_mut()
-            .request_mut()
-            .page_mut()
-            .checked_previous()
-            .map_err(SearchError::Page)
-            .map_err(PageError::Custom)?;
+        self.client_mut().value_mut().checked_previous()?;
 
         Ok(self.client)
     }
 }
 
 /// A page result object.
-pub type PageResult<T, E> = Result<T, PageError<E>>;
+pub type PageResult<T> = Result<T, PageError>;
 
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 /// An error produced while converting or navigating a search page.
-pub enum PageError<E: std::error::Error> {
+pub enum PageError {
     /// The current page is already the first page.
     #[error("Already at the first page")]
     NoPreviousPage,
@@ -632,354 +306,13 @@ pub enum PageError<E: std::error::Error> {
     #[error("Already at the last page")]
     NoNextPage,
 
-    /// Conversion or client operation `E` failed.
-    #[error("Custom error: {0}")]
-    Custom(E),
+    /// Batch error.
+    #[error("Batch Error: {0}")]
+    Batch(#[source] BatchError),
 }
 
-/// A compact concept representation returned by a search.
-///
-/// # Example
-///
-/// ```no_run
-/// # #[cfg(feature = "reqwest")]
-/// use umls_http::reqwest;
-/// use umls_client::{info::Info, config::Config, search::ConceptSnapshot};
-/// # #[cfg(feature = "reqwest")]
-/// async fn fetch_concept(
-///     snapshot: ConceptSnapshot,
-///     config: &Config,
-///     client: reqwest::Client,
-/// ) -> Result<(), Box<dyn std::error::Error>> {
-///     let concept = Info::new(snapshot).with_client(client).fetch(config).await?;
-///     println!("{}", concept.name);
-///     Ok(())
-/// }
-/// ```
-pub struct ConceptSnapshot {
-    cui: crate::core::cui::Cui,
-    root_source: DisplayName,
-    pub(crate) info: info::Info<umls_http::WithoutClient, types::Concept, url::Url>,
-    name: DisplayName,
-    semantic_types: Vec<DisplayName>,
-}
-
-impl ConceptSnapshot {
-    #[cfg(feature = "reqwest")]
-    /// Creates a concept snapshot from validated search-result fields.
-    pub(crate) fn new(
-        cui: crate::core::cui::Cui,
-        root_source: DisplayName,
-        info: info::Info<umls_http::WithoutClient, types::Concept, url::Url>,
-        name: DisplayName,
-        semantic_types: Vec<DisplayName>,
-    ) -> Self {
-        Self {
-            cui,
-            root_source,
-            info,
-            name,
-            semantic_types,
-        }
-    }
-
-    /// Returns the concept's validated CUI as a string.
-    pub fn cui(&self) -> &str {
-        self.cui.as_ref()
-    }
-
-    /// Returns the source vocabulary that supplied the result.
-    pub fn root_source(&self) -> &str {
-        self.root_source.as_ref()
-    }
-
-    /// Returns the resource reference used to retrieve the full concept.
-    pub fn info(&self) -> &info::Info<umls_http::WithoutClient, types::Concept, url::Url> {
-        &self.info
-    }
-
-    /// Returns the semantic types assigned to this search result.
-    pub fn semantic_types(&self) -> &[DisplayName] {
-        &self.semantic_types
-    }
-
-    /// Returns the human-readable concept name.
-    pub fn name(&self) -> &str {
-        self.name.as_ref()
-    }
-}
-
-impl std::fmt::Display for ConceptSnapshot {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}({})", self.name(), self.cui())
-    }
-}
-
-#[cfg(feature = "reqwest")]
-impl TryFrom<RawSearchDto> for ConceptSnapshot {
-    type Error = ConceptSnapshotError;
-
-    fn try_from(value: RawSearchDto) -> Result<Self, Self::Error> {
-        let cui: crate::core::cui::Cui = value
-            .ui
-            .as_str()
-            .parse()
-            .map_err(ConceptSnapshotError::Cui)?;
-        let root_source = value
-            .root_source
-            .ok_or(ConceptSnapshotError::MissingRootSource)?;
-        let semantic_types = value
-            .semantic_types
-            .ok_or(ConceptSnapshotError::MissingSemanticTypes)?;
-        let info = info::Info::new(value.uri);
-        let name = value.name;
-
-        Ok(ConceptSnapshot::new(
-            cui,
-            root_source,
-            info,
-            name,
-            semantic_types,
-        ))
-    }
-}
-
-#[derive(Debug, thiserror::Error)]
-/// An error produced while converting a raw search record into a concept snapshot.
-pub enum ConceptSnapshotError {
-    /// The result contained an invalid concept identifier.
-    #[error("CUI format error: {0}")]
-    Cui(crate::core::cui::Error),
-
-    /// The result omitted its root source.
-    #[error("Missing root source")]
-    MissingRootSource,
-
-    /// The result omitted its semantic types.
-    #[error("Missing semantic types")]
-    MissingSemanticTypes,
-}
-
-#[cfg(test)]
-mod tests {
-
-    use crate::search::core::ReturnIdType;
-
-    use super::*;
-
-    #[test]
-    fn successful_to_str_input_type_conversion() {
-        fn assert_input_type(input_type: InputType, value: &str) {
-            assert_eq!(input_type.as_str(), value);
-        }
-
-        assert_input_type(InputType::Atom, "atom");
-        assert_input_type(InputType::Code, "code");
-        assert_input_type(InputType::SourceConcept, "sourceConcept");
-        assert_input_type(InputType::SourceDescriptor, "sourceDescriptor");
-        assert_input_type(InputType::SourceUi, "sourceUi");
-        assert_input_type(InputType::Tty, "tty");
-    }
-
-    #[test]
-    fn successful_as_ref_input_type_conversion() {
-        fn assert_input_type(input_type: InputType, value: &str) {
-            assert_eq!(input_type.as_ref(), value);
-        }
-
-        assert_input_type(InputType::Atom, "atom");
-        assert_input_type(InputType::Code, "code");
-        assert_input_type(InputType::SourceConcept, "sourceConcept");
-        assert_input_type(InputType::SourceDescriptor, "sourceDescriptor");
-        assert_input_type(InputType::SourceUi, "sourceUi");
-        assert_input_type(InputType::Tty, "tty");
-    }
-
-    #[test]
-    fn successful_to_str_return_id_type_conversion() {
-        fn assert_return_id_type(return_id_type: ReturnIdType, value: &str) {
-            assert_eq!(return_id_type.as_str(), value);
-        }
-
-        assert_return_id_type(ReturnIdType::Concept, "concept");
-        assert_return_id_type(ReturnIdType::Aui, "aui");
-        assert_return_id_type(ReturnIdType::Code, "code");
-        assert_return_id_type(ReturnIdType::SourceConcept, "sourceConcept");
-        assert_return_id_type(ReturnIdType::SourceDescriptor, "sourceDescriptor");
-        assert_return_id_type(ReturnIdType::SourceUi, "sourceUi");
-    }
-
-    #[test]
-    fn successful_as_ref_return_id_type_conversion() {
-        fn assert_return_id_type(return_id_type: ReturnIdType, value: &str) {
-            assert_eq!(return_id_type.as_ref(), value);
-        }
-
-        assert_return_id_type(ReturnIdType::Concept, "concept");
-        assert_return_id_type(ReturnIdType::Aui, "aui");
-        assert_return_id_type(ReturnIdType::Code, "code");
-        assert_return_id_type(ReturnIdType::SourceConcept, "sourceConcept");
-        assert_return_id_type(ReturnIdType::SourceDescriptor, "sourceDescriptor");
-        assert_return_id_type(ReturnIdType::SourceUi, "sourceUi");
-    }
-
-    #[test]
-    fn successful_to_str_search_type_conversion() {
-        fn assert_search_type(search_type: SearchType, value: &str) {
-            assert_eq!(search_type.as_str(), value);
-        }
-
-        assert_search_type(SearchType::Exact, "exact");
-        assert_search_type(SearchType::Words, "words");
-        assert_search_type(SearchType::LeftTruncation, "leftTruncation");
-        assert_search_type(SearchType::RightTruncation, "rightTruncation");
-        assert_search_type(SearchType::NormalizedString, "normalizedString");
-        assert_search_type(SearchType::NormalizedWords, "normalizedWords");
-    }
-
-    #[test]
-    fn successful_as_ref_search_type_conversion() {
-        fn assert_search_type(search_type: SearchType, value: &str) {
-            assert_eq!(search_type.as_ref(), value);
-        }
-
-        assert_search_type(SearchType::Exact, "exact");
-        assert_search_type(SearchType::Words, "words");
-        assert_search_type(SearchType::LeftTruncation, "leftTruncation");
-        assert_search_type(SearchType::RightTruncation, "rightTruncation");
-        assert_search_type(SearchType::NormalizedString, "normalizedString");
-        assert_search_type(SearchType::NormalizedWords, "normalizedWords");
-    }
-
-    #[test]
-    fn create_trimmed_term() -> Result<(), Box<dyn std::error::Error>> {
-        let values = vec![" term", "term   ", "term", "   term   "];
-
-        for value in values {
-            let term = Term::try_new(value)?;
-            assert_eq!(term.as_str(), "term");
-        }
-
-        Ok(())
-    }
-
-    #[test]
-    fn reject_empty_term() {
-        assert!(Term::try_new("").is_err());
-    }
-
-    #[test]
-    fn rejects_whitespace_only_term() {
-        assert!(Term::try_new(" \t\n ").is_err());
-    }
-
-    #[test]
-    fn parses_term_from_string_slice() {
-        let term: Term = "  coughing  ".parse().unwrap();
-
-        assert_eq!(term.as_str(), "coughing");
-    }
-
-    #[test]
-    fn formats_term_for_display() {
-        let term = Term::try_new("coughing").unwrap();
-
-        assert_eq!(term.to_string(), "coughing");
-    }
-
-    #[test]
-    fn creates_display_name() {
-        let name = DisplayName::try_new("Diabetes mellitus").unwrap();
-
-        assert_eq!(name.as_str(), "Diabetes mellitus");
-    }
-
-    #[test]
-    fn trims_surrounding_whitespace() {
-        for value in [
-            "Diabetes mellitus ",
-            " Diabetes mellitus",
-            "  Diabetes mellitus  ",
-            "\tDiabetes mellitus\n",
-        ] {
-            let name = DisplayName::try_new(value).unwrap();
-
-            assert_eq!(name.as_str(), "Diabetes mellitus");
-        }
-    }
-
-    #[test]
-    fn rejects_empty_string() {
-        assert!(DisplayName::try_new("").is_err());
-    }
-
-    #[test]
-    fn rejects_whitespace_only_string() {
-        for value in [" ", "   ", "\t", "\n", " \t\n "] {
-            assert!(DisplayName::try_new(value).is_err());
-        }
-    }
-
-    #[test]
-    fn parses_from_string_slice() {
-        let name: DisplayName = "  Sign or Symptom  ".parse().unwrap();
-
-        assert_eq!(name.as_str(), "Sign or Symptom");
-    }
-
-    #[test]
-    fn tries_from_owned_string() {
-        let name = DisplayName::try_from("  Disorders  ".to_owned()).unwrap();
-
-        assert_eq!(name.as_str(), "Disorders");
-    }
-
-    #[test]
-    fn tries_from_borrowed_string() {
-        let name = DisplayName::try_from("  SNOMEDCT_US  ").unwrap();
-
-        assert_eq!(name.as_str(), "SNOMEDCT_US");
-    }
-
-    #[test]
-    fn exposes_value_through_as_ref() {
-        let name = DisplayName::try_new("Finding").unwrap();
-
-        assert_eq!(name.as_ref(), "Finding");
-    }
-
-    #[test]
-    fn formats_value_for_display() {
-        let name = DisplayName::try_new("Finding").unwrap();
-
-        assert_eq!(name.to_string(), "Finding");
-    }
-
-    #[test]
-    fn returns_underlying_string() {
-        let name = DisplayName::try_new("Finding").unwrap();
-
-        assert_eq!(name.into_inner(), "Finding");
-    }
-
-    #[test]
-    fn creates_page_with_size_and_number() {
-        let page =
-            core::PageRequest::new(NonZeroU64::new(25).unwrap(), NonZeroU64::new(1).unwrap());
-
-        assert_eq!(page.size().get(), 25);
-        assert_eq!(page.number().get(), 1);
-    }
-
-    #[test]
-    fn builds_request_with_valid_page() -> Result<(), Box<dyn std::error::Error>> {
-        let term = Term::try_new("cough")?;
-
-        let request = Request::builder(term).build();
-
-        assert_eq!(request.page().size(), DEFAULT_PAGE_SIZE);
-        assert_eq!(request.page().number(), DEFAULT_PAGE_NUMBER);
-
-        Ok(())
+impl From<BatchError> for PageError {
+    fn from(value: BatchError) -> Self {
+        PageError::Batch(value)
     }
 }

@@ -1,3 +1,4 @@
+#![allow(missing_docs)]
 //! Provides clients for JSON requests and streamed HTTP responses.
 //!
 //! The `reqwest` feature enables [`Client`].

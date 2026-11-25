@@ -26,3 +26,5 @@ pub mod content;
 
 /// Implement non empty utf8 string implementation.
 pub mod display_name;
+
+pub mod search;

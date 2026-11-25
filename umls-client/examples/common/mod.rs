@@ -42,13 +42,13 @@ pub fn config_from_args(args: Args) -> Result<Config, Box<dyn std::error::Error>
 pub mod term {
 
     use clap::Parser;
-    use umls_client::search::core::Term;
+    use umls_client::dto::display_name::DisplayName;
 
     /// A command line argument to take search term.
     #[derive(Debug, Parser)]
     pub struct Args {
         #[arg(long)]
         /// The search term.
-        pub term: Term,
+        pub term: DisplayName,
     }
 }
