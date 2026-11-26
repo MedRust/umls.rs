@@ -1,8 +1,4 @@
-use crate::{
-    atom, definition,
-    dto::{display_name::get_trimmed_non_empty_string, page},
-    relation, types,
-};
+use crate::{atom, definition, dto::display_name::get_trimmed_non_empty_string, relation, types};
 use serde::Deserialize;
 use url::Url;
 
@@ -82,8 +78,8 @@ pub(crate) struct SerializableConcept {
     name: String,
 }
 
-impl From<page::Page<SerializableConcept>> for Payload {
-    fn from(value: page::Page<SerializableConcept>) -> Self {
+impl From<umls_util::Page<SerializableConcept>> for Payload {
+    fn from(value: umls_util::Page<SerializableConcept>) -> Self {
         let value = value.into_content();
         let definitions = match value.definitions {
             OptionalResource::Available(url) => Some(definition::Definition::new(url)),

@@ -1,10 +1,10 @@
 use std::num::NonZeroU64;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::dto::content::Content;
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 /// A decoded page returned by the UMLS concept-atoms endpoint.
 pub struct Page<T> {
     #[serde(rename = "pageSize")]
@@ -12,14 +12,19 @@ pub struct Page<T> {
     #[serde(rename = "pageNumber")]
     number: NonZeroU64,
     #[serde(rename = "pageCount")]
-    count: NonZeroU64,
+    count: Option<NonZeroU64>,
     #[serde(rename = "result")]
     content: T,
 }
 
 impl<T> Page<T> {
     /// Create new [`Page`] object.
-    pub fn new(size: NonZeroU64, number: NonZeroU64, count: NonZeroU64, content: T) -> Self {
+    pub fn new(
+        size: NonZeroU64,
+        number: NonZeroU64,
+        count: Option<NonZeroU64>,
+        content: T,
+    ) -> Self {
         Self {
             size,
             number,
@@ -36,11 +41,6 @@ impl<T> Page<T> {
     /// Returns the one-based number of this page.
     pub fn number(&self) -> std::num::NonZero<u64> {
         self.number
-    }
-
-    /// Returns the page count reported by the UMLS API.
-    pub fn count(&self) -> std::num::NonZero<u64> {
-        self.count
     }
 
     /// Returns this page's decoded content.
@@ -83,5 +83,17 @@ impl<T> Page<Content<T>> {
             count: self.count,
             content: Content::new(result),
         })
+    }
+
+    /// Returns page count.
+    pub fn count(&self) -> Option<NonZeroU64> {
+        self.count
+    }
+}
+
+impl<T> Page<Vec<T>> {
+    /// Returns page count.
+    pub fn count(&self) -> Option<NonZeroU64> {
+        self.count
     }
 }

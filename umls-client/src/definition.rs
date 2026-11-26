@@ -1,4 +1,6 @@
 use umls_http::WithoutClient;
+#[cfg(feature = "reqwest")]
+use umls_util::{Content, Page};
 
 #[cfg(feature = "reqwest")]
 use crate::dto::definition as dto;
@@ -20,10 +22,7 @@ use crate::{
 use crate::config;
 
 #[cfg(feature = "reqwest")]
-use crate::{
-    dto::{batch::Batch, content::Content, page::Page},
-    search::Response,
-};
+use crate::{dto::batch::Batch, search::Response};
 
 /// Represents definition error.
 #[derive(Debug, thiserror::Error)]
