@@ -202,7 +202,7 @@ async fn fetch_source_asserted_concepts_using_batch_forward_pagination()
 
     assert_eq!(page.size().get(), 1);
     assert_eq!(page.number().get(), 1);
-    assert_eq!(page.count().map(|x| x.get()), Some(2));
+    assert_eq!(page.count().get(), 2);
 
     let content = page.content();
     assert!(!content.list().is_empty());
@@ -233,7 +233,7 @@ async fn fetch_source_asserted_concepts_using_batch_forward_pagination()
 
     assert_eq!(page.size().get(), 1);
     assert_eq!(page.number().get(), 2);
-    assert_eq!(page.count().map(|x| x.get()), Some(2));
+    assert_eq!(page.count().get(), 2);
 
     let content = page.content();
     assert!(!content.list().is_empty());
@@ -315,7 +315,7 @@ async fn fetch_source_asserted_concepts_using_batch_backward_pagination()
 
     assert_eq!(page.size().get(), 1);
     assert_eq!(page.number().get(), 2);
-    assert_eq!(page.count().map(|x| x.get()), Some(2));
+    assert_eq!(page.count().get(), 2);
 
     let content = page.content();
     assert!(!content.list().is_empty());
@@ -346,7 +346,7 @@ async fn fetch_source_asserted_concepts_using_batch_backward_pagination()
 
     assert_eq!(page.size().get(), 1);
     assert_eq!(page.number().get(), 1);
-    assert_eq!(page.count().map(|x| x.get()), Some(2));
+    assert_eq!(page.count().get(), 2);
 
     let content = page.content();
     assert!(!content.list().is_empty());

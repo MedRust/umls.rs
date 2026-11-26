@@ -533,13 +533,13 @@ impl<T, C> Response<Page<Content<T>>, C> {
 
     /// Converts the response into a navigable page retaining request state.
     pub fn into_page(self) -> super::search::Page<Content<T>, C> {
-        let count = self.body.count().saturating_mul(self.body.size());
+        let count = self.body.count();
         let size = self.body.size();
         let number = self.body.number();
 
         let content = self.body.into_content();
 
-        super::search::Page::new(content, size, number, Some(count), self.client)
+        super::search::Page::new(content, size, number, count, self.client)
     }
 }
 

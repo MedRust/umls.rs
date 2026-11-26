@@ -16,7 +16,7 @@ use umls_client::{
     parent::Parent,
     relation, search, types,
 };
-use umls_http::reqwest::Client;
+use umls_http::{WithoutClient, reqwest::Client};
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -134,38 +134,45 @@ impl UmlsServer {
         let Ok(term) = args.query.parse() else {
             return failure("query must not be empty");
         };
-        let (page, size) = match pagination(args.page, args.page_size) {
+        let (number, size) = match pagination(args.page, args.page_size) {
             Ok(value) => value,
             Err(message) => return failure(message),
         };
-        let response = search::Request::builder(term)
-            .page_number(page)
-            .page_size(size)
-            .concept(&self.config)
+
+        let Ok(config) = umls_client::dto::search::concept::Config::<
+            umls_client::dto::search::partial_search::NoPartial,
+        >::builder()
+        .input(umls_client::dto::search::Input::Atom(term))
+        .build() else {
+            return failure("Missing concept search input.");
+        };
+
+        let batch = umls_client::dto::batch::Batch::new(size, number, config);
+
+        let response = search::Search::<WithoutClient, umls_client::types::Concept, _>::new(batch)
             .with_client(self.client.clone())
-            .get()
+            .fetch(&self.config)
             .await;
+
         let Ok(response) = response else {
             return failure(
                 "UMLS search failed; check credentials, service availability, and release configuration",
             );
         };
-        let Ok(page) = response.into_page() else {
-            return failure("UMLS returned invalid concept search results");
-        };
+        let page = response.into_page();
         let results: Vec<_> = page
             .content()
             .list()
             .iter()
             .map(|item| {
                 json!({
-                    "cui": item.cui(), "name": item.name(), "root_source": item.root_source(),
+                    "cui": item.ui(), "name": item.name(), "root_source": item.root_source(),
                 })
             })
             .collect();
         success(
             &json!({"results": results, "page": page.number().get(), "page_size": page.size().get(),
-            "total_pages": page.total_pages().map(NonZeroU64::get), "has_next": page.has_next(),
+            "page_count": page.count().get(), "has_next": page.has_next(),
             "version": self.config.version().as_str()}),
         )
     }
@@ -268,7 +275,7 @@ impl UmlsServer {
         })).collect();
         success(
             &json!({"results": results, "page": page.number().get(), "page_size": page.size().get(),
-            "total_pages": page.total_pages().map(NonZeroU64::get), "has_next": page.has_next(),
+            "page_count": page.count(), "has_next": page.has_next(),
             "version": self.config.version().as_str()}),
         )
     }
@@ -578,6 +585,7 @@ mod tests {
                     .query_param("pageNumber", "2")
                     .query_param("pageSize", "1");
                 then.status(200)
+                    .header("CONTENT-TYPE", "application/json")
                     .json_body(json!({"pageNumber": 2, "pageSize": 1,
                 "result": {"classType": "searchResults", "recCount": 3, "results": [{"ui": "C0010200", "name": "Cough",
                 "rootSource": "SNOMEDCT_US", "semanticTypes": ["Sign or Symptom"], "uri": "https://example.com/concept"}]}}));
@@ -593,7 +601,7 @@ mod tests {
         let value = body(result);
         assert_eq!(value["results"][0]["cui"], "C0010200");
         assert_eq!(value["page"], 2);
-        assert_eq!(value["total_pages"], 3);
+        assert_eq!(value["page_count"], 3);
         assert_eq!(value["has_next"], true);
         mock.assert_async().await;
     }
@@ -667,7 +675,7 @@ mod tests {
             .await;
         let value = body(result);
         assert_eq!(value["results"][0]["root_source"], "MSH");
-        assert_eq!(value["total_pages"], 2);
+        assert_eq!(value["page_count"], 2);
         assert_eq!(value["has_next"], true);
         mock.assert_async().await;
     }

@@ -246,7 +246,7 @@ fn render(frame: &mut Frame<'_>, app: &mut App) {
                 " {} — page {} of {} — previous: {} / next: {} ",
                 app.active_cui.as_ref().expect("loaded page has a CUI"),
                 page.number(),
-                page.total_pages().map_or(0, |n| n.get()),
+                page.count().get(),
                 if page.has_previous() { "p" } else { "—" },
                 if page.has_next() { "n" } else { "—" }
             )

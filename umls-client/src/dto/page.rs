@@ -18,6 +18,16 @@ pub struct Page<T> {
 }
 
 impl<T> Page<T> {
+    /// Create new [`Page`] object.
+    pub fn new(size: NonZeroU64, number: NonZeroU64, count: NonZeroU64, content: T) -> Self {
+        Self {
+            size,
+            number,
+            count,
+            content,
+        }
+    }
+
     /// Returns the maximum number of atoms requested or returned per page.
     pub fn size(&self) -> std::num::NonZero<u64> {
         self.size

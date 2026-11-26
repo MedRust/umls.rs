@@ -13,21 +13,32 @@
 mod common;
 
 use clap::Parser;
-use umls_client::search;
+use umls_client::{search, types};
+use umls_http::WithoutClient;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    _ = env_logger::builder().try_init();
     let args = common::Args::parse();
     let config = common::config_from_args(args)?;
 
     let term = "Cough".parse()?;
 
-    let content = search::Builder::new(term)
-        .concept(&config)
-        .with_client(Default::default())
-        .get()
+    let client = umls_http::reqwest::Client::default();
+
+    let concept = umls_client::dto::search::concept::Config::<
+        umls_client::dto::search::partial_search::NoPartial,
+    >::builder()
+    .input(umls_client::dto::search::Input::Atom(term))
+    .build()?;
+
+    let batch = umls_client::dto::batch::Batch::new(25.try_into()?, 1.try_into()?, concept);
+
+    let content = search::Search::<WithoutClient, types::Concept, _>::new(batch)
+        .with_client(client)
+        .fetch(&config)
         .await?
-        .into_content()?;
+        .into_content();
 
     println!("First 25 concept search result:");
     for index in 0..content.list().len() {
@@ -35,7 +46,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .list()
             .get(index)
             .expect("Concept should be present at index");
-        println!("{:02}: {}", index + 1, concept);
+        println!("{:02}: {}", index + 1, concept.name());
     }
 
     Ok(())
