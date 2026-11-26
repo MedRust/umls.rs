@@ -9,10 +9,11 @@ reqwest = { version = "0.13.1", optional = true, features = ["json", "stream"] }
 bytes = "1.12.1"
 futures-core = "0.3.34"
 futures-util = "0.3.34"
-serde = "1.0.229"
+serde = { version = "1.0.229", features = ["derive"] }
 thiserror = "2.0.20"
 http = "1.5.0"
 tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread"] }
+mime = "0.3.18"
 
 [lints]
 workspace = true
@@ -22,4 +23,5 @@ workspace = true
 reqwest = ["dep:reqwest", "dep:serde_json"]
 
 [dev-dependencies]
+env_logger = "0.11.12"
 httpmock = "0.8.3"
