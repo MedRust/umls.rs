@@ -4,7 +4,7 @@ use std::{marker::PhantomData, num::NonZeroU64};
 
 use umls_http::WithoutClient;
 #[cfg(feature = "reqwest")]
-use umls_util::Content;
+use umls_util::{Content, SearchResults};
 
 use crate::dto::batch::BatchError;
 
@@ -13,7 +13,10 @@ pub mod core;
 
 #[cfg(feature = "reqwest")]
 use crate::{
-    dto::{self, search::partial_search::NoPartial},
+    dto::{
+        self,
+        search::{ConceptResponse, RawSearch, partial_search::NoPartial},
+    },
     types,
 };
 
@@ -83,7 +86,7 @@ impl
         self,
         config: &crate::config::Config,
     ) -> Result<
-        Response<umls_util::Page<Content<dto::search::ConceptResponse>>, Self>,
+        Response<umls_util::Page<umls_util::SearchResults<dto::search::ConceptResponse>>, Self>,
         Box<dyn std::error::Error>,
     > {
         let url = config.search_url(self.value()).url();
@@ -92,10 +95,19 @@ impl
             .client
             .clone()
             .with_type::<umls_http::reqwest::Json>()
-            .get::<_, dto::search::SearchPage>(url)
-            .await
-            .map(Into::<umls_util::Page<Content<dto::search::RawSearch>>>::into)?
-            .try_iter_map(TryInto::<dto::search::ConceptResponse>::try_into)?;
+            .search::<_, RawSearch>(url)
+            .await?
+            .try_map::<_, Box<dyn std::error::Error>>(|x| {
+                let total_count = x.total_count();
+                let content = x
+                    .into_content()
+                    .into_list()
+                    .into_iter()
+                    .map(TryInto::<ConceptResponse>::try_into)
+                    .collect::<Result<Vec<ConceptResponse>, dto::search::Error>>()
+                    .map(Content::new)?;
+                Ok(SearchResults::new(content, total_count))
+            })?;
 
         Ok(Response::new(body, self))
     }

@@ -52,6 +52,7 @@ use std::{marker::PhantomData, num::NonZeroU64};
 use umls_http::WithoutClient;
 use umls_util::Content;
 use umls_util::Page;
+use umls_util::SearchResults;
 
 #[cfg(feature = "reqwest")]
 use crate::{dto::batch::BatchError, types};
@@ -535,6 +536,26 @@ impl<T, C> Response<Page<Content<T>>, C> {
         let number = self.body.number();
 
         let content = self.body.into_content();
+
+        super::search::Page::new(content, size, number, count, self.client)
+    }
+}
+
+impl<T, C> Response<Page<SearchResults<T>>, C> {
+    /// Consumes the response and returns its atom content.
+    ///
+    /// Pagination metadata and retained request state are discarded.
+    pub fn into_content(self) -> Content<T> {
+        self.body.into_content().into_content()
+    }
+
+    /// Converts the response into a navigable page retaining request state.
+    pub fn into_page(self) -> super::search::Page<Content<T>, C> {
+        let count = self.body.count().or(NonZeroU64::new(1)).unwrap();
+        let size = self.body.size();
+        let number = self.body.number();
+
+        let content = self.body.into_content().into_content();
 
         super::search::Page::new(content, size, number, count, self.client)
     }
