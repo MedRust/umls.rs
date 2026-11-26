@@ -172,7 +172,7 @@ async fn search(
         .unwrap();
 
     let batch =
-        umls_client::dto::batch::Batch::new(25.try_into().unwrap(), 2.try_into().unwrap(), concept);
+        umls_client::dto::batch::Batch::new(25.try_into().unwrap(), 1.try_into().unwrap(), concept);
 
     match search::Search::<WithoutClient, types::Concept, _>::new(batch)
         .with_client(client.clone())
