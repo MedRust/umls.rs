@@ -172,7 +172,7 @@ impl UmlsServer {
             .collect();
         success(
             &json!({"results": results, "page": page.number().get(), "page_size": page.size().get(),
-            "total_pages": page.total_pages().map(NonZeroU64::get), "has_next": page.has_next(),
+            "page_count": page.count().get(), "has_next": page.has_next(),
             "version": self.config.version().as_str()}),
         )
     }
@@ -275,7 +275,7 @@ impl UmlsServer {
         })).collect();
         success(
             &json!({"results": results, "page": page.number().get(), "page_size": page.size().get(),
-            "total_pages": page.total_pages().map(NonZeroU64::get), "has_next": page.has_next(),
+            "page_count": page.count(), "has_next": page.has_next(),
             "version": self.config.version().as_str()}),
         )
     }
@@ -601,7 +601,7 @@ mod tests {
         let value = body(result);
         assert_eq!(value["results"][0]["cui"], "C0010200");
         assert_eq!(value["page"], 2);
-        assert_eq!(value["total_pages"], 3);
+        assert_eq!(value["page_count"], 3);
         assert_eq!(value["has_next"], true);
         mock.assert_async().await;
     }
@@ -675,7 +675,7 @@ mod tests {
             .await;
         let value = body(result);
         assert_eq!(value["results"][0]["root_source"], "MSH");
-        assert_eq!(value["total_pages"], 2);
+        assert_eq!(value["page_count"], 2);
         assert_eq!(value["has_next"], true);
         mock.assert_async().await;
     }

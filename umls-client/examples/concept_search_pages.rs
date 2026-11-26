@@ -2,7 +2,7 @@
 
 mod common;
 
-use std::{error::Error, num::NonZeroU64, time::Duration};
+use std::{error::Error, time::Duration};
 
 use clap::Parser;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
@@ -181,7 +181,7 @@ async fn search(
     {
         Ok(response) => {
             let page = response.into_page();
-            let result_count = page.count().map_or(0, NonZeroU64::get);
+            let result_count = page.count().get();
             app.active_term = Some(raw_term.to_owned());
             app.status = if result_count == 0 {
                 format!("No concepts found for {raw_term:?}.")
@@ -385,9 +385,7 @@ fn render_results(frame: &mut Frame<'_>, app: &mut App, area: Rect) {
     let page_title = app.page.as_ref().map_or_else(
         || " Results ".to_owned(),
         |page| {
-            let total = page
-                .total_pages()
-                .map_or_else(|| "0".to_owned(), |value| value.to_string());
+            let total = page.count().to_string();
             format!(" Results — page {} of {total} ", page.number())
         },
     );

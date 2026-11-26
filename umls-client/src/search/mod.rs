@@ -106,7 +106,7 @@ pub struct Page<T, C> {
     content: T,
     size: NonZeroU64,
     number: NonZeroU64,
-    count: Option<NonZeroU64>,
+    count: NonZeroU64,
     pub(crate) client: C,
 }
 
@@ -118,7 +118,7 @@ impl<T, C> Page<T, C> {
         content: T,
         size: NonZeroU64,
         number: NonZeroU64,
-        count: Option<NonZeroU64>,
+        count: NonZeroU64,
         client: C,
     ) -> Self {
         Self {
@@ -145,19 +145,12 @@ impl<T, C> Page<T, C> {
         self.number
     }
 
-    /// Returns the total number of matching records.
+    /// Returns the total number pages.
     ///
     /// `None` means the response contained no matching records. The UMLS API
     /// omits `recCount` when the count is zero.
-    pub fn count(&self) -> Option<NonZeroU64> {
+    pub fn count(&self) -> NonZeroU64 {
         self.count
-    }
-
-    /// Returns the number of non-empty result pages.
-    ///
-    /// `None` means there are no matching records.
-    pub fn total_pages(&self) -> Option<NonZeroU64> {
-        self.count.map(|x| x.div_ceil(self.size))
     }
 
     /// Returns `true` when a previous page exists.
@@ -169,8 +162,7 @@ impl<T, C> Page<T, C> {
     ///
     /// The function will return false if the count is [`Option::None`].
     pub fn has_next(&self) -> bool {
-        self.total_pages()
-            .is_some_and(|total_pages| self.number() < total_pages)
+        self.number < self.count
     }
 
     /// Returns the retained client or search state.
@@ -314,5 +306,176 @@ pub enum PageError {
 impl From<BatchError> for PageError {
     fn from(value: BatchError) -> Self {
         PageError::Batch(value)
+    }
+}
+
+#[cfg(test)]
+mod test {
+
+    use super::*;
+    use crate::{
+        dto::{self, content::Content},
+        types,
+    };
+
+    #[test]
+    fn has_next_true_on_page_count_greater_than_page_number() {
+        let page = Page::new(
+            "",
+            10.try_into().unwrap(),
+            1.try_into().unwrap(),
+            2.try_into().unwrap(),
+            "",
+        );
+
+        assert!(page.has_next());
+    }
+
+    #[test]
+    fn has_next_false_on_page_count_equal_to_page_number() {
+        let page = Page::new(
+            "",
+            10.try_into().unwrap(),
+            2.try_into().unwrap(),
+            2.try_into().unwrap(),
+            "",
+        );
+
+        assert!(!page.has_next());
+    }
+
+    #[test]
+    fn has_next_false_on_page_count_less_than_page_number() {
+        let page = Page::new(
+            "",
+            10.try_into().unwrap(),
+            3.try_into().unwrap(),
+            2.try_into().unwrap(),
+            "",
+        );
+
+        assert!(!page.has_next());
+    }
+
+    #[test]
+    fn has_previous_true_on_page_number_greater_then_one() {
+        let page = Page::new(
+            "",
+            10.try_into().unwrap(),
+            2.try_into().unwrap(),
+            2.try_into().unwrap(),
+            "",
+        );
+
+        assert!(page.has_previous());
+    }
+
+    #[test]
+    fn has_previous_false_on_page_number_equal_to_one() {
+        let page = Page::new(
+            "",
+            10.try_into().unwrap(),
+            1.try_into().unwrap(),
+            2.try_into().unwrap(),
+            "",
+        );
+
+        assert!(!page.has_previous());
+    }
+
+    #[cfg(feature = "reqwest")]
+    #[test]
+    fn change_page_number_in_batch_on_next_call() {
+        let value =
+            dto::search::concept::Config::<dto::search::partial_search::NoPartial>::builder()
+                .input(dto::search::Input::Atom("C0010200".try_into().unwrap()))
+                .build()
+                .unwrap();
+        let value = dto::batch::Batch::new(10.try_into().unwrap(), 1.try_into().unwrap(), value);
+        let client = Search::<_, types::Concept, _>::new(value)
+            .with_client(umls_http::reqwest::Client::default());
+        let page = Page::new(
+            Content::<dto::search::ConceptResponse>::new(vec![]),
+            10.try_into().unwrap(),
+            1.try_into().unwrap(),
+            10.try_into().unwrap(),
+            client,
+        );
+
+        assert!(page.has_next());
+        let client = page.next().unwrap();
+        assert_eq!(client.value().number().get(), 2);
+    }
+
+    #[cfg(feature = "reqwest")]
+    #[test]
+    fn next_failed_with_no_next_page_error_on_has_next_false() {
+        let value =
+            dto::search::concept::Config::<dto::search::partial_search::NoPartial>::builder()
+                .input(dto::search::Input::Atom("C0010200".try_into().unwrap()))
+                .build()
+                .unwrap();
+        let value = dto::batch::Batch::new(10.try_into().unwrap(), 1.try_into().unwrap(), value);
+        let client = Search::<_, types::Concept, _>::new(value)
+            .with_client(umls_http::reqwest::Client::default());
+        let page = Page::new(
+            Content::<dto::search::ConceptResponse>::new(vec![]),
+            10.try_into().unwrap(),
+            1.try_into().unwrap(),
+            1.try_into().unwrap(),
+            client,
+        );
+
+        assert!(!page.has_next());
+        let result = page.next();
+        assert!(matches!(result, Err(PageError::NoNextPage)));
+    }
+
+    #[cfg(feature = "reqwest")]
+    #[test]
+    fn reduce_page_number_by_one_in_batch_on_previous_call() {
+        let value =
+            dto::search::concept::Config::<dto::search::partial_search::NoPartial>::builder()
+                .input(dto::search::Input::Atom("C0010200".try_into().unwrap()))
+                .build()
+                .unwrap();
+        let value = dto::batch::Batch::new(10.try_into().unwrap(), 2.try_into().unwrap(), value);
+        let client = Search::<_, types::Concept, _>::new(value)
+            .with_client(umls_http::reqwest::Client::default());
+        let page = Page::new(
+            Content::<dto::search::ConceptResponse>::new(vec![]),
+            10.try_into().unwrap(),
+            2.try_into().unwrap(),
+            10.try_into().unwrap(),
+            client,
+        );
+
+        assert!(page.has_previous());
+        let client = page.previous().unwrap();
+        assert_eq!(client.value().number().get(), 1);
+    }
+
+    #[cfg(feature = "reqwest")]
+    #[test]
+    fn previous_failed_with_no_previous_page_error_on_has_previous_false() {
+        let value =
+            dto::search::concept::Config::<dto::search::partial_search::NoPartial>::builder()
+                .input(dto::search::Input::Atom("C0010200".try_into().unwrap()))
+                .build()
+                .unwrap();
+        let value = dto::batch::Batch::new(10.try_into().unwrap(), 1.try_into().unwrap(), value);
+        let client = Search::<_, types::Concept, _>::new(value)
+            .with_client(umls_http::reqwest::Client::default());
+        let page = Page::new(
+            Content::<dto::search::ConceptResponse>::new(vec![]),
+            10.try_into().unwrap(),
+            1.try_into().unwrap(),
+            10.try_into().unwrap(),
+            client,
+        );
+
+        assert!(!page.has_previous());
+        let result = page.previous();
+        assert!(matches!(result, Err(PageError::NoPreviousPage)));
     }
 }

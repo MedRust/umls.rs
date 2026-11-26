@@ -539,7 +539,7 @@ impl<T, C> Response<Page<Content<T>>, C> {
 
         let content = self.body.into_content();
 
-        super::search::Page::new(content, size, number, Some(count), self.client)
+        super::search::Page::new(content, size, number, count, self.client)
     }
 }
 

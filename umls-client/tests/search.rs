@@ -68,7 +68,7 @@ async fn successful_search_in_umls() -> Result<(), Box<dyn std::error::Error>> {
 
     assert_eq!(response.size().get(), 1);
     assert_eq!(response.number().get(), 1);
-    assert_eq!(response.count().map(|x| x.get()), Some(1523));
+    assert_eq!(response.count().get(), 1523);
 
     let results = response.content().list();
 
@@ -172,7 +172,7 @@ async fn search_umls_concepts() -> Result<(), Box<dyn std::error::Error>> {
 
     assert_eq!(response.size().get(), 25);
     assert_eq!(response.number().get(), 1);
-    assert_eq!(response.count().map(|x| x.get()), Some(61));
+    assert_eq!(response.count().get(), 61);
     assert!(!response.content().list().is_empty());
     let object = response
         .content()
