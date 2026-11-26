@@ -313,6 +313,8 @@ impl From<BatchError> for PageError {
 mod test {
 
     use super::*;
+
+    #[cfg(feature = "reqwest")]
     use crate::{
         dto::{self, content::Content},
         types,

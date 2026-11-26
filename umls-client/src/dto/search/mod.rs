@@ -175,7 +175,7 @@ impl<U> Builder<return_type::Concept, U> {
 
 impl From<SearchPage> for dto::page::Page<Content<RawSearch>> {
     fn from(value: SearchPage) -> Self {
-        let total_count = value.content.rec_count.get();
+        let total_count = value.content.rec_count.map_or(0, |x| x.get());
         let page_size = value.size.get();
         let mut page_count = total_count / page_size;
         page_count += if !total_count.is_multiple_of(page_size) {
@@ -241,7 +241,7 @@ pub(crate) struct SearchResult {
     #[serde(rename = "results")]
     results: Vec<RawSearch>,
     #[serde(rename = "recCount")]
-    rec_count: NonZeroU64,
+    rec_count: Option<NonZeroU64>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
