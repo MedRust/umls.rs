@@ -31,7 +31,7 @@ use std::marker::PhantomData;
 
 use url::Url;
 
-use crate::{config::Config, core::aui::Aui, dto::display_name::DisplayName};
+use crate::{config::Config, core::aui::Aui};
 
 /// Validate url against with the base url.
 ///
@@ -126,18 +126,12 @@ impl<'a> Validator<'a> {
     }
 
     fn aui_check(mut self) -> Result<Self, Error> {
-        self.split
-            .next()
-            .ok_or(Error::InvalidPath)
-            .and_then(|x| match x.parse::<DisplayName>() {
-                Ok(value) => {
-                    if let Err(e) = Aui::new(value) {
-                        return Err(Error::Aui(e));
-                    }
-                    Ok(self)
-                }
-                Err(_) => Err(Error::InvalidPath),
-            })
+        self.split.next().ok_or(Error::InvalidPath).and_then(|x| {
+            if let Err(e) = x.parse::<Aui>() {
+                return Err(Error::Aui(e));
+            }
+            Ok(self)
+        })
     }
 
     fn concept_url_validator(base_url: &'a Url, url: &'a Url) -> Result<Self, Error> {
@@ -224,7 +218,7 @@ pub enum Error {
 
     /// Represents invalid AUI format.
     #[error("Invalid AUI format error: {0}")]
-    Aui(#[source] crate::core::aui::InvalidFormat),
+    Aui(#[source] crate::core::aui::Error),
 
     /// Represents incomplete validation of url.
     #[error("Incomplete validation of url")]

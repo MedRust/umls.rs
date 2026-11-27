@@ -872,7 +872,7 @@ mod tests {
         atom, config,
         core::{aui, cui, url::Definition},
         definition,
-        dto::{batch::Batch, display_name::DisplayName},
+        dto::batch::Batch,
     };
 
     #[cfg(feature = "reqwest")]
@@ -898,8 +898,7 @@ mod tests {
     #[test]
     fn construct_atom_info_uri_for_aui() -> Result<(), Box<dyn std::error::Error>> {
         let config = config::Config::builder("some_api_key").build()?;
-        let string: DisplayName = "A8345234".parse()?;
-        let aui = aui::Aui::new(string)?;
+        let aui: aui::Aui = "A8345234".parse()?;
 
         let uri = Info::<types::Atom, _>::new(&config, &aui).url();
         assert_eq!(uri.scheme(), "https");
@@ -1575,8 +1574,7 @@ mod tests {
     #[test]
     fn construct_atom_parent_url() -> Result<(), Box<dyn std::error::Error>> {
         let umls_config = config::Config::builder("some_api_key").build()?;
-        let string: DisplayName = "A8345234".parse()?;
-        let aui = aui::Aui::new(string)?;
+        let aui: aui::Aui = "A8345234".parse()?;
 
         let uri = Parent::<types::Atom, _>::new(&umls_config, aui).url();
         assert_eq!(uri.scheme(), "https");
@@ -1589,17 +1587,19 @@ mod tests {
 
         let batch_parents = [
             (
-                Batch::new(300.try_into()?, 1.try_into()?, {
-                    let display_name: DisplayName = "A8345234".parse()?;
-                    aui::Aui::new(display_name)
-                }?),
+                Batch::new(
+                    300.try_into()?,
+                    1.try_into()?,
+                    "A8345234".parse::<aui::Aui>()?,
+                ),
                 "pageSize=300&pageNumber=1&apiKey=some_api_key",
             ),
             (
-                Batch::new(25.try_into()?, 30.try_into()?, {
-                    let display_name: DisplayName = "A8345234".parse()?;
-                    aui::Aui::new(display_name)
-                }?),
+                Batch::new(
+                    25.try_into()?,
+                    30.try_into()?,
+                    "A8345234".parse::<aui::Aui>()?,
+                ),
                 "pageSize=25&pageNumber=30&apiKey=some_api_key",
             ),
         ];

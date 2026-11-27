@@ -1,4 +1,5 @@
-use crate::dto::display_name::DisplayName;
+use crate::dto::display_name::{DisplayName, EmptyString};
+use std::str::FromStr;
 
 fn is_valid_aui(value: &DisplayName) -> bool {
     let value = value.as_str();
@@ -7,10 +8,23 @@ fn is_valid_aui(value: &DisplayName) -> bool {
         && value[1..].bytes().all(|byte| byte.is_ascii_digit())
 }
 
-/// An Invalid format error.
+/// Represents [`Aui`] construction and parser error.
 #[derive(Debug, thiserror::Error)]
-#[error("Invalid format: {0}")]
-pub struct InvalidFormat(String);
+pub enum Error {
+    /// Invalid format error.
+    #[error("Invalid format: {0}")]
+    InvalidFormat(String),
+
+    /// Empty string
+    #[error("Empty string")]
+    Empty,
+}
+
+impl From<EmptyString> for Error {
+    fn from(_value: EmptyString) -> Self {
+        Error::Empty
+    }
+}
 
 /// An atom unique identifier.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -18,9 +32,9 @@ pub struct Aui(DisplayName);
 
 impl Aui {
     /// Create new atom unique identifier for given object.
-    pub fn new(aui: DisplayName) -> Result<Self, InvalidFormat> {
+    pub fn new(aui: DisplayName) -> Result<Self, Error> {
         if !is_valid_aui(&aui) {
-            return Err(InvalidFormat(aui.as_str().into()));
+            return Err(Error::InvalidFormat(aui.as_str().into()));
         }
 
         Ok(Aui(aui))
@@ -44,7 +58,7 @@ impl AsRef<str> for Aui {
 }
 
 impl TryFrom<DisplayName> for Aui {
-    type Error = InvalidFormat;
+    type Error = Error;
 
     fn try_from(value: DisplayName) -> Result<Self, Self::Error> {
         Self::new(value)
@@ -54,6 +68,15 @@ impl TryFrom<DisplayName> for Aui {
 impl std::fmt::Display for Aui {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.as_str())
+    }
+}
+
+impl FromStr for Aui {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let display_name: DisplayName = s.parse()?;
+        Aui::new(display_name)
     }
 }
 
@@ -87,7 +110,7 @@ mod tests {
     fn create_new_aui() {
         let strings = ["A1234567", "A12345678"];
         for value in strings {
-            let result = Aui::new(value.try_into().unwrap());
+            let result = value.parse::<Aui>();
             match result {
                 Ok(aui) => {
                     assert_eq!(aui.as_str(), value);
@@ -98,16 +121,15 @@ mod tests {
 
         let invalid_strings = ["1234567A", "A123456", "A123456789", "1234A56", "1234A567"];
         for invalid_string in invalid_strings {
-            let result = Aui::new(invalid_string.try_into().unwrap());
-            assert!(matches!(result, Err(InvalidFormat(_))));
+            let result = invalid_string.parse::<Aui>();
+            assert!(matches!(result, Err(Error::InvalidFormat(_))));
         }
     }
 
     #[test]
     fn format_representation() {
         for string in ["A1234567", "A12345678"] {
-            let display_name: DisplayName = string.parse().unwrap();
-            let aui = Aui::new(display_name).unwrap();
+            let aui = string.parse::<Aui>().unwrap();
             let display_string = format!("{}", aui);
             assert_eq!(display_string, string);
         }
@@ -116,8 +138,7 @@ mod tests {
     #[test]
     fn as_ref_presentation() {
         for string in ["A1234567", "A12345678"] {
-            let display_name: DisplayName = string.parse().unwrap();
-            let aui = Aui::new(display_name).unwrap();
+            let aui = string.parse::<Aui>().unwrap();
             assert_eq!(aui.as_ref(), string);
         }
     }

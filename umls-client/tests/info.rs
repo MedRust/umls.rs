@@ -59,8 +59,7 @@ async fn successfully_get_atom_info() -> Result<(), Box<dyn std::error::Error>> 
 
     let client = umls_http::reqwest::Client::default();
 
-    let aui_string: DisplayName = "A8345234".parse()?;
-    let aui = Aui::new(aui_string)?;
+    let aui = "A8345234".parse::<Aui>()?;
 
     let response = Info::new(aui).with_client(client).fetch(&config).await?;
 

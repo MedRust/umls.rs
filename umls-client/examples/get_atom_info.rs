@@ -26,8 +26,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let client = umls_http::reqwest::Client::default();
 
-    let string: DisplayName = "A8345234".parse()?;
-    let aui = Aui::new(string)?;
+    let aui = "A8345234".parse::<Aui>()?;
 
     let response = Info::new(aui).with_client(client).fetch(&config).await?;
 

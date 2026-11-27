@@ -31,7 +31,7 @@ async fn fetch_atom_parents_using_url() -> Result<(), Box<dyn std::error::Error>
         .version(config::Version::Current)
         .build()?;
 
-    let aui = Aui::new("A10134087".try_into()?)?;
+    let aui = "A10134087".parse::<Aui>()?;
 
     let pages = Parent::<types::Atom, _, _>::new(aui)
         .with_client(client)
@@ -79,8 +79,7 @@ async fn fetch_atom_parents_using_aui() -> Result<(), Box<dyn std::error::Error>
         .version(config::Version::Current)
         .build()?;
 
-    let aui: DisplayName = "A10134087".parse()?;
-    let aui = Aui::new(aui)?;
+    let aui = "A10134087".parse::<Aui>()?;
 
     let pages = Parent::new(aui)
         .with_client(client)
