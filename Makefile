@@ -1,3 +1,4 @@
+CARGO_FLAGS := -q
 
 build: build-umls-mcp build-umls-http build-umls-client build-umls-downloader build-umls-downloader-cli
 
@@ -51,3 +52,11 @@ mcp:
 clean:
 	@echo "=> Removing artifacts..."
 	@cargo clean
+
+doc:
+	@echo "=> Building Rust documentation..."
+	@cargo doc --all-features $(CARGO_FLAGS)
+
+open-doc:
+	@echo "=> Building Rust documentation..."
+	@cargo doc --all-features --open $(CARGO_FLAGS)
