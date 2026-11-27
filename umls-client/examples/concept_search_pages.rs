@@ -32,7 +32,7 @@ type ConceptPage = Page<
 >;
 
 type ConceptResponse = Response<
-    umls_util::Page<umls_util::Content<dto::search::ConceptResponse>>,
+    umls_util::Page<umls_util::SearchResults<dto::search::ConceptResponse>>,
     Search<
         umls_http::reqwest::Client,
         Concept,

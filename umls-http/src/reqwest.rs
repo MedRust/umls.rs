@@ -15,6 +15,8 @@ use reqwest::IntoUrl;
 pub use reqwest::Error;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
+use umls_util::{Content, Page, SearchResults};
+
 const JSON_HEADER: &str = "application/json";
 
 /// An HTTP client used to query server.
@@ -113,6 +115,27 @@ impl ReqwestClient<Json> {
 
     fn get_request_builder<T: IntoUrl>(&self, url: T) -> reqwest::RequestBuilder {
         self.client.get(url).header(ACCEPT, JSON_HEADER)
+    }
+
+    pub async fn fetch_page<T: IntoUrl, V: DeserializeOwned>(
+        &self,
+        url: T,
+    ) -> Result<Page<V>, ClientError> {
+        self.get::<_, Page<V>>(url).await
+    }
+
+    pub async fn fetch_page_content<T: IntoUrl, V: DeserializeOwned>(
+        &self,
+        url: T,
+    ) -> Result<Page<Content<V>>, ClientError> {
+        self.fetch_page::<_, Content<V>>(url).await
+    }
+
+    pub async fn search<T: IntoUrl, V: DeserializeOwned>(
+        &self,
+        url: T,
+    ) -> Result<Page<SearchResults<V>>, ClientError> {
+        self.fetch_page::<_, SearchResults<V>>(url).await
     }
 }
 
