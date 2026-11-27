@@ -3,6 +3,8 @@
 pub mod config;
 
 use umls_http::WithoutClient;
+#[cfg(feature = "reqwest")]
+use umls_util::{Content, Page};
 
 use crate::core::url::validator;
 
@@ -18,11 +20,7 @@ use umls_http::reqwest::Client;
 
 #[cfg(feature = "reqwest")]
 use crate::{
-    dto::{
-        batch::{Batch, BatchError},
-        content::Content,
-        page::Page,
-    },
+    dto::batch::{Batch, BatchError},
     search::Response,
 };
 

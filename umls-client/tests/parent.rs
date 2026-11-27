@@ -134,7 +134,7 @@ async fn fetch_source_asserted_parents_using_url() -> Result<(), Box<dyn std::er
 
     assert_eq!(page.size().get(), 1);
     assert_eq!(page.number().get(), 1);
-    assert_eq!(page.count().get(), 2);
+    assert_eq!(page.count().map(|x| x.get()), Some(2));
     assert!(!page.content().list().is_empty());
     assert_eq!(page.content().list().len(), 1);
 
@@ -403,7 +403,7 @@ async fn fetch_source_asserted_concepts_using_source_atom_cluster()
 
     assert_eq!(page.size().get(), 1);
     assert_eq!(page.number().get(), 1);
-    assert_eq!(page.count().get(), 2);
+    assert_eq!(page.count().map(|x| x.get()), Some(2));
     assert!(!page.content().list().is_empty());
     assert_eq!(page.content().list().len(), 1);
 

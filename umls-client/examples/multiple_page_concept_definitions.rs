@@ -19,11 +19,12 @@ use umls_client::{
     config::Config,
     core::cui::Cui,
     definition::{self, Definition},
+    dto::batch::Batch,
     dto::definition as dto,
-    dto::{batch::Batch, content::Content},
     search::Page,
 };
 use umls_http::reqwest;
+use umls_util::Content;
 
 type DefinitionPage =
     Page<Content<dto::Definition>, Definition<reqwest::Client, Batch<definition::Config>>>;

@@ -15,11 +15,12 @@ use ratatui::{
 };
 use umls_client::{
     config::Config,
-    dto::{self, content::Content, search::partial_search::NoPartial},
+    dto::{self, search::partial_search::NoPartial},
     search::{self, Page, Response, Search},
     types::{self, Concept},
 };
 use umls_http::{WithoutClient, reqwest};
+use umls_util::Content;
 
 type ConceptPage = Page<
     Content<dto::search::ConceptResponse>,
@@ -31,7 +32,7 @@ type ConceptPage = Page<
 >;
 
 type ConceptResponse = Response<
-    dto::page::Page<dto::content::Content<dto::search::ConceptResponse>>,
+    umls_util::Page<umls_util::Content<dto::search::ConceptResponse>>,
     Search<
         umls_http::reqwest::Client,
         Concept,

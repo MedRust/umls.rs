@@ -11,6 +11,8 @@ use crate::dto::source::{SourceAtomCluster, SourceConcept};
 
 #[cfg(feature = "reqwest")]
 use umls_http::reqwest;
+#[cfg(feature = "reqwest")]
+use umls_util::{Content, Page};
 
 #[cfg(feature = "reqwest")]
 use crate::core::aui::Aui;
@@ -25,10 +27,7 @@ use crate::dto::{
 };
 
 #[cfg(feature = "reqwest")]
-use crate::{
-    config,
-    dto::{content::Content, page::Page},
-};
+use crate::config;
 
 /// UMLS parent client.
 pub struct Parent<U, C, T> {

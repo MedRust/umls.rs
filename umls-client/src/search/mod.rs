@@ -3,6 +3,8 @@
 use std::{marker::PhantomData, num::NonZeroU64};
 
 use umls_http::WithoutClient;
+#[cfg(feature = "reqwest")]
+use umls_util::Content;
 
 use crate::dto::batch::BatchError;
 
@@ -11,7 +13,7 @@ pub mod core;
 
 #[cfg(feature = "reqwest")]
 use crate::{
-    dto::{self, content::Content, search::partial_search::NoPartial},
+    dto::{self, search::partial_search::NoPartial},
     types,
 };
 
@@ -81,7 +83,7 @@ impl
         self,
         config: &crate::config::Config,
     ) -> Result<
-        Response<dto::page::Page<Content<dto::search::ConceptResponse>>, Self>,
+        Response<umls_util::Page<Content<dto::search::ConceptResponse>>, Self>,
         Box<dyn std::error::Error>,
     > {
         let url = config.search_url(self.value()).url();
@@ -92,7 +94,7 @@ impl
             .with_type::<umls_http::reqwest::Json>()
             .get::<_, dto::search::SearchPage>(url)
             .await
-            .map(Into::<dto::page::Page<Content<dto::search::RawSearch>>>::into)?
+            .map(Into::<umls_util::Page<Content<dto::search::RawSearch>>>::into)?
             .try_iter_map(TryInto::<dto::search::ConceptResponse>::try_into)?;
 
         Ok(Response::new(body, self))
@@ -313,12 +315,8 @@ impl From<BatchError> for PageError {
 mod test {
 
     use super::*;
-
     #[cfg(feature = "reqwest")]
-    use crate::{
-        dto::{self, content::Content},
-        types,
-    };
+    use crate::{dto, types};
 
     #[test]
     fn has_next_true_on_page_count_greater_than_page_number() {

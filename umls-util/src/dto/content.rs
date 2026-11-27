@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 /// An owned collection of converted results.
 #[derive(Debug)]
@@ -8,7 +8,7 @@ pub struct Content<T> {
 
 impl<T> Content<T> {
     /// Creates content from an owned result list.
-    pub(crate) fn new(list: Vec<T>) -> Self {
+    pub fn new(list: Vec<T>) -> Self {
         Self { list }
     }
 
@@ -43,5 +43,17 @@ impl<'de, T: Deserialize<'de>> Deserialize<'de> for Content<T> {
         let list = Vec::<T>::deserialize(deserializer)?;
 
         Ok(Content::new(list))
+    }
+}
+
+impl<T> Serialize for Content<T>
+where
+    T: Serialize,
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.list().serialize(serializer)
     }
 }

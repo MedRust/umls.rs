@@ -50,11 +50,11 @@ use crate::core::url::validator;
 use std::{marker::PhantomData, num::NonZeroU64};
 
 use umls_http::WithoutClient;
+use umls_util::Content;
+use umls_util::Page;
 
 #[cfg(feature = "reqwest")]
 use crate::{dto::batch::BatchError, types};
-
-use crate::dto::page::Page;
 
 use crate::dto::batch::Batch;
 
@@ -67,10 +67,7 @@ use crate::core::cui::Cui;
 #[cfg(feature = "reqwest")]
 use umls_http::reqwest;
 
-use crate::dto::{
-    content::Content,
-    display_name::{DisplayName, EmptyString},
-};
+use crate::dto::display_name::{DisplayName, EmptyString};
 
 use crate::search::Response;
 
@@ -533,7 +530,7 @@ impl<T, C> Response<Page<Content<T>>, C> {
 
     /// Converts the response into a navigable page retaining request state.
     pub fn into_page(self) -> super::search::Page<Content<T>, C> {
-        let count = self.body.count();
+        let count = self.body.count().or(NonZeroU64::new(1)).unwrap();
         let size = self.body.size();
         let number = self.body.number();
 

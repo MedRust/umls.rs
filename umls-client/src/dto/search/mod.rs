@@ -8,10 +8,7 @@ use serde::Deserialize;
 use umls_http::WithoutClient;
 use url::Url;
 
-use crate::{
-    dto::{self, content::Content, display_name::DisplayName},
-    info::Info,
-};
+use crate::{dto::display_name::DisplayName, info::Info};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Input {
@@ -173,7 +170,7 @@ impl<U> Builder<return_type::Concept, U> {
     }
 }
 
-impl From<SearchPage> for dto::page::Page<Content<RawSearch>> {
+impl From<SearchPage> for umls_util::Page<umls_util::Content<RawSearch>> {
     fn from(value: SearchPage) -> Self {
         let total_count = value.content.rec_count.map_or(0, |x| x.get());
         let page_size = value.size.get();
@@ -184,12 +181,12 @@ impl From<SearchPage> for dto::page::Page<Content<RawSearch>> {
             0
         };
 
-        let content = Content::new(value.content.results);
+        let content = umls_util::Content::new(value.content.results);
 
-        dto::page::Page::new(
+        umls_util::Page::new(
             value.size,
             value.number,
-            page_count.try_into().unwrap(),
+            page_count.try_into().ok(),
             content,
         )
     }

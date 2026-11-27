@@ -13,12 +13,10 @@ use crate::core::aui::Aui;
 #[cfg(feature = "reqwest")]
 use crate::core::url::validator;
 #[cfg(feature = "reqwest")]
-use crate::dto::{self, page};
+use crate::dto::{self};
 
 #[cfg(feature = "reqwest")]
 use crate::dto::concept::Payload;
-#[cfg(feature = "reqwest")]
-use crate::dto::page::Page;
 
 #[cfg(feature = "reqwest")]
 use crate::types;
@@ -166,7 +164,7 @@ impl Info<reqwest::Client, types::Concept, url::Url> {
             .send()
             .await?
             .error_for_status()?
-            .json::<page::Page<SerializableConcept>>()
+            .json::<umls_util::Page<SerializableConcept>>()
             .await
             .map(Into::<Payload>::into)
             .map_err(Error::Client)
@@ -184,7 +182,7 @@ impl Info<reqwest::Client, types::Atom, Aui> {
             .send()
             .await?
             .error_for_status()?
-            .json::<Page<AtomResponse>>()
+            .json::<umls_util::Page<AtomResponse>>()
             .await
             .map(|x| x.into_content())
             .map_err(Error::Client)
@@ -241,7 +239,7 @@ impl Info<reqwest::Client, types::Source, url::Url> {
             .send()
             .await?
             .error_for_status()?
-            .json::<Page<dto::source::SourceAtomCluster>>()
+            .json::<umls_util::Page<dto::source::SourceAtomCluster>>()
             .await
             .map(|x| x.into_content())
             .map_err(Error::Client)
