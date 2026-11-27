@@ -531,7 +531,7 @@ impl<T, C> Response<Page<Content<T>>, C> {
 
     /// Converts the response into a navigable page retaining request state.
     pub fn into_page(self) -> super::search::Page<Content<T>, C> {
-        let count = self.body.count().or(NonZeroU64::new(1)).unwrap();
+        let count = self.body.count().unwrap_or(NonZeroU64::MIN);
         let size = self.body.size();
         let number = self.body.number();
 
@@ -551,7 +551,7 @@ impl<T, C> Response<Page<SearchResults<T>>, C> {
 
     /// Converts the response into a navigable page retaining request state.
     pub fn into_page(self) -> super::search::Page<Content<T>, C> {
-        let count = self.body.count().or(NonZeroU64::new(1)).unwrap();
+        let count = self.body.count().unwrap_or(NonZeroU64::MIN);
         let size = self.body.size();
         let number = self.body.number();
 
