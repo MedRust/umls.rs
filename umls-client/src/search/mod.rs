@@ -94,7 +94,6 @@ impl
         let body = self
             .client
             .clone()
-            .with_type::<umls_http::reqwest::Json>()
             .search::<_, RawSearch>(url)
             .await?
             .try_map::<_, Box<dyn std::error::Error>>(|x| {

@@ -29,7 +29,7 @@ use chrono::NaiveDate;
 #[cfg(feature = "reqwest")]
 use futures_core::Stream;
 #[cfg(feature = "reqwest")]
-use futures_util::StreamExt;
+use futures_util::{StreamExt, TryStreamExt};
 #[cfg(feature = "reqwest")]
 use secrecy::ExposeSecret;
 use secrecy::SecretString;
@@ -209,11 +209,7 @@ impl ReleaseFetcher<reqwest::Client, http::Uri, Current> {
         let uri = self.uri().to_string();
 
         self.client
-            .get(uri)
-            .send()
-            .await?
-            .error_for_status()?
-            .json::<Vec<Release>>()
+            .get::<_, Vec<Release>>(uri)
             .await
             .map(|x| x.first().cloned())
             .map_err(Error::Client)
@@ -271,14 +267,7 @@ impl ReleaseFetcher<reqwest::Client, http::Uri, kind::All> {
     pub async fn send(self) -> Result<Vec<Release>, Error<reqwest::Error>> {
         let uri = self.uri().to_string();
 
-        self.client
-            .get(uri)
-            .send()
-            .await?
-            .error_for_status()?
-            .json::<Vec<Release>>()
-            .await
-            .map_err(Error::Client)
+        self.client.get(uri).await.map_err(Error::Client)
     }
 }
 
@@ -714,7 +703,7 @@ impl<T> ReleaseDownloader<umls_http::WithoutClient, T> {
 }
 
 #[cfg(feature = "reqwest")]
-impl ReleaseDownloader<reqwest::Client, http::Uri> {
+impl ReleaseDownloader<reqwest::BytesStreamClient, http::Uri> {
     /// Starts a release download and returns its response body as a stream.
     ///
     /// The request is sent when this method is awaited. The returned stream owns the response
@@ -731,7 +720,7 @@ impl ReleaseDownloader<reqwest::Client, http::Uri> {
     /// let api_key = std::env::var("UMLS_API_KEY")?;
     /// use futures_util::StreamExt;
     /// let source = release.download_url.parse::<http::Uri>()?;
-    /// let downloader = ReleaseDownloader::new(api_key, source).with_client(reqwest::Client::default());
+    /// let downloader = ReleaseDownloader::new(api_key, source).with_client(reqwest::BytesStreamClient::default());
     /// let mut stream = std::pin::pin!(downloader.download().await?);
     /// while let Some(chunk) = stream.next().await {
     ///     println!("Received {} bytes", chunk?.len());
@@ -749,8 +738,8 @@ impl ReleaseDownloader<reqwest::Client, http::Uri> {
     pub async fn download(
         &self,
     ) -> Result<
-        impl Stream<Item = Result<Bytes, reqwest::Error>> + Send + 'static + use<>,
-        Error<reqwest::Error>,
+        impl Stream<Item = Result<Bytes, Error<umls_http::reqwest::Error>>> + Send + 'static + use<>,
+        Error<umls_http::reqwest::Error>,
     > {
         let uri = download_uri(&self.value, self.api_key.expose_secret())?;
 
@@ -761,16 +750,16 @@ impl ReleaseDownloader<reqwest::Client, http::Uri> {
         &self,
         uri: http::Uri,
     ) -> Result<
-        impl Stream<Item = Result<Bytes, reqwest::Error>> + Send + 'static + use<>,
-        Error<reqwest::Error>,
+        impl Stream<Item = Result<Bytes, Error<umls_http::reqwest::Error>>> + Send + 'static + use<>,
+        Error<umls_http::reqwest::Error>,
     > {
-        self.client
-            .get(uri.to_string())
-            .send()
-            .await?
-            .error_for_status()
-            .map(|x| x.bytes_stream())
-            .map_err(Error::Client)
+        let object = self
+            .client()
+            .fetch(uri.to_string())
+            .await
+            .map_err(Error::Client)?;
+
+        Ok(object.map_err(Error::Client))
     }
 }
 
@@ -856,10 +845,10 @@ impl<D: AsRef<Path>> ReleaseDownloader<reqwest::Client, DownloadResource<D>> {
     /// [`Error::Client`] when reading the response body fails, or another [`enum@Error`] variant when
     /// request construction or the HTTP operation fails.
     pub async fn download(self) -> Result<(), Error<reqwest::Error>> {
-        let stream = ReleaseDownloader::new(self.api_key.clone(), self.value.source)
-            .with_client(self.client.clone())
-            .download()
-            .await?;
+        let stream_client: reqwest::BytesStreamClient = self.client.clone().with_type();
+        let downloader = ReleaseDownloader::new(self.api_key.clone(), self.value.source)
+            .with_client(stream_client);
+        let stream = downloader.download().await?;
 
         write_download(stream, self.value.destination).await
     }
@@ -867,14 +856,14 @@ impl<D: AsRef<Path>> ReleaseDownloader<reqwest::Client, DownloadResource<D>> {
 
 #[cfg(feature = "reqwest")]
 async fn write_download(
-    stream: impl Stream<Item = Result<Bytes, reqwest::Error>>,
+    stream: impl Stream<Item = Result<Bytes, Error<umls_http::reqwest::Error>>>,
     destination: impl AsRef<Path>,
-) -> Result<(), Error<reqwest::Error>> {
+) -> Result<(), Error<umls_http::reqwest::Error>> {
     let mut stream = std::pin::pin!(stream);
     let file = File::create(destination)?;
     let mut writer = BufWriter::new(file);
     while let Some(chunk) = stream.next().await {
-        writer.write_all(&chunk.map_err(Error::Client)?)?;
+        writer.write_all(&chunk?)?;
     }
     writer.flush()?;
     Ok(())
@@ -964,7 +953,7 @@ mod tests {
             .await;
         let source = "https://example.test/archive.zip".parse().unwrap();
         let downloader = ReleaseDownloader::new("test+key", source)
-            .with_client(umls_http::reqwest::Client::default());
+            .with_client(umls_http::reqwest::BytesStreamClient::default());
         // Keep the production query construction; route only the origin to the local server.
         let uri = download_uri(&downloader.value, "test+key").unwrap();
         let local_uri = format!("{}{}", server.base_url(), uri.path_and_query().unwrap())
@@ -998,11 +987,13 @@ mod tests {
             .unwrap();
                 wait.await.unwrap();
             });
+
         let downloader = ReleaseDownloader::new(
             "key",
             "https://example.test/archive".parse::<http::Uri>().unwrap(),
         )
-        .with_client(umls_http::reqwest::Client::default());
+        .with_client(umls_http::reqwest::BytesStreamClient::default());
+
         let stream = downloader
             .download_from_uri(format!("http://{address}/download").parse().unwrap())
             .await

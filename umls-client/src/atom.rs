@@ -456,11 +456,7 @@ impl Atom<reqwest::Client, types::atom::All, url::Url> {
         let url = umls_config.authenticated_url(self.value);
 
         self.client
-            .get(url)
-            .send()
-            .await?
-            .error_for_status()?
-            .json()
+            .fetch_page_content::<_, AtomResponse>(url)
             .await
             .map_err(Error::Client)
     }
@@ -510,11 +506,7 @@ impl Atom<reqwest::Client, types::atom::Preferred, url::Url> {
         let url = umls_config.authenticated_url(self.value);
 
         self.client
-            .get(url)
-            .send()
-            .await?
-            .error_for_status()?
-            .json::<Page<AtomResponse>>()
+            .fetch_page::<_, AtomResponse>(url)
             .await
             .map(|x| x.into_content())
             .map_err(Error::Client)

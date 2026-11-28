@@ -32,6 +32,7 @@ async fn fetch_first_page_content_of_concept_atoms() -> Result<(), Box<dyn std::
                 .path(path)
                 .query_param("apiKey", api_key.to_string());
             then.status(200)
+                .header("CONTENT-TYPE", "application/json")
                 .json_body(json!({
                     "pageSize": 1,
                     "pageNumber": 1,
@@ -109,6 +110,7 @@ async fn fetch_first_page_content_of_concept_atoms_with_differnt_version()
                 .path(path)
                 .query_param("apiKey", api_key.to_string());
             then.status(200)
+                .header("CONTENT-TYPE", "application/json")
                 .json_body(json!({
                     "pageSize": 1,
                     "pageNumber": 1,
@@ -174,7 +176,7 @@ async fn reports_unsuccessful_atom_statuses() -> Result<(), Box<dyn std::error::
     mock_server
         .mock_async(|when, then| {
             when.method(Method::GET);
-            then.status(503);
+            then.status(503).header("CONTENT-TYPE", "application/json");
         })
         .await;
 
@@ -244,6 +246,7 @@ async fn fetch_first_page_of_concept_atoms() -> Result<(), Box<dyn std::error::E
                 .query_param("apiKey", api_key.to_string())
                 .query_param("pageNumber", "1");
             then.status(200)
+                .header("CONTENT-TYPE", "application/json")
                 .json_body(json!({
                     "pageSize": 1,
                     "pageNumber": 1,
@@ -282,7 +285,9 @@ async fn fetch_first_page_of_concept_atoms() -> Result<(), Box<dyn std::error::E
                 .path(path)
                 .query_param("apiKey", api_key.to_string())
                 .query_param("pageNumber", "2");
-            then.status(200).json_body(json!({
+            then.status(200)
+                .header("CONTENT-TYPE", "application/json")
+                .json_body(json!({
                 "pageSize": 1,
                 "pageNumber": 2,
                 "pageCount": 54,
@@ -379,6 +384,7 @@ async fn fetch_first_page_content_of_concept_atoms_using_url()
                 .path(path)
                 .query_param("apiKey", api_key.to_string());
             then.status(200)
+                .header("CONTENT-TYPE", "application/json")
                 .json_body(json!({
                     "pageSize": 1,
                     "pageNumber": 1,
@@ -452,9 +458,11 @@ async fn fetch_first_page_of_concept_atoms_using_url() -> Result<(), Box<dyn std
 
             when.method(Method::GET)
                 .path(path)
+                .header("ACCEPT", "application/json")
                 .query_param("apiKey", api_key.to_string())
                 .query_param("pageNumber", "1");
             then.status(200)
+                .header("CONTENT-TYPE", "application/json")
                 .json_body(json!({
                     "pageSize": 1,
                     "pageNumber": 1,
@@ -493,7 +501,7 @@ async fn fetch_first_page_of_concept_atoms_using_url() -> Result<(), Box<dyn std
                 .path(path)
                 .query_param("apiKey", api_key.to_string())
                 .query_param("pageNumber", "2");
-            then.status(200).json_body(json!({
+            then.status(200).header("CONTENT-TYPE", "application/json").json_body(json!({
                 "pageSize": 1,
                 "pageNumber": 2,
                 "pageCount": 54,
@@ -590,6 +598,7 @@ async fn fetch_first_page_content_of_concept_atoms_using_cui()
                 .path(path)
                 .query_param("apiKey", api_key.to_string());
             then.status(200)
+                .header("CONTENT-TYPE", "application/json")
                 .json_body(json!({
                     "pageSize": 1,
                     "pageNumber": 1,
@@ -662,6 +671,7 @@ async fn fetch_preferred_concept_atom() -> Result<(), Box<dyn std::error::Error>
                 .path(path)
                 .query_param("apiKey", api_key.to_string());
             then.status(200)
+                .header("CONTENT-TYPE", "application/json")
                 .json_body(json!({
                     "pageSize": 1,
                     "pageNumber": 1,
@@ -734,6 +744,7 @@ async fn fetch_preferred_concept_atom_from_different_version()
                 .path(path)
                 .query_param("apiKey", api_key.to_string());
             then.status(200)
+                .header("CONTENT-TYPE", "application/json")
                 .json_body(json!({
                     "pageSize": 1,
                     "pageNumber": 1,

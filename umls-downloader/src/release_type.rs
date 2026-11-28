@@ -198,11 +198,7 @@ impl Client<reqwest::Client> {
         uri: http::Uri,
     ) -> Result<Vec<ReleaseType>, crate::Error<reqwest::Error>> {
         self.client()
-            .get(uri.to_string())
-            .send()
-            .await?
-            .error_for_status()?
-            .json::<ReleaseTypes>()
+            .get::<_, ReleaseTypes>(uri.to_string())
             .await
             .map(|x| x.types)
             .map_err(crate::Error::Client)
@@ -227,7 +223,8 @@ mod tests {
             let mock = server
                 .mock_async(|when, then| {
                     when.method(GET).path("/releases");
-                    then.json_body(serde_json::json!({"releaseTypes":types}));
+                    then.header("CONTENT-TYPE", "application/json")
+                        .json_body(serde_json::json!({ "releaseTypes": types }));
                 })
                 .await;
             let client = Client::default().with_client(reqwest::Client::default());

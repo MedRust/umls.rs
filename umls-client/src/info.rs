@@ -160,11 +160,7 @@ impl Info<reqwest::Client, types::Concept, url::Url> {
         let url = config.authenticated_url(self.value);
 
         self.client
-            .get(url)
-            .send()
-            .await?
-            .error_for_status()?
-            .json::<umls_util::Page<SerializableConcept>>()
+            .fetch_page::<_, SerializableConcept>(url)
             .await
             .map(Into::<Payload>::into)
             .map_err(Error::Client)
@@ -178,11 +174,7 @@ impl Info<reqwest::Client, types::Atom, Aui> {
         let url = config.info_url::<types::Atom, _>(&self.value).url();
 
         self.client()
-            .get(url)
-            .send()
-            .await?
-            .error_for_status()?
-            .json::<umls_util::Page<AtomResponse>>()
+            .fetch_page::<_, AtomResponse>(url)
             .await
             .map(|x| x.into_content())
             .map_err(Error::Client)
@@ -235,11 +227,7 @@ impl Info<reqwest::Client, types::Source, url::Url> {
         let url = config.authenticated_url(self.value);
 
         client
-            .get(url)
-            .send()
-            .await?
-            .error_for_status()?
-            .json::<umls_util::Page<dto::source::SourceAtomCluster>>()
+            .fetch_page::<_, dto::source::SourceAtomCluster>(url)
             .await
             .map(|x| x.into_content())
             .map_err(Error::Client)

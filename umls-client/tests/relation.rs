@@ -20,7 +20,9 @@ async fn fetch_concept_relation_first_page() -> Result<(), Box<dyn std::error::E
                 .query_param_exists("apiKey");
             let json_data = include_str!("fixtures/concept_relations.json");
             let json_value: Value = serde_json::from_str(json_data).unwrap();
-            then.status(200).json_body_obj(&json_value);
+            then.status(200)
+                .header("CONTENT-TYPE", "application/json")
+                .json_body_obj(&json_value);
         })
         .await;
 
@@ -58,7 +60,9 @@ async fn fetch_concept_relation_batch_pages() -> Result<(), Box<dyn std::error::
                 .query_param("pageSize", "25");
             let json_data = include_str!("fixtures/concept_relations.json");
             let json_value: Value = serde_json::from_str(json_data).unwrap();
-            then.status(200).json_body_obj(&json_value);
+            then.status(200)
+                .header("CONTENT-TYPE", "application/json")
+                .json_body_obj(&json_value);
         })
         .await;
 
@@ -71,7 +75,9 @@ async fn fetch_concept_relation_batch_pages() -> Result<(), Box<dyn std::error::
                 .query_param("pageSize", "25");
             let json_data = include_str!("fixtures/concept_relations.json");
             let json_value: Value = serde_json::from_str(json_data).unwrap();
-            then.status(200).json_body_obj(&json_value);
+            then.status(200)
+                .header("CONTENT-TYPE", "application/json")
+                .json_body_obj(&json_value);
         })
         .await;
 
@@ -111,7 +117,9 @@ async fn fetch_concept_relation_using_url() -> Result<(), Box<dyn std::error::Er
                 .query_param_exists("apiKey");
             let json_data = include_str!("fixtures/concept_relations.json");
             let json_value: Value = serde_json::from_str(json_data).unwrap();
-            then.status(200).json_body_obj(&json_value);
+            then.status(200)
+                .header("CONTENT-TYPE", "application/json")
+                .json_body_obj(&json_value);
         })
         .await;
 

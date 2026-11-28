@@ -23,7 +23,8 @@ async fn release_selection_preserves_order_empty_results_and_explicit_queries() 
                 when.path("/releases")
                     .query_param("custom", "kept")
                     .query_param_missing("current");
-                then.json_body(json!(records));
+                then.header("CONTENT-TYPE", "application/json")
+                    .json_body(json!(records));
             })
             .await;
         let uri: http::Uri = server.url("/releases?custom=kept").parse().unwrap();

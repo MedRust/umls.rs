@@ -3,7 +3,7 @@
 
 use httpmock::{Method::GET, MockServer};
 use umls_client::dto::batch::Batch;
-use umls_client::dto::{display_name::DisplayName, source::SourceConcept};
+use umls_client::dto::source::SourceConcept;
 use umls_client::{config, core::aui::Aui, parent::Parent, types};
 use url::Url;
 
@@ -18,7 +18,9 @@ async fn fetch_atom_parents_using_url() -> Result<(), Box<dyn std::error::Error>
 
             let value = include_str!("fixtures/atom_parents.json");
             let body: serde_json::Value = serde_json::from_str(value).unwrap();
-            then.status(200).json_body(body);
+            then.status(200)
+                .header("CONTENT-TYPE", "application/json")
+                .json_body(body);
         })
         .await;
 
@@ -67,7 +69,9 @@ async fn fetch_atom_parents_using_aui() -> Result<(), Box<dyn std::error::Error>
 
             let value = include_str!("fixtures/atom_parents.json");
             let body: serde_json::Value = serde_json::from_str(value).unwrap();
-            then.status(200).json_body(body);
+            then.status(200)
+                .header("CONTENT-TYPE", "application/json")
+                .json_body(body);
         })
         .await;
 
@@ -114,7 +118,9 @@ async fn fetch_source_asserted_parents_using_url() -> Result<(), Box<dyn std::er
                 .query_param_exists("apiKey");
             let json_string = include_str!("fixtures/source_conecpt_parent_page_1.json");
             let json: serde_json::Value = serde_json::from_str(json_string).unwrap();
-            then.status(200).json_body(json);
+            then.status(200)
+                .header("CONTENT-TYPE", "application/json")
+                .json_body(json);
         })
         .await;
 
@@ -383,7 +389,9 @@ async fn fetch_source_asserted_concepts_using_source_atom_cluster()
                 .query_param_exists("apiKey");
             let json_string = include_str!("fixtures/source_conecpt_parent_page_1.json");
             let json: serde_json::Value = serde_json::from_str(json_string).unwrap();
-            then.status(200).json_body(json);
+            then.status(200)
+                .header("CONTENT-TYPE", "application/json")
+                .json_body(json);
         })
         .await;
 

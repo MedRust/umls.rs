@@ -192,11 +192,7 @@ impl Definition<reqwest::Client, url::Url> {
 
         let body = self
             .client
-            .get(url)
-            .send()
-            .await?
-            .error_for_status()?
-            .json::<Page<Content<dto::RawDefinition>>>()
+            .fetch_page_content::<_, dto::RawDefinition>(url)
             .await?;
 
         let page = body.try_map::<_, Error<umls_http::reqwest::Error>>(|x| {

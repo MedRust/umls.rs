@@ -43,7 +43,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(30))
         .build()?;
-    let server = server::UmlsServer::new(config, umls_http::reqwest::Client::new(client));
+    let client = umls_http::reqwest::Client::new(client);
+
+    let server = server::UmlsServer::new(config, client);
     match args.transport {
         Transport::Stdio => {
             let service = server.serve(stdio()).await?;

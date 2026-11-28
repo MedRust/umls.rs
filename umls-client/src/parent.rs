@@ -87,11 +87,7 @@ impl Parent<types::Atom, umls_http::reqwest::Client, url::Url> {
         let url = umls_config.authenticated_url(self.value);
 
         self.client
-            .get(url)
-            .send()
-            .await?
-            .error_for_status()?
-            .json::<Page<Content<AtomResponse>>>()
+            .fetch_page_content::<_, AtomResponse>(url)
             .await
             .map_err(Error::Client)
     }
@@ -262,13 +258,7 @@ impl Parent<types::Source, umls_http::reqwest::Client, url::Url> {
 
         let url = umls_config.authenticated_url(self.value);
 
-        let response: Page<Content<SourceAtomCluster>> = client
-            .get(url)
-            .send()
-            .await?
-            .error_for_status()?
-            .json()
-            .await?;
+        let response: Page<Content<SourceAtomCluster>> = client.fetch_page_content(url).await?;
 
         Ok(response)
     }

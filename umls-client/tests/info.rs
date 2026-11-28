@@ -6,7 +6,7 @@ use serde_json::json;
 use umls_client::{
     config,
     core::{aui::Aui, cui::Cui},
-    dto::{concept::Payload, display_name::DisplayName, source::SourceConcept},
+    dto::{concept::Payload, source::SourceConcept},
     info::{self, Info},
     types,
 };
@@ -22,6 +22,7 @@ async fn successfully_get_atom_info() -> Result<(), Box<dyn std::error::Error>> 
                 .path("/content/current/AUI/A8345234")
                 .query_param_exists("apiKey");
             then.status(200)
+                .header("CONTENT-TYPE", "application/json")
             .json_body(json!({
                 "pageSize": 25,
                 "pageNumber": 1,
@@ -211,7 +212,9 @@ async fn fetches_source_asserted_concept_info_using_url() -> Result<(), Box<dyn 
                 .query_param("apiKey", "some_api_key");
             let json_string = include_str!("fixtures/source_asserted_concept_info.json");
             let body: serde_json::Value = serde_json::from_str(json_string).unwrap();
-            then.status(200).json_body(body);
+            then.status(200)
+                .header("CONTENT-TYPE", "application/json")
+                .json_body(body);
         })
         .await;
 
@@ -272,7 +275,9 @@ async fn fetches_source_asserted_concept_info_using_source_concept()
                 .query_param("apiKey", "some_api_key");
             let json_string = include_str!("fixtures/source_asserted_concept_info.json");
             let body: serde_json::Value = serde_json::from_str(json_string).unwrap();
-            then.status(200).json_body(body);
+            then.status(200)
+                .header("CONTENT-TYPE", "application/json")
+                .json_body(body);
         })
         .await;
 

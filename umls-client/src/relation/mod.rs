@@ -160,11 +160,7 @@ impl Relation<Client, url::Url> {
         let url = umls_config.authenticated_url(self.value);
 
         let response = client
-            .get(url)
-            .send()
-            .await?
-            .error_for_status()?
-            .json::<Page<Content<SerializableRelation>>>()
+            .fetch_page_content::<_, SerializableRelation>(url)
             .await?;
 
         response

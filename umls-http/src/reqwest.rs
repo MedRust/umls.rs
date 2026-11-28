@@ -5,6 +5,8 @@
 
 use std::marker::PhantomData;
 
+use futures_core::Stream;
+use futures_util::TryStreamExt;
 use http::{
     HeaderMap, HeaderName, StatusCode,
     header::{ACCEPT, CONTENT_TYPE},
@@ -12,7 +14,6 @@ use http::{
 use mime::Mime;
 use reqwest::IntoUrl;
 
-pub use reqwest::Error;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 use umls_util::{Content, Page, SearchResults};
@@ -20,14 +21,14 @@ use umls_util::{Content, Page, SearchResults};
 const JSON_HEADER: &str = "application/json";
 
 /// An HTTP client used to query server.
-pub type Client = ReqwestClient<Any>;
+pub type Client = ReqwestClient<Json>;
 
-/// Typestate marker preserving backward-compatible, unvalidated request builders.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct Any;
+pub type BytesStreamClient = ReqwestClient<BytesStream>;
+
+pub type Error = ClientError;
 
 /// Typestate marker that enables automatic JSON response validation and deserialization.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Json;
 
 #[derive(Clone, Default)]
@@ -48,7 +49,26 @@ pub struct ReqwestClient<T> {
     _type: PhantomData<T>,
 }
 
-impl ReqwestClient<Any> {
+impl<S> ReqwestClient<S> {
+    /// Consumes `self` and returns a new [`ReqwestClient`] configured with the specified typestate marker.
+    ///
+    /// The underlying connection pool is preserved. Use this to switch between JSON and
+    /// byte-stream modes without rebuilding the HTTP client.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use umls_http::reqwest::{self, BytesStreamClient};
+    /// let json_client: reqwest::Client = Default::default();
+    /// let stream_client: BytesStreamClient = json_client.with_type();
+    /// ```
+    pub fn with_type<T>(self) -> ReqwestClient<T> {
+        ReqwestClient {
+            client: self.client,
+            _type: PhantomData,
+        }
+    }
+
     /// Wraps a configured reqwest client for JSON and streaming requests.
     ///
     /// The client reuses connections across requests and can be cloned for independent request
@@ -70,21 +90,6 @@ impl ReqwestClient<Any> {
             client,
             _type: PhantomData,
         }
-    }
-
-    /// Consumes `self` and returns a new [`ReqwestClient`] configured with the specified typestate marker.
-    pub fn with_type<T>(self) -> ReqwestClient<T> {
-        ReqwestClient {
-            client: self.client,
-            _type: PhantomData,
-        }
-    }
-}
-
-impl ReqwestClient<Any> {
-    /// Returns a [`reqwest::RequestBuilder`] object for given url.
-    pub fn get<T: IntoUrl>(&self, url: T) -> reqwest::RequestBuilder {
-        self.client.get(url)
     }
 }
 
@@ -282,6 +287,22 @@ async fn validate_response_body(
             Err(response.json::<ErrorResponse>().await?.into())
         }
         other => Err(ClientError::UnsupportedStatusCode(other.as_u16())),
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct BytesStream;
+
+impl ReqwestClient<BytesStream> {
+    pub async fn fetch<T: IntoUrl>(
+        &self,
+        url: T,
+    ) -> Result<
+        impl Stream<Item = Result<bytes::Bytes, ClientError>> + Send + Sync + 'static + use<T>,
+        ClientError,
+    > {
+        let response = self.client.get(url).send().await?;
+        Ok(response.bytes_stream().map_err(ClientError::from))
     }
 }
 

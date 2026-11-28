@@ -3,7 +3,7 @@
 
 use httpmock::MockServer;
 use serde_json::json;
-use umls_http::reqwest::{ClientError, ReqwestClient};
+use umls_http::reqwest::{Client, ClientError};
 
 #[tokio::test]
 async fn get_success_on_200_ok() -> Result<(), Box<dyn std::error::Error>> {
@@ -26,8 +26,7 @@ async fn get_success_on_200_ok() -> Result<(), Box<dyn std::error::Error>> {
 
     let base_url = mock_server.base_url();
 
-    let _ = ReqwestClient::default()
-        .with_type::<umls_http::reqwest::Json>()
+    let _ = umls_http::reqwest::Client::default()
         .get::<_, serde_json::Value>(base_url)
         .await?;
 
@@ -58,8 +57,7 @@ async fn validation_error_on_400_bad_request() -> Result<(), Box<dyn std::error:
         })
         .await;
 
-    let result = ReqwestClient::default()
-        .with_type::<umls_http::reqwest::Json>()
+    let result = umls_http::reqwest::Client::default()
         .get::<_, serde_json::Value>(mock_server.base_url())
         .await;
 
@@ -97,8 +95,7 @@ async fn unauthorized_error_on_401() -> Result<(), Box<dyn std::error::Error>> {
         })
         .await;
 
-    let result = ReqwestClient::default()
-        .with_type::<umls_http::reqwest::Json>()
+    let result = Client::default()
         .get::<_, serde_json::Value>(mock_server.base_url())
         .await;
 
@@ -138,8 +135,7 @@ async fn not_found_error_on_404() -> Result<(), Box<dyn std::error::Error>> {
         })
         .await;
 
-    let result = ReqwestClient::default()
-        .with_type::<umls_http::reqwest::Json>()
+    let result = Client::default()
         .get::<_, serde_json::Value>(mock_server.base_url())
         .await;
 

@@ -661,8 +661,9 @@ mod tests {
         let mock_server = MockServer::start_async().await;
         let mock = mock_server.mock_async(|when, then| {
             when.method(GET).path("/rest/content/current/CUI/C0010200/atoms")
+                .header("ACCEPT", "application/json")
                 .query_param("pageSize", "1");
-            then.status(200).json_body(json!({"pageNumber": 1, "pageSize": 1, "pageCount": 2,
+            then.status(200).header("CONTENT-TYPE", "application/json").json_body(json!({"pageNumber": 1, "pageSize": 1, "pageCount": 2,
                 "result": [{"ui": "A1234567", "name": "Cough", "rootSource": "MSH",
                     "termType": "MH", "language": "ENG", "obsolete": "false", "suppressible": "false"}]}));
         }).await;
@@ -684,8 +685,8 @@ mod tests {
     async fn concept_details_use_configured_release() {
         let mock_server = MockServer::start_async().await;
         let mock = mock_server.mock_async(|when, then| {
-            when.method(GET).path("/rest/content/2024AB/CUI/C0010200");
-            then.status(200).json_body(json!({"pageSize": 25, "pageNumber": 1, "pageCount": 1, "result": {
+            when.method(GET).header("ACCEPT", "application/json").path("/rest/content/2024AB/CUI/C0010200");
+            then.status(200).header("CONTENT-TYPE", "application/json").json_body(json!({"pageSize": 25, "pageNumber": 1, "pageCount": 1, "result": {
                 "classType": "Concept", "ui": "C0010200", "name": "Cough",
                 "suppressible": false, "status": "R", "dateAdded": "01-01-1990",
                 "majorRevisionDate": "01-01-2024", "semanticTypes": [{"name": "Sign or Symptom", "uri": "NONE"}],
@@ -744,8 +745,10 @@ mod tests {
         .mock_async(|when, then| {
             when.method(GET)
                 .path("/content/current/AUI/A8345234")
+                    .header("ACCEPT", "application/json")
                 .query_param_exists("apiKey");
             then.status(200)
+                    .header("CONTENT-TYPE", "application/json")
             .json_body(json!({
                 "pageSize": 25,
                 "pageNumber": 1,
@@ -806,10 +809,11 @@ mod tests {
             .mock_async(|when, then| {
                 when.method(GET)
                     .path("/content/current/CUI/C0010200/relations")
+                    .header("ACCEPT", "application/json")
                     .query_param_exists("apiKey")
                     .query_param("pageNumber", "1")
                     .query_param("pageSize", "25");
-                then.status(200).json_body(json!({
+                then.status(200).header("CONTENT-TYPE", "application/json").json_body(json!({
                     "pageSize": 25,
                     "pageNumber": 1,
                     "pageCount": 74,
@@ -866,9 +870,10 @@ mod tests {
             .mock_async(|when, then| {
                 when.method(GET)
                     .path("/content/current/AUI/A10134087/parents")
+                    .header("ACCEPT", "application/json")
                     .query_param_exists("apiKey");
 
-                then.status(200).json_body(json!({"pageSize":25,"pageNumber":1,"result":[{"classType":"Atom","ui":"A19720766","sourceDescriptor":"NONE","sourceConcept":"https://uts-ws.nlm.nih.gov/rest/content/2026AA/source/HL7V3.0/2.16.840.1.113883.5.112","concept":"https://uts-ws.nlm.nih.gov/rest/content/2026AA/CUI/C0013153","suppressible":"false","obsolete":"false","rootSource":"HL7V3.0","termType":"CSY","code":"https://uts-ws.nlm.nih.gov/rest/content/2026AA/source/HL7V3.0-V-HL7V3.0/RouteOfAdministration","language":"ENG","name":"RouteOfAdministration","ancestors":"https://uts-ws.nlm.nih.gov/rest/content/2026AA/AUI/A19720766/ancestors","descendants":"https://uts-ws.nlm.nih.gov/rest/content/2026AA/AUI/A19720766/descendants","attributes":"https://uts-ws.nlm.nih.gov/rest/content/2026AA/AUI/A19720766/attributes","relations":"https://uts-ws.nlm.nih.gov/rest/content/2026AA/AUI/A19720766/relations","children":"https://uts-ws.nlm.nih.gov/rest/content/2026AA/AUI/A19720766/children","parents":"https://uts-ws.nlm.nih.gov/rest/content/2026AA/AUI/A19720766/parents"}],"pageCount":1}));
+                then.status(200).header("CONTENT-TYPE", "application/json").json_body(json!({"pageSize":25,"pageNumber":1,"result":[{"classType":"Atom","ui":"A19720766","sourceDescriptor":"NONE","sourceConcept":"https://uts-ws.nlm.nih.gov/rest/content/2026AA/source/HL7V3.0/2.16.840.1.113883.5.112","concept":"https://uts-ws.nlm.nih.gov/rest/content/2026AA/CUI/C0013153","suppressible":"false","obsolete":"false","rootSource":"HL7V3.0","termType":"CSY","code":"https://uts-ws.nlm.nih.gov/rest/content/2026AA/source/HL7V3.0-V-HL7V3.0/RouteOfAdministration","language":"ENG","name":"RouteOfAdministration","ancestors":"https://uts-ws.nlm.nih.gov/rest/content/2026AA/AUI/A19720766/ancestors","descendants":"https://uts-ws.nlm.nih.gov/rest/content/2026AA/AUI/A19720766/descendants","attributes":"https://uts-ws.nlm.nih.gov/rest/content/2026AA/AUI/A19720766/attributes","relations":"https://uts-ws.nlm.nih.gov/rest/content/2026AA/AUI/A19720766/relations","children":"https://uts-ws.nlm.nih.gov/rest/content/2026AA/AUI/A19720766/children","parents":"https://uts-ws.nlm.nih.gov/rest/content/2026AA/AUI/A19720766/parents"}],"pageCount":1}));
             })
             .await;
 
